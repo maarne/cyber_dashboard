@@ -167,44 +167,19 @@ def on_startup():
 # ============================================================
 
 @app.get("/")
-def dashboard_home(request: Request):
+def dashboard_home(request: Request, start_date: str = None, end_date: str = None):
     """
-    Render the main dashboard page with all data from the database.
-
-    WHAT IS "request: Request"?
-    ---------------------------
-    FastAPI automatically provides the Request object, which
-    contains information about the incoming HTTP request
-    (headers, URL, cookies, etc.). Jinja2 templates require
-    this object to generate correct URLs.
-
-    Args:
-        request: The incoming HTTP request object (auto-provided).
-
-    Returns:
-        TemplateResponse: The rendered HTML page.
+    Render the main dashboard page with data filtered by optional date range.
     """
-    # Query our database for all the data we need to display.
-    # Each function returns a list of dictionaries.
-    summary = get_dashboard_summary()
-    cves = get_recent_cves(limit=50)
-    cisa_exploits = get_cisa_exploits(limit=50)
-    articles = get_rss_articles(limit=50)
-    threats = get_threat_indicators(limit=50)
+    summary = get_dashboard_summary(start_date=start_date, end_date=end_date)
+    cves = get_recent_cves(limit=50, start_date=start_date, end_date=end_date)
+    cisa_exploits = get_cisa_exploits(limit=50, start_date=start_date, end_date=end_date)
+    articles = get_rss_articles(limit=50, start_date=start_date, end_date=end_date)
+    threats = get_threat_indicators(limit=50, start_date=start_date, end_date=end_date)
     rss_sources = get_rss_sources()
 
-    # Render the template with all the data.
-    # templates.TemplateResponse() does the following:
-    # 1. Loads the "index.html" template file
-    # 2. Fills in all the {{ variable }} placeholders with our data
-    # 3. Returns the rendered HTML as an HTTP response
-    #
-    # The dictionary passed as the second argument contains ALL
-    # the variables that the template can access. The key names
-    # (like "summary", "cves") become the variable names inside
-    # the template (like {{ summary.total_cves }}).
     return templates.TemplateResponse(
-        request=request,             # Required by Jinja2
+        request=request,
         name="index.html",
         context={
             "request": request,
@@ -214,6 +189,8 @@ def dashboard_home(request: Request):
             "articles": articles,
             "threats": threats,
             "rss_sources": rss_sources,
+            "start_date": start_date or "",
+            "end_date": end_date or "",
         },
     )
 
@@ -307,54 +284,33 @@ def refresh_all_feeds():
 # ============================================================
 
 @app.get("/api/cves")
-def api_get_cves(limit: int = 20, severity: str = None):
-    """
-    Return recent CVEs as JSON data.
-
-    PYTHON CONCEPT — Query Parameters:
-    -----------------------------------
-    "limit: int = 20" and "severity: str = None" become
-    URL query parameters. Users can call:
-        /api/cves?limit=10&severity=CRITICAL
-
-    FastAPI automatically:
-    1. Extracts the values from the URL
-    2. Converts "limit" to an integer (type validation!)
-    3. Passes them as function arguments
-
-    Args:
-        limit: Max number of CVEs to return (default 20).
-        severity: Optional severity filter (CRITICAL/HIGH/etc).
-
-    Returns:
-        list: A list of CVE dictionaries in JSON format.
-    """
-    cves = get_recent_cves(limit=limit, severity_filter=severity)
-    return cves
+def api_get_cves(limit: int = 20, severity: str = None, start_date: str = None, end_date: str = None):
+    """Return recent CVEs as JSON data with optional severity and date range filters."""
+    return get_recent_cves(limit=limit, severity_filter=severity, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/cisa")
-def api_get_cisa_exploits(limit: int = 20):
-    """Return CISA Known Exploited Vulnerabilities as JSON."""
-    return get_cisa_exploits(limit=limit)
+def api_get_cisa_exploits(limit: int = 20, start_date: str = None, end_date: str = None):
+    """Return CISA Known Exploited Vulnerabilities as JSON with optional date range filter."""
+    return get_cisa_exploits(limit=limit, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/news")
-def api_get_news(limit: int = 30, source: str = None):
-    """Return security news articles as JSON."""
-    return get_rss_articles(limit=limit, source_filter=source)
+def api_get_news(limit: int = 30, source: str = None, start_date: str = None, end_date: str = None):
+    """Return security news articles as JSON with optional source and date range filters."""
+    return get_rss_articles(limit=limit, source_filter=source, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/threats")
-def api_get_threats(limit: int = 30, indicator_type: str = None):
-    """Return threat indicators as JSON."""
-    return get_threat_indicators(limit=limit, indicator_type=indicator_type)
+def api_get_threats(limit: int = 30, indicator_type: str = None, start_date: str = None, end_date: str = None):
+    """Return threat indicators as JSON with optional type and date range filters."""
+    return get_threat_indicators(limit=limit, indicator_type=indicator_type, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/summary")
-def api_get_summary():
-    """Return dashboard summary statistics as JSON."""
-    return get_dashboard_summary()
+def api_get_summary(start_date: str = None, end_date: str = None):
+    """Return dashboard summary statistics as JSON with optional date range filter."""
+    return get_dashboard_summary(start_date=start_date, end_date=end_date)
 
 
 # ============================================================

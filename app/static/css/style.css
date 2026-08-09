@@ -264,12 +264,96 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
-.stat-label {
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+/* =============================================================
+   DATE RANGE SELECTOR BAR
+   ============================================================= */
+.date-filter-bar {
+    max-width: 1440px;
+    margin: 0 auto 1.5rem;
+    padding: 0 2rem;
+}
+
+.date-filter-form {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 0.875rem 1.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+}
+
+.date-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.date-label {
+    font-size: 0.85rem;
     font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.date-input {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    padding: 0.375rem 0.75rem;
+    font-family: var(--font-family);
+    font-size: 0.85rem;
+    outline: none;
+    transition: all var(--transition-speed) ease;
+}
+
+.date-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+    cursor: pointer;
+}
+
+.btn-sm {
+    padding: 0.375rem 0.875rem;
+    font-size: 0.8rem;
+}
+
+.preset-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+}
+
+.preset-btn {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+}
+
+.preset-btn:hover {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.preset-btn.active {
+    background: var(--color-accent);
+    color: white;
+    border-color: var(--color-accent);
 }
 
 
@@ -532,6 +616,7 @@ body {
     /* Clamp description to 3 lines max */
     display: -webkit-box;
     -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }

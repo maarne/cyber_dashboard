@@ -86,6 +86,44 @@
 
 
 <!-- =============================================================
+     GLOBAL DATE RANGE SELECTOR BAR
+     ============================================================= -->
+<section class="date-filter-bar">
+    <form id="date-filter-form" method="GET" action="/" class="date-filter-form">
+        <div class="date-input-group">
+            <label for="start-date" class="date-label">📅 From:</label>
+            <input type="date"
+                   id="start-date"
+                   name="start_date"
+                   class="date-input"
+                   value="{{ start_date }}">
+        </div>
+
+        <div class="date-input-group">
+            <label for="end-date" class="date-label">To:</label>
+            <input type="date"
+                   id="end-date"
+                   name="end_date"
+                   class="date-input"
+                   value="{{ end_date }}">
+        </div>
+
+        <button type="submit" class="btn btn-ghost btn-sm">Apply Filter</button>
+        {% if start_date or end_date %}
+        <a href="/" class="btn btn-ghost btn-sm" style="color: var(--color-rose);">Clear Date Filter</a>
+        {% endif %}
+
+        <!-- Quick Presets -->
+        <div class="preset-buttons">
+            <button type="button" class="preset-btn" data-preset="today">Today</button>
+            <button type="button" class="preset-btn" data-preset="7days">Last 7 Days</button>
+            <button type="button" class="preset-btn" data-preset="30days">Last 30 Days</button>
+        </div>
+    </form>
+</section>
+
+
+<!-- =============================================================
      MAIN CONTENT AREA WITH TABS
      ============================================================= -->
 <main class="main-content">

@@ -317,6 +317,54 @@ function showToast(message, type) {
 
 
 // =============================================================
+// DATE PRESET BUTTONS
+// =============================================================
+
+function initDatePresets() {
+    var presetBtns = document.querySelectorAll('.preset-btn');
+    var startDateInput = document.getElementById('start-date');
+    var endDateInput = document.getElementById('end-date');
+    var dateForm = document.getElementById('date-filter-form');
+
+    function formatDate(d) {
+        var year = d.getFullYear();
+        var month = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+
+    presetBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var preset = btn.dataset.preset;
+            var today = new Date();
+            var endStr = formatDate(today);
+            var startStr = endStr;
+
+            if (preset === 'today') {
+                startStr = endStr;
+            } else if (preset === '7days') {
+                var d7 = new Date();
+                d7.setDate(today.getDate() - 7);
+                startStr = formatDate(d7);
+            } else if (preset === '30days') {
+                var d30 = new Date();
+                d30.setDate(today.getDate() - 30);
+                startStr = formatDate(d30);
+            }
+
+            if (startDateInput && endDateInput) {
+                startDateInput.value = startStr;
+                endDateInput.value = endStr;
+                if (dateForm) {
+                    dateForm.submit();
+                }
+            }
+        });
+    });
+}
+
+
+// =============================================================
 // INITIALIZATION
 // =============================================================
 // DOMContentLoaded fires when the HTML has been fully parsed.
@@ -327,6 +375,7 @@ function showToast(message, type) {
 document.addEventListener('DOMContentLoaded', function() {
     initTabs();
     initSearchAndFilter();
+    initDatePresets();
 
     // Wire up the refresh button
     var refreshBtn = document.getElementById('refresh-btn');

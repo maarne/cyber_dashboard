@@ -26,195 +26,175 @@
 from app.database import get_connection
 
 
-def get_recent_cves(limit=20, severity_filter=None):
+def _build_where_clause(base_conditions=None, start_date=None, end_date=None, date_column="fetched_at"):
     """
-    Retrieve recent CVEs from the database.
+    Helper function to build dynamic SQL WHERE clauses and parameters safely.
 
-    PYTHON CONCEPT — Default Parameter Values:
-    -------------------------------------------
-    "limit=20" means if the caller doesn't specify a limit,
-    it defaults to 20. Both of these calls are valid:
-        get_recent_cves()          → uses limit=20
-        get_recent_cves(limit=50)  → uses limit=50
+    BEGINNER PYTHON CONCEPT — Helper Functions:
+    --------------------------------------------
+    When multiple functions need to build similar SQL queries,
+    we extract that logic into a helper function to avoid
+    repeating code (DRY principle: Don't Repeat Yourself).
 
     Args:
-        limit: Maximum number of CVEs to return (default: 20).
-        severity_filter: If provided (e.g., "CRITICAL"), only
-                         return CVEs matching that severity.
+        base_conditions: List of (sql_snippet, param) tuples for non-date filters
+        start_date: String in 'YYYY-MM-DD' format (optional)
+        end_date: String in 'YYYY-MM-DD' format (optional)
+        date_column: The table column containing dates
 
     Returns:
-        list: A list of dictionaries, each representing a CVE.
+        tuple: (where_clause_str, params_list)
+    """
+    conditions = []
+    params = []
+
+    # Add non-date base conditions (e.g. severity = ?)
+    if base_conditions:
+        for condition_str, param_val in base_conditions:
+            conditions.append(condition_str)
+            if param_val is not None:
+                params.append(param_val)
+
+    # Add start_date filter if provided
+    if start_date:
+        conditions.append(f"date({date_column}) >= ?")
+        params.append(start_date)
+
+    # Add end_date filter if provided
+    if end_date:
+        conditions.append(f"date({date_column}) <= ?")
+        params.append(end_date)
+
+    # Join all conditions with " AND "
+    if conditions:
+        return "WHERE " + " AND ".join(conditions), params
+    return "", params
+
+
+def get_recent_cves(limit=50, severity_filter=None, start_date=None, end_date=None):
+    """
+    Retrieve CVEs from the database with optional severity and date range filtering.
+
+    Args:
+        limit: Maximum number of CVEs to return.
+        severity_filter: Filter by severity (CRITICAL, HIGH, etc.)
+        start_date: Start date string 'YYYY-MM-DD'
+        end_date: End date string 'YYYY-MM-DD'
     """
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Build the SQL query dynamically based on whether
-        # a severity filter was provided.
-        #
-        # PYTHON CONCEPT — Ternary Operator:
-        #   value_if_true IF condition ELSE value_if_false
-        #   This is a one-line shortcut for a simple if/else.
-        if severity_filter:
-            # When filtering by severity, we add a WHERE clause.
-            # The "?" placeholder prevents SQL injection.
-            cursor.execute("""
-                SELECT * FROM cves
-                WHERE severity = ?
-                ORDER BY published_date DESC
-                LIMIT ?
-            """, (severity_filter, limit))
-        else:
-            # No filter: return all CVEs, newest first.
-            # ORDER BY published_date DESC sorts in descending
-            # order (newest dates first).
-            # LIMIT restricts how many rows are returned.
-            cursor.execute("""
-                SELECT * FROM cves
-                ORDER BY published_date DESC
-                LIMIT ?
-            """, (limit,))
-            # NOTE: (limit,) has a trailing comma to make it a
-            # TUPLE with one element. Without the comma, Python
-            # would treat (limit) as just parentheses around
-            # the variable, not as a tuple!
-            #   (limit)  → same as just "limit" (an integer)
-            #   (limit,) → a tuple containing one integer
+        base_conds = [("severity = ?", severity_filter)] if severity_filter else []
+        where_str, params = _build_where_clause(
+            base_conditions=base_conds,
+            start_date=start_date,
+            end_date=end_date,
+            date_column="COALESCE(published_date, fetched_at)"
+        )
 
-        # cursor.fetchall() retrieves ALL matching rows at once.
-        # Each row is a sqlite3.Row object (because we set
-        # row_factory in database.py).
+        query = f"""
+            SELECT * FROM cves
+            {where_str}
+            ORDER BY published_date DESC
+            LIMIT ?
+        """
+        params.append(limit)
+
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
 
-    # Convert sqlite3.Row objects to regular dictionaries.
-    # PYTHON CONCEPT — dict(row):
-    #   dict() can convert various objects into dictionaries.
-    #   sqlite3.Row objects support this conversion because
-    #   we set conn.row_factory = sqlite3.Row.
-    #
-    #   This is equivalent to:
-    #     result = []
-    #     for row in rows:
-    #         result.append(dict(row))
-    #     return result
-    #
-    #   But the list comprehension below is more concise!
     return [dict(row) for row in rows]
 
 
-def get_cisa_exploits(limit=20):
+def get_cisa_exploits(limit=50, start_date=None, end_date=None):
     """
-    Retrieve CISA Known Exploited Vulnerabilities from the database.
-
-    These are the vulnerabilities that attackers are actively
-    exploiting in the wild. They should be treated as the
-    highest priority for patching.
-
-    Args:
-        limit: Maximum number of entries to return.
-
-    Returns:
-        list: A list of CISA exploit dictionaries.
+    Retrieve CISA Known Exploited Vulnerabilities with date filtering.
     """
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+
+        where_str, params = _build_where_clause(
+            start_date=start_date,
+            end_date=end_date,
+            date_column="COALESCE(date_added, fetched_at)"
+        )
+
+        query = f"""
             SELECT * FROM cisa_exploits
+            {where_str}
             ORDER BY date_added DESC
             LIMIT ?
-        """, (limit,))
+        """
+        params.append(limit)
+
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
 
     return [dict(row) for row in rows]
 
 
-def get_rss_articles(limit=30, source_filter=None):
+def get_rss_articles(limit=50, source_filter=None, start_date=None, end_date=None):
     """
-    Retrieve security news articles from the database.
-
-    Args:
-        limit: Maximum number of articles to return.
-        source_filter: If provided, only return articles from
-                       this specific RSS feed source.
-
-    Returns:
-        list: A list of article dictionaries.
+    Retrieve security news articles with source and date range filtering.
     """
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        if source_filter:
-            cursor.execute("""
-                SELECT * FROM rss_articles
-                WHERE source = ?
-                ORDER BY fetched_at DESC
-                LIMIT ?
-            """, (source_filter, limit))
-        else:
-            cursor.execute("""
-                SELECT * FROM rss_articles
-                ORDER BY fetched_at DESC
-                LIMIT ?
-            """, (limit,))
+        base_conds = [("source = ?", source_filter)] if source_filter else []
+        where_str, params = _build_where_clause(
+            base_conditions=base_conds,
+            start_date=start_date,
+            end_date=end_date,
+            date_column="fetched_at"
+        )
 
+        query = f"""
+            SELECT * FROM rss_articles
+            {where_str}
+            ORDER BY fetched_at DESC
+            LIMIT ?
+        """
+        params.append(limit)
+
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
 
     return [dict(row) for row in rows]
 
 
-def get_threat_indicators(limit=30, indicator_type=None):
+def get_threat_indicators(limit=50, indicator_type=None, start_date=None, end_date=None):
     """
-    Retrieve threat indicators (malicious URLs and IPs)
-    from the database.
-
-    Args:
-        limit: Maximum number of indicators to return.
-        indicator_type: If provided ("url" or "ip"), filter
-                        by indicator type.
-
-    Returns:
-        list: A list of threat indicator dictionaries.
+    Retrieve threat indicators with type and date range filtering.
     """
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        if indicator_type:
-            cursor.execute("""
-                SELECT * FROM threat_indicators
-                WHERE indicator_type = ?
-                ORDER BY fetched_at DESC
-                LIMIT ?
-            """, (indicator_type, limit))
-        else:
-            cursor.execute("""
-                SELECT * FROM threat_indicators
-                ORDER BY fetched_at DESC
-                LIMIT ?
-            """, (limit,))
+        base_conds = [("indicator_type = ?", indicator_type)] if indicator_type else []
+        where_str, params = _build_where_clause(
+            base_conditions=base_conds,
+            start_date=start_date,
+            end_date=end_date,
+            date_column="COALESCE(date_added, fetched_at)"
+        )
 
+        query = f"""
+            SELECT * FROM threat_indicators
+            {where_str}
+            ORDER BY fetched_at DESC
+            LIMIT ?
+        """
+        params.append(limit)
+
+        cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
 
     return [dict(row) for row in rows]
 
 
-def get_dashboard_summary():
+def get_dashboard_summary(start_date=None, end_date=None):
     """
-    Get summary statistics for the dashboard header.
-
-    This function runs several COUNT queries to give us
-    quick statistics like "how many total CVEs" and
-    "how many are CRITICAL".
-
-    SQL CONCEPT — COUNT():
-    ----------------------
-    COUNT(*) counts the total number of rows in a table.
-    COUNT(*) with WHERE counts only rows matching a condition:
-        SELECT COUNT(*) FROM cves WHERE severity = 'CRITICAL'
-
-    Returns:
-        dict: A dictionary of summary statistics.
+    Get summary statistics for the dashboard header, respecting date filters.
     """
-    # We create a dictionary to hold all our summary stats.
-    # We'll fill it in one query at a time.
     summary = {
         "total_cves": 0,
         "critical_cves": 0,
@@ -227,35 +207,53 @@ def get_dashboard_summary():
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Count total CVEs
-        cursor.execute("SELECT COUNT(*) as count FROM cves")
-        # cursor.fetchone() retrieves just ONE row (the count).
-        # We access the "count" column to get the number.
+        # CVE counts
+        cve_where, cve_params = _build_where_clause(
+            start_date=start_date, end_date=end_date, date_column="COALESCE(published_date, fetched_at)"
+        )
+        cursor.execute(f"SELECT COUNT(*) as count FROM cves {cve_where}", tuple(cve_params))
         row = cursor.fetchone()
         summary["total_cves"] = row["count"] if row else 0
 
-        # Count CRITICAL severity CVEs
-        cursor.execute("SELECT COUNT(*) as count FROM cves WHERE severity = 'CRITICAL'")
+        # Critical CVEs
+        crit_where, crit_params = _build_where_clause(
+            base_conditions=[("severity = ?", "CRITICAL")],
+            start_date=start_date, end_date=end_date, date_column="COALESCE(published_date, fetched_at)"
+        )
+        cursor.execute(f"SELECT COUNT(*) as count FROM cves {crit_where}", tuple(crit_params))
         row = cursor.fetchone()
         summary["critical_cves"] = row["count"] if row else 0
 
-        # Count HIGH severity CVEs
-        cursor.execute("SELECT COUNT(*) as count FROM cves WHERE severity = 'HIGH'")
+        # High CVEs
+        high_where, high_params = _build_where_clause(
+            base_conditions=[("severity = ?", "HIGH")],
+            start_date=start_date, end_date=end_date, date_column="COALESCE(published_date, fetched_at)"
+        )
+        cursor.execute(f"SELECT COUNT(*) as count FROM cves {high_where}", tuple(high_params))
         row = cursor.fetchone()
         summary["high_cves"] = row["count"] if row else 0
 
-        # Count CISA active exploits
-        cursor.execute("SELECT COUNT(*) as count FROM cisa_exploits")
+        # CISA Exploits
+        cisa_where, cisa_params = _build_where_clause(
+            start_date=start_date, end_date=end_date, date_column="COALESCE(date_added, fetched_at)"
+        )
+        cursor.execute(f"SELECT COUNT(*) as count FROM cisa_exploits {cisa_where}", tuple(cisa_params))
         row = cursor.fetchone()
         summary["active_exploits"] = row["count"] if row else 0
 
-        # Count RSS articles
-        cursor.execute("SELECT COUNT(*) as count FROM rss_articles")
+        # RSS Articles
+        rss_where, rss_params = _build_where_clause(
+            start_date=start_date, end_date=end_date, date_column="fetched_at"
+        )
+        cursor.execute(f"SELECT COUNT(*) as count FROM rss_articles {rss_where}", tuple(rss_params))
         row = cursor.fetchone()
         summary["total_articles"] = row["count"] if row else 0
 
-        # Count threat indicators
-        cursor.execute("SELECT COUNT(*) as count FROM threat_indicators")
+        # Threat Indicators
+        threat_where, threat_params = _build_where_clause(
+            start_date=start_date, end_date=end_date, date_column="COALESCE(date_added, fetched_at)"
+        )
+        cursor.execute(f"SELECT COUNT(*) as count FROM threat_indicators {threat_where}", tuple(threat_params))
         row = cursor.fetchone()
         summary["total_threats"] = row["count"] if row else 0
 
