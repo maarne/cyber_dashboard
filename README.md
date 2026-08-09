@@ -6,6 +6,10 @@ This project aggregates vulnerability data, active exploit alerts, security news
 
 ---
 
+![Project Screenshot](images/screenshot_v1.jpg)
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Set Up the Virtual Environment
