@@ -1,0 +1,40 @@
+<!-- =============================================================
+     components/news_card.html — Security News Article Card
+     =============================================================
+     Renders a single RSS news article with the headline,
+     source, date, summary, and a link to the full article.
+     ============================================================= -->
+
+<div class="data-card" data-source="{{ article.source | default('') }}">
+    <!-- Card Header -->
+    <div class="card-header">
+        <h3 class="card-title">
+            <a href="{{ article.link }}" target="_blank" rel="noopener">
+                {{ article.title | default('Untitled Article') }}
+            </a>
+        </h3>
+    </div>
+
+    <!-- Summary -->
+    <p class="card-description">
+        {{ article.summary | default('No summary available.') }}
+    </p>
+
+    <!-- Metadata: Source + Date -->
+    <div class="card-meta">
+        {% if article.source %}
+        <span class="source-tag">{{ article.source }}</span>
+        {% endif %}
+
+        {% if article.published %}
+        <span class="card-meta-item">
+            📅 {{ article.published }}
+        </span>
+        {% endif %}
+
+        <a href="{{ article.link }}" target="_blank" rel="noopener"
+           style="margin-left: auto; color: var(--color-accent); text-decoration: none; font-size: 0.8rem;">
+            Read Full Article →
+        </a>
+    </div>
+</div>

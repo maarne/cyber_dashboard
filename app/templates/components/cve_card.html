@@ -1,0 +1,75 @@
+{#
+     =============================================================
+     components/cve_card.html — Single CVE Card Component
+     =============================================================
+     This template renders ONE CVE vulnerability card.
+     It is "included" by index.html inside a for loop:
+
+         for cve in cves:
+             include "components/cve_card.html"
+         endfor
+
+     The variable "cve" is available because Jinja2 passes
+     the loop variable into included templates automatically.
+
+     JINJA2 CONCEPTS:
+     - if / elif / else: Conditional logic
+     - variable | default('fallback'): Default filter
+     - Nested conditions for dynamic CSS classes
+     =============================================================
+#}
+
+<div class="data-card"
+     data-severity="{{ cve.severity | default('UNKNOWN') | upper }}">
+
+    <!-- Card Header: CVE ID + Severity Badge -->
+    <div class="card-header">
+        <span class="card-id">{{ cve.cve_id }}</span>
+
+        <!--
+            JINJA2 CONCEPT — Conditional CSS Class:
+            We assign a different CSS class to the badge based
+            on the severity level. This changes its color.
+
+            The "|lower" filter converts text to lowercase:
+                "CRITICAL" → "critical"
+        -->
+        {% if cve.severity == 'CRITICAL' %}
+            <span class="severity-badge critical">{{ cve.severity }}</span>
+        {% elif cve.severity == 'HIGH' %}
+            <span class="severity-badge high">{{ cve.severity }}</span>
+        {% elif cve.severity == 'MEDIUM' %}
+            <span class="severity-badge medium">{{ cve.severity }}</span>
+        {% elif cve.severity == 'LOW' %}
+            <span class="severity-badge low">{{ cve.severity }}</span>
+        {% else %}
+            <span class="severity-badge unknown">{{ cve.severity | default('N/A') }}</span>
+        {% endif %}
+    </div>
+
+    <!-- Description (truncated to 3 lines by CSS) -->
+    <p class="card-description">
+        {{ cve.description | default('No description available.') }}
+    </p>
+
+    <!-- Metadata Row: Score, EPSS, Date -->
+    <div class="card-meta">
+        {% if cve.cvss_score is not none %}
+        <span class="card-meta-item">
+            📊 CVSS: <strong>{{ cve.cvss_score }}</strong>
+        </span>
+        {% endif %}
+
+        {% if cve.epss_score is not none %}
+        <span class="card-meta-item">
+            🎯 EPSS: <strong>{{ "%.1f" | format(cve.epss_score * 100) }}%</strong>
+        </span>
+        {% endif %}
+
+        {% if cve.published_date %}
+        <span class="card-meta-item">
+            📅 {{ cve.published_date[:10] }}
+        </span>
+        {% endif %}
+    </div>
+</div>

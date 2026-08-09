@@ -1,0 +1,120 @@
+{#
+     =============================================================
+     app/templates/base.html — Master Layout Template
+     =============================================================
+
+     WHAT IS THIS FILE?
+     ==================
+     This is the "base" or "master" template. It contains the
+     HTML structure that is SHARED across all pages: the head,
+     header/navbar, footer, and loading spinner.
+
+     Other templates (like index.html) "extend" this base and
+     fill in the content area. This avoids duplicating the
+     header, footer, and CSS/JS includes on every page.
+
+     JINJA2 CONCEPTS:
+     =================
+     - block name: Defines a replaceable section
+     - variable: Outputs a Python variable's value
+     - include "file": Inserts another template's content
+     - url_for(): Generates URLs for static files and routes
+     =============================================================
+#}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <!-- Responsive viewport for mobile devices -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Real-time Cyber Security Dashboard — Track CVEs, active exploits, security news, and threat indicators in one place.">
+    <meta name="theme-color" content="#0a0e1a">
+
+    {# Page Title: The 'block' tag lets child templates override this #}
+    <title>{% block title %}CyberDash — Security Dashboard{% endblock %}</title>
+
+    <!-- Google Fonts: Inter for UI text -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- Our custom CSS stylesheet.
+         url_for('static', path='...') generates the correct URL
+         for files in our static/ directory. -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+
+    <!-- Any extra head content from child templates -->
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    <!-- =========================================================
+         HEADER / NAVIGATION BAR
+         ========================================================= -->
+    <header class="header">
+        <div class="header-inner">
+            <!-- Logo -->
+            <a href="/" class="logo">
+                <span class="logo-icon">🛡️</span>
+                <span class="logo-text">CyberDash</span>
+            </a>
+
+            <!-- Header Action Buttons -->
+            <div class="header-actions">
+                <button id="refresh-btn" class="btn btn-primary">
+                    🔄 Refresh Feeds
+                </button>
+            </div>
+        </div>
+    </header>
+
+    {# =========================================================
+         MAIN CONTENT AREA
+         This is where child templates insert their content.
+         The block content / endblock placeholder below is
+         where index.html fills in its content.
+         ========================================================= #}
+    {% block content %}{% endblock %}
+
+    <!-- =========================================================
+         FOOTER
+         ========================================================= -->
+    <footer class="footer">
+        <p>
+            CyberDash — Python Cyber Security Dashboard &middot;
+            Data from
+            <a href="https://nvd.nist.gov" target="_blank" rel="noopener">NVD</a>,
+            <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener">CISA KEV</a>,
+            <a href="https://urlhaus.abuse.ch" target="_blank" rel="noopener">Abuse.ch</a>
+            &amp; RSS Feeds
+        </p>
+    </footer>
+
+    <!-- =========================================================
+         LOADING SPINNER OVERLAY
+         Hidden by default; shown during data refresh.
+         ========================================================= -->
+    <div id="spinner-overlay" class="spinner-overlay">
+        <div style="text-align: center;">
+            <div class="spinner"></div>
+            <p class="spinner-text">Refreshing feeds...</p>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         TOAST NOTIFICATION CONTAINER
+         Toasts are dynamically added here by JavaScript.
+         ========================================================= -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Our custom JavaScript file -->
+    <script src="{{ url_for('static', path='js/dashboard.js') }}"></script>
+
+    <!-- Any extra scripts from child templates -->
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

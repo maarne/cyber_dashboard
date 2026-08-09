@@ -1,0 +1,59 @@
+<!-- =============================================================
+     components/cisa_card.html — CISA Active Exploit Card
+     =============================================================
+     Renders a single CISA Known Exploited Vulnerability card.
+     These represent vulnerabilities actively being exploited
+     by attackers in the real world.
+     ============================================================= -->
+
+<div class="data-card">
+    <!-- Card Header -->
+    <div class="card-header">
+        <span class="card-id">{{ exploit.cve_id }}</span>
+        <span class="severity-badge critical">EXPLOITED</span>
+    </div>
+
+    <!-- Vulnerability Name -->
+    <h3 class="card-title">
+        {{ exploit.vulnerability_name | default('Unknown Vulnerability') }}
+    </h3>
+
+    <!-- Description -->
+    <p class="card-description">
+        {{ exploit.short_description | default('No description available.') }}
+    </p>
+
+    <!-- Metadata -->
+    <div class="card-meta">
+        {% if exploit.vendor_project %}
+        <span class="card-meta-item">
+            🏢 {{ exploit.vendor_project }}
+        </span>
+        {% endif %}
+
+        {% if exploit.product %}
+        <span class="card-meta-item">
+            📦 {{ exploit.product }}
+        </span>
+        {% endif %}
+
+        {% if exploit.date_added %}
+        <span class="card-meta-item">
+            📅 Added: {{ exploit.date_added }}
+        </span>
+        {% endif %}
+
+        {% if exploit.due_date %}
+        <span class="card-meta-item">
+            ⏰ Due: {{ exploit.due_date }}
+        </span>
+        {% endif %}
+    </div>
+
+    <!-- Required Action -->
+    {% if exploit.required_action %}
+    <p class="card-description" style="color: var(--color-amber); font-size: 0.78rem; margin-top: 0.25rem;">
+        ⚡ {{ exploit.required_action }}
+    </p>
+    {% endif %}
+</div>

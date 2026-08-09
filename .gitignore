@@ -1,0 +1,19 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# SQLite database (regenerated at runtime)
+*.db
+
+# IDE / editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

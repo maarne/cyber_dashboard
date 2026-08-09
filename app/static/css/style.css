@@ -1,0 +1,840 @@
+/* =============================================================
+   app/static/css/style.css — Cyber Security Dashboard Styles
+   =============================================================
+
+   This stylesheet creates a premium dark-mode "cyber" aesthetic
+   with glassmorphism effects, neon accent glows, and smooth
+   animations. It uses CSS custom properties (variables) for
+   easy theming and consistency.
+
+   CSS CONCEPTS FOR BEGINNERS:
+   ---------------------------
+   - Custom Properties (--variable-name): Reusable values
+   - Flexbox & Grid: Modern layout systems
+   - Transitions: Smooth hover animations
+   - backdrop-filter: Frosted glass effect
+   - @keyframes: Custom animations
+   ============================================================= */
+
+
+/* =============================================================
+   CSS CUSTOM PROPERTIES (Variables)
+   =============================================================
+   :root targets the top-level HTML element. Variables defined
+   here are available EVERYWHERE in the stylesheet.
+
+   Usage:  color: var(--color-accent);
+   ============================================================= */
+:root {
+    /* --- Color Palette --- */
+    --color-bg-primary:     #0a0e1a;
+    --color-bg-secondary:   #111827;
+    --color-bg-card:        rgba(17, 24, 39, 0.7);
+    --color-bg-card-hover:  rgba(30, 41, 59, 0.8);
+    --color-border:         rgba(99, 102, 241, 0.15);
+    --color-border-hover:   rgba(99, 102, 241, 0.35);
+
+    /* --- Accent Colors --- */
+    --color-accent:         #818cf8;
+    --color-accent-bright:  #a5b4fc;
+    --color-cyan:           #22d3ee;
+    --color-emerald:        #34d399;
+    --color-amber:          #fbbf24;
+    --color-rose:           #fb7185;
+    --color-red:            #ef4444;
+
+    /* --- Severity Colors --- */
+    --color-critical:       #ef4444;
+    --color-high:           #f97316;
+    --color-medium:         #eab308;
+    --color-low:            #22c55e;
+    --color-unknown:        #6b7280;
+
+    /* --- Text Colors --- */
+    --color-text-primary:   #f1f5f9;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted:     #64748b;
+
+    /* --- Typography --- */
+    --font-family:          'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-mono:            'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+    /* --- Spacing --- */
+    --radius-sm:            0.375rem;
+    --radius-md:            0.625rem;
+    --radius-lg:            1rem;
+    --radius-xl:            1.25rem;
+
+    /* --- Effects --- */
+    --glass-blur:           12px;
+    --shadow-card:          0 4px 24px rgba(0, 0, 0, 0.3);
+    --shadow-glow:          0 0 20px rgba(129, 140, 248, 0.15);
+    --transition-speed:     0.25s;
+}
+
+
+/* =============================================================
+   GLOBAL RESET & BASE STYLES
+   ============================================================= */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+
+    /* Subtle grid pattern background */
+    background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+
+/* =============================================================
+   HEADER & NAVIGATION
+   ============================================================= */
+.header {
+    background: rgba(10, 14, 26, 0.85);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-bottom: 1px solid var(--color-border);
+    padding: 1rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-inner {
+    max-width: 1440px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: var(--color-text-primary);
+}
+
+.logo-icon {
+    font-size: 1.75rem;
+    filter: drop-shadow(0 0 8px rgba(129, 140, 248, 0.5));
+}
+
+.logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--color-accent-bright), var(--color-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: var(--radius-md);
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+    border: 1px solid transparent;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--color-accent), #6366f1);
+    color: white;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 0 24px rgba(99, 102, 241, 0.45);
+    transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-color: var(--color-border);
+}
+
+.btn-ghost:hover {
+    color: var(--color-text-primary);
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--color-border-hover);
+}
+
+
+/* =============================================================
+   SUMMARY STATS BAR
+   ============================================================= */
+.stats-bar {
+    max-width: 1440px;
+    margin: 1.5rem auto;
+    padding: 0 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all var(--transition-speed) ease;
+}
+
+.stat-card:hover {
+    border-color: var(--color-border-hover);
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
+}
+
+.stat-icon {
+    font-size: 1.75rem;
+    width: 3rem;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
+
+.stat-icon.critical { background: rgba(239, 68, 68, 0.15); }
+.stat-icon.high     { background: rgba(249, 115, 22, 0.15); }
+.stat-icon.exploit  { background: rgba(251, 113, 133, 0.15); }
+.stat-icon.news     { background: rgba(34, 211, 238, 0.15); }
+.stat-icon.threats  { background: rgba(251, 191, 36, 0.15); }
+.stat-icon.total    { background: rgba(129, 140, 248, 0.15); }
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+}
+
+
+/* =============================================================
+   MAIN CONTENT & TAB NAVIGATION
+   ============================================================= */
+.main-content {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 2rem 3rem;
+}
+
+.tab-nav {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tab-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-btn {
+    padding: 0.75rem 1.25rem;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all var(--transition-speed) ease;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tab-btn:hover {
+    color: var(--color-text-secondary);
+}
+
+.tab-btn.active {
+    color: var(--color-accent-bright);
+    border-bottom-color: var(--color-accent);
+}
+
+.tab-badge {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--color-accent-bright);
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.tab-panel {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* =============================================================
+   FILTER BAR (Search + Severity Pills)
+   ============================================================= */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 220px;
+    padding: 0.625rem 1rem 0.625rem 2.5rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    transition: all var(--transition-speed) ease;
+    outline: none;
+}
+
+.search-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.search-input::placeholder {
+    color: var(--color-text-muted);
+}
+
+.search-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+}
+
+.search-wrapper::before {
+    content: "🔍";
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.85rem;
+    pointer-events: none;
+}
+
+.filter-pill {
+    padding: 0.375rem 0.875rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+}
+
+.filter-pill:hover {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+}
+
+.filter-pill.active {
+    color: white;
+    border-color: transparent;
+}
+
+.filter-pill.active[data-severity="CRITICAL"] {
+    background: var(--color-critical);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+.filter-pill.active[data-severity="HIGH"] {
+    background: var(--color-high);
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.3);
+}
+.filter-pill.active[data-severity="MEDIUM"] {
+    background: var(--color-medium);
+    color: #1a1a1a;
+    box-shadow: 0 0 10px rgba(234, 179, 8, 0.3);
+}
+.filter-pill.active[data-severity="LOW"] {
+    background: var(--color-low);
+    color: #1a1a1a;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+}
+.filter-pill.active[data-severity="ALL"] {
+    background: var(--color-accent);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+
+.source-select {
+    padding: 0.5rem 0.875rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+    font-family: var(--font-family);
+    font-size: 0.8rem;
+    outline: none;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+}
+
+.source-select:focus {
+    border-color: var(--color-accent);
+}
+
+/* Dark dropdown options */
+.source-select option {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+}
+
+
+/* =============================================================
+   DATA CARDS — CVE, CISA, News, Threat
+   ============================================================= */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 1rem;
+}
+
+.data-card {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    transition: all var(--transition-speed) ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.data-card:hover {
+    border-color: var(--color-border-hover);
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.card-id {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-accent-bright);
+}
+
+.card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.4;
+}
+
+.card-title a {
+    color: var(--color-text-primary);
+    text-decoration: none;
+    transition: color var(--transition-speed) ease;
+}
+
+.card-title a:hover {
+    color: var(--color-accent-bright);
+}
+
+.card-description {
+    font-size: 0.825rem;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+    /* Clamp description to 3 lines max */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+.card-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+/* --- Severity Badges --- */
+.severity-badge {
+    padding: 0.2rem 0.625rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.severity-badge.critical {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-critical);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.severity-badge.high {
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--color-high);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.severity-badge.medium {
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--color-medium);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.severity-badge.low {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--color-low);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.severity-badge.unknown {
+    background: rgba(107, 114, 128, 0.15);
+    color: var(--color-unknown);
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+/* --- CVSS Score Badge --- */
+.score-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* --- Source Tag --- */
+.source-tag {
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    font-weight: 500;
+    background: rgba(34, 211, 238, 0.1);
+    color: var(--color-cyan);
+    border: 1px solid rgba(34, 211, 238, 0.2);
+}
+
+/* --- Threat Status --- */
+.status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online  { background: var(--color-red);     box-shadow: 0 0 6px var(--color-red); }
+.status-dot.offline { background: var(--color-unknown); }
+.status-dot.active  { background: var(--color-red);     box-shadow: 0 0 6px var(--color-red); }
+
+.indicator-value {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--color-rose);
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+
+/* =============================================================
+   EMPTY STATE
+   ============================================================= */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--color-text-muted);
+}
+
+.empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-state-text {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-sub {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+
+/* =============================================================
+   LOADING SPINNER
+   ============================================================= */
+.spinner-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 14, 26, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+}
+
+.spinner-overlay.active {
+    display: flex;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid rgba(129, 140, 248, 0.2);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner-text {
+    color: var(--color-text-secondary);
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+
+/* =============================================================
+   TOAST NOTIFICATIONS
+   ============================================================= */
+.toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toast {
+    padding: 0.875rem 1.25rem;
+    border-radius: var(--radius-md);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+    box-shadow: var(--shadow-card);
+    animation: slideIn 0.3s ease, fadeOut 0.3s ease 3.7s;
+    max-width: 360px;
+}
+
+.toast.success {
+    border-left: 3px solid var(--color-emerald);
+}
+
+.toast.error {
+    border-left: 3px solid var(--color-red);
+}
+
+.toast.info {
+    border-left: 3px solid var(--color-cyan);
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(40px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+
+
+/* =============================================================
+   FOOTER
+   ============================================================= */
+.footer {
+    border-top: 1px solid var(--color-border);
+    padding: 1.5rem 2rem;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+}
+
+.footer a {
+    color: var(--color-accent);
+    text-decoration: none;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+
+
+/* =============================================================
+   RESPONSIVE — Mobile & Tablet Adjustments
+   ============================================================= */
+@media (max-width: 768px) {
+    .header {
+        padding: 0.75rem 1rem;
+    }
+
+    .header-inner {
+        flex-wrap: wrap;
+    }
+
+    .stats-bar {
+        padding: 0 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .main-content {
+        padding: 0 1rem 2rem;
+    }
+
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-wrapper {
+        min-width: 100%;
+    }
+}
+
+
+/* =============================================================
+   PULSE ANIMATION for live status indicators
+   ============================================================= */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+}
+
+.pulse {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+
+/* =============================================================
+   SCROLLBAR STYLING (Webkit browsers)
+   ============================================================= */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.25);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.4);
+}

@@ -1,0 +1,235 @@
+{#
+     =============================================================
+     app/templates/index.html — Main Dashboard Page
+     =============================================================
+
+     This template "extends" base.html, which means it inherits
+     the header, footer, CSS, and JS from the base template.
+     It only needs to define the CONTENT that goes inside the
+     block content area.
+
+     JINJA2 CONCEPTS USED:
+     =====================
+     - extends "base.html": Inherit from the base template
+     - block content: Fill in the content placeholder
+     - for item in list: Loop over data from the server
+     - if condition: Conditional rendering
+     - {{ variable }}: Output a value
+     - include "...": Include a sub-template (component)
+     =============================================================
+#}
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<!-- =============================================================
+     SUMMARY STATISTICS BAR
+     Shows quick counts at the top of the dashboard.
+     The "summary" variable is passed from our FastAPI route.
+     ============================================================= -->
+<section class="stats-bar">
+    <!-- Total CVEs -->
+    <div class="stat-card">
+        <div class="stat-icon total">🔒</div>
+        <div class="stat-info">
+            <span class="stat-value">{{ summary.total_cves }}</span>
+            <span class="stat-label">Total CVEs</span>
+        </div>
+    </div>
+
+    <!-- Critical CVEs -->
+    <div class="stat-card">
+        <div class="stat-icon critical">🔴</div>
+        <div class="stat-info">
+            <span class="stat-value">{{ summary.critical_cves }}</span>
+            <span class="stat-label">Critical</span>
+        </div>
+    </div>
+
+    <!-- High CVEs -->
+    <div class="stat-card">
+        <div class="stat-icon high">🟠</div>
+        <div class="stat-info">
+            <span class="stat-value">{{ summary.high_cves }}</span>
+            <span class="stat-label">High</span>
+        </div>
+    </div>
+
+    <!-- CISA Active Exploits -->
+    <div class="stat-card">
+        <div class="stat-icon exploit">⚠️</div>
+        <div class="stat-info">
+            <span class="stat-value">{{ summary.active_exploits }}</span>
+            <span class="stat-label">Active Exploits</span>
+        </div>
+    </div>
+
+    <!-- News Articles -->
+    <div class="stat-card">
+        <div class="stat-icon news">📰</div>
+        <div class="stat-info">
+            <span class="stat-value">{{ summary.total_articles }}</span>
+            <span class="stat-label">News Articles</span>
+        </div>
+    </div>
+
+    <!-- Threat Indicators -->
+    <div class="stat-card">
+        <div class="stat-icon threats">🎯</div>
+        <div class="stat-info">
+            <span class="stat-value">{{ summary.total_threats }}</span>
+            <span class="stat-label">Threat Indicators</span>
+        </div>
+    </div>
+</section>
+
+
+<!-- =============================================================
+     MAIN CONTENT AREA WITH TABS
+     ============================================================= -->
+<main class="main-content">
+
+    <!-- TAB NAVIGATION -->
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="cves">
+            🛡️ Recent CVEs
+            <span class="tab-badge">{{ summary.total_cves }}</span>
+        </button>
+        <button class="tab-btn" data-tab="cisa">
+            ⚠️ Active Exploits
+            <span class="tab-badge">{{ summary.active_exploits }}</span>
+        </button>
+        <button class="tab-btn" data-tab="news">
+            📰 Security News
+            <span class="tab-badge">{{ summary.total_articles }}</span>
+        </button>
+        <button class="tab-btn" data-tab="threats">
+            🎯 Threat Intel
+            <span class="tab-badge">{{ summary.total_threats }}</span>
+        </button>
+    </nav>
+
+
+    <!-- =========================================================
+         TAB PANEL: Recent CVEs
+         ========================================================= -->
+    <div id="panel-cves" class="tab-panel active">
+
+        <!-- Filter Bar: Search + Severity Pills -->
+        <div class="filter-bar">
+            <div class="search-wrapper">
+                <input type="text"
+                       id="cve-search"
+                       class="search-input"
+                       placeholder="Search CVEs by ID or description...">
+            </div>
+            <button class="filter-pill active" data-severity="ALL">All</button>
+            <button class="filter-pill" data-severity="CRITICAL">Critical</button>
+            <button class="filter-pill" data-severity="HIGH">High</button>
+            <button class="filter-pill" data-severity="MEDIUM">Medium</button>
+            <button class="filter-pill" data-severity="LOW">Low</button>
+        </div>
+
+        <!-- CVE Cards Grid -->
+        {% if cves %}
+        <div class="card-grid">
+            {#
+                JINJA2 CONCEPT — for Loop:
+                This loops over each CVE in the "cves" list
+                that was passed from our FastAPI route. For each
+                CVE, it renders a card with the CVE's data.
+            #}
+            {% for cve in cves %}
+            {% include "components/cve_card.html" %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <p class="empty-state-text">No CVEs loaded yet</p>
+            <p class="empty-state-sub">Click "Refresh Feeds" to fetch the latest vulnerability data</p>
+        </div>
+        {% endif %}
+    </div>
+
+
+    <!-- =========================================================
+         TAB PANEL: CISA Active Exploits
+         ========================================================= -->
+    <div id="panel-cisa" class="tab-panel">
+        {% if cisa_exploits %}
+        <div class="card-grid">
+            {% for exploit in cisa_exploits %}
+            {% include "components/cisa_card.html" %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <p class="empty-state-text">No CISA exploits loaded yet</p>
+            <p class="empty-state-sub">Click "Refresh Feeds" to fetch the CISA KEV catalog</p>
+        </div>
+        {% endif %}
+    </div>
+
+
+    <!-- =========================================================
+         TAB PANEL: Security News
+         ========================================================= -->
+    <div id="panel-news" class="tab-panel">
+
+        <!-- News Filter Bar -->
+        <div class="filter-bar">
+            <div class="search-wrapper">
+                <input type="text"
+                       id="news-search"
+                       class="search-input"
+                       placeholder="Search news articles...">
+            </div>
+            <select id="news-source-filter" class="source-select">
+                <option value="ALL">All Sources</option>
+                {% for source in rss_sources %}
+                <option value="{{ source }}">{{ source }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {% if articles %}
+        <div class="card-grid">
+            {% for article in articles %}
+            {% include "components/news_card.html" %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">📰</div>
+            <p class="empty-state-text">No news articles loaded yet</p>
+            <p class="empty-state-sub">Click "Refresh Feeds" to fetch the latest security news</p>
+        </div>
+        {% endif %}
+    </div>
+
+
+    <!-- =========================================================
+         TAB PANEL: Threat Intelligence
+         ========================================================= -->
+    <div id="panel-threats" class="tab-panel">
+        {% if threats %}
+        <div class="card-grid">
+            {% for threat in threats %}
+            {% include "components/threat_card.html" %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">🎯</div>
+            <p class="empty-state-text">No threat indicators loaded yet</p>
+            <p class="empty-state-sub">Click "Refresh Feeds" to fetch threat intelligence data</p>
+        </div>
+        {% endif %}
+    </div>
+
+</main>
+
+{% endblock %}

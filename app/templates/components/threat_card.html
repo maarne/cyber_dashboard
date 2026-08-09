@@ -1,0 +1,53 @@
+<!-- =============================================================
+     components/threat_card.html — Threat Indicator Card
+     =============================================================
+     Renders a single threat indicator (malicious URL or IP)
+     from Abuse.ch feeds. Shows the indicator value, type,
+     threat category, and status.
+     ============================================================= -->
+
+<div class="data-card">
+    <!-- Card Header: Type + Status -->
+    <div class="card-header">
+        <span class="card-id" style="text-transform: uppercase;">
+            {% if threat.indicator_type == 'url' %}
+                🔗 Malicious URL
+            {% elif threat.indicator_type == 'ip' %}
+                🌐 Botnet C2 IP
+            {% else %}
+                ⚡ {{ threat.indicator_type }}
+            {% endif %}
+        </span>
+
+        {% if threat.status %}
+        <span style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--color-text-muted);">
+            <span class="status-dot {{ threat.status | lower }}"></span>
+            {{ threat.status }}
+        </span>
+        {% endif %}
+    </div>
+
+    <!-- Indicator Value (URL or IP) -->
+    <p class="indicator-value">
+        {{ threat.indicator_value }}
+    </p>
+
+    <!-- Metadata -->
+    <div class="card-meta">
+        {% if threat.threat_type %}
+        <span class="card-meta-item">
+            🏷️ {{ threat.threat_type }}
+        </span>
+        {% endif %}
+
+        {% if threat.source %}
+        <span class="source-tag">{{ threat.source }}</span>
+        {% endif %}
+
+        {% if threat.date_added %}
+        <span class="card-meta-item">
+            📅 {{ threat.date_added }}
+        </span>
+        {% endif %}
+    </div>
+</div>
