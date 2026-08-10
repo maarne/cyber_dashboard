@@ -31,11 +31,92 @@
     <div class="settings-header">
         <div class="settings-header-text">
             <h1>⚙️ Settings</h1>
-            <p class="settings-subtitle">Manage webhook notifications and integrations.</p>
+            <p class="settings-subtitle">Manage scheduled refreshes, webhook notifications, and integrations.</p>
         </div>
         <button id="add-webhook-btn" class="btn btn-primary">
             ➕ Add Webhook
         </button>
+    </div>
+
+    <!-- =========================================================
+         SCHEDULED REFRESH SECTION
+         Lets users configure automatic data refreshes on a timer.
+         ========================================================= -->
+    <div class="schedule-section">
+        <h2 class="section-title">
+            ⏰ Scheduled Refresh
+        </h2>
+
+        <div class="schedule-card">
+            <!-- Schedule Toggle Row -->
+            <div class="schedule-toggle-row">
+                <div class="schedule-info">
+                    <h3>Auto-Refresh Feeds</h3>
+                    <p>Automatically fetch the latest CVEs, CISA exploits, news, and threat intel on a recurring schedule.</p>
+                </div>
+                <label class="toggle-switch" title="Enable or disable scheduled refresh">
+                    <input type="checkbox" class="toggle-input"
+                           id="schedule-toggle"
+                           {% if schedule.enabled %}checked{% endif %}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Interval Selection (radio buttons) -->
+            <div class="schedule-interval" id="schedule-interval-group">
+                <label class="interval-label">Refresh Every:</label>
+                <div class="interval-options">
+                    <label class="interval-option {% if schedule.interval_hours == 6 %}active{% endif %}">
+                        <input type="radio" name="schedule-interval" value="6"
+                               {% if schedule.interval_hours == 6 %}checked{% endif %}>
+                        <span class="interval-pill">6 hours</span>
+                    </label>
+                    <label class="interval-option {% if schedule.interval_hours == 12 %}active{% endif %}">
+                        <input type="radio" name="schedule-interval" value="12"
+                               {% if schedule.interval_hours == 12 %}checked{% endif %}>
+                        <span class="interval-pill">12 hours</span>
+                    </label>
+                    <label class="interval-option {% if schedule.interval_hours == 24 %}active{% endif %}">
+                        <input type="radio" name="schedule-interval" value="24"
+                               {% if schedule.interval_hours == 24 %}checked{% endif %}>
+                        <span class="interval-pill">24 hours</span>
+                    </label>
+                    <label class="interval-option {% if schedule.interval_hours == 48 %}active{% endif %}">
+                        <input type="radio" name="schedule-interval" value="48"
+                               {% if schedule.interval_hours == 48 %}checked{% endif %}>
+                        <span class="interval-pill">48 hours</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Status Display -->
+            <div class="schedule-status" id="schedule-status">
+                <div class="status-row">
+                    <span class="status-label">Status:</span>
+                    <span class="status-value" id="schedule-status-text">
+                        {% if schedule.is_running %}
+                            <span class="status-dot status-dot-active"></span> Running
+                        {% elif schedule.enabled %}
+                            <span class="status-dot status-dot-pending"></span> Starting...
+                        {% else %}
+                            <span class="status-dot status-dot-inactive"></span> Disabled
+                        {% endif %}
+                    </span>
+                </div>
+                {% if schedule.last_refresh %}
+                <div class="status-row">
+                    <span class="status-label">Last refresh:</span>
+                    <span class="status-value" id="schedule-last-refresh">{{ schedule.last_refresh }}</span>
+                </div>
+                {% endif %}
+                {% if schedule.next_refresh %}
+                <div class="status-row">
+                    <span class="status-label">Next refresh:</span>
+                    <span class="status-value" id="schedule-next-refresh">{{ schedule.next_refresh }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <!-- =========================================================
@@ -222,6 +303,69 @@
             </div>
             {% endfor %}
         </div>
+    </div>
+
+    <!-- =========================================================
+         RSS FEED SOURCES
+         Lets users add, remove, and toggle RSS news feeds.
+         ========================================================= -->
+    <div class="rss-feeds-section">
+        <h2 class="section-title">
+            📡 News Feed Sources
+            <span class="webhook-count" id="feed-count">{{ rss_feeds | length }}</span>
+        </h2>
+
+        <!-- Add Feed Form (inline) -->
+        <div class="feed-add-form">
+            <form id="add-feed-form" class="feed-form-row">
+                <input type="text" id="feed-name-input"
+                       placeholder="Feed name (e.g. BleepingComputer)"
+                       required class="form-input feed-input-name">
+                <input type="url" id="feed-url-input"
+                       placeholder="RSS feed URL (e.g. https://example.com/feed/)"
+                       required class="form-input feed-input-url">
+                <button type="submit" class="btn btn-primary btn-add-feed">
+                    ➕ Add
+                </button>
+            </form>
+        </div>
+
+        <!-- Feed List -->
+        <div id="rss-feeds-list" class="rss-feeds-list">
+            {% for feed in rss_feeds %}
+            <div class="feed-row" data-feed-id="{{ feed.id }}">
+                <div class="feed-info">
+                    <span class="feed-name">{{ feed.name }}</span>
+                    <a href="{{ feed.url }}" target="_blank" rel="noopener"
+                       class="feed-url" title="{{ feed.url }}">
+                        {{ feed.url[:60] }}{% if feed.url | length > 60 %}…{% endif %}
+                    </a>
+                </div>
+                <div class="feed-actions">
+                    <label class="toggle-switch toggle-sm" title="Enable or disable this feed">
+                        <input type="checkbox" class="toggle-input feed-toggle"
+                               data-feed-id="{{ feed.id }}"
+                               {% if feed.is_active %}checked{% endif %}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <button class="btn btn-sm btn-delete feed-delete-btn"
+                            data-feed-id="{{ feed.id }}"
+                            data-feed-name="{{ feed.name }}"
+                            title="Remove this feed">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if rss_feeds | length == 0 %}
+        <div class="empty-state" id="feeds-empty-state">
+            <div class="empty-icon">📡</div>
+            <h3>No RSS Feeds Configured</h3>
+            <p>Add an RSS feed URL above to start monitoring security news sources.</p>
+        </div>
+        {% endif %}
     </div>
 
     <!-- =========================================================

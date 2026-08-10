@@ -52,7 +52,13 @@ from app.database import initialize_database
 # Import the data fetcher services
 from app.services.cve_service import fetch_and_store_cves, fetch_epss_scores
 from app.services.cisa_service import fetch_and_store_cisa_kev
-from app.services.rss_service import fetch_and_store_rss
+from app.services.rss_service import (
+    fetch_and_store_rss,
+    get_all_rss_feeds,
+    add_rss_feed,
+    delete_rss_feed,
+    toggle_rss_feed,
+)
 from app.services.threat_service import fetch_all_threat_intel
 
 # Import the database query service
@@ -82,6 +88,17 @@ from app.services.webhook_service import (
 # Import the WebhookSchema Pydantic model for validating
 # webhook form data sent from the Settings page.
 from app.models.schemas import WebhookSchema
+
+# Import the background scheduler service.
+# This module manages a daemon thread that automatically
+# refreshes all feeds at a user-configured interval.
+from app.services.scheduler_service import (
+    start_scheduler,
+    restart_scheduler,
+    get_scheduler_status,
+    get_schedule_settings,
+    save_schedule_settings,
+)
 
 
 # ============================================================
@@ -167,6 +184,11 @@ def on_startup():
     print("🌐 Dashboard available at: http://127.0.0.1:8000")
     print("📚 API documentation at:   http://127.0.0.1:8000/docs")
     print("=" * 50)
+
+    # Start the background scheduler if it was previously enabled.
+    # This means the schedule survives server restarts — if a user
+    # set a 24-hour refresh schedule, it will resume automatically.
+    start_scheduler()
 
 
 # ============================================================
@@ -393,18 +415,20 @@ def api_get_summary(start_date: str = None, end_date: str = None):
 @app.get("/settings")
 def settings_page(request: Request):
     """
-    Render the Settings page with all configured webhooks.
-
-    This page lets users add, edit, delete, and test webhook
-    endpoints for Slack, Discord, Teams, or generic URLs.
+    Render the Settings page with all configured webhooks
+    and the current schedule configuration.
     """
     webhooks = get_all_webhooks()
+    schedule = get_scheduler_status()
+    rss_feeds = get_all_rss_feeds()
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
         context={
             "request": request,
             "webhooks": webhooks,
+            "schedule": schedule,
+            "rss_feeds": rss_feeds,
         },
     )
 
@@ -537,6 +561,133 @@ def api_test_webhook(webhook_id: int):
         return JSONResponse(
             content={"error": "Failed to send test notification. Check the webhook URL."},
             status_code=400,  # 400 = "Bad Request"
+        )
+
+
+# ============================================================
+# API ROUTES: Scheduled Refresh
+# ============================================================
+# These endpoints let the Settings page manage the automatic
+# feed refresh schedule.
+#
+# PYTHON CONCEPT — Background Task Management:
+#   When the user changes the schedule, we save the settings
+#   to the database and then restart the scheduler thread.
+#   The thread reads the new settings on startup, so it
+#   automatically picks up the new interval.
+# ============================================================
+
+@app.get("/api/schedule")
+def api_get_schedule():
+    """Return the current schedule settings and status."""
+    return get_scheduler_status()
+
+
+@app.post("/api/schedule")
+def api_update_schedule(request_data: dict):
+    """
+    Update the automatic refresh schedule.
+
+    PYTHON CONCEPT — dict Parameter:
+        FastAPI can accept a plain dict as the request body.
+        We use this instead of a Pydantic model here because
+        the schedule only has two simple fields (enabled and
+        interval_hours).
+
+    Args:
+        request_data: JSON body with "enabled" (bool) and
+                      "interval_hours" (int: 6, 12, 24, or 48).
+    """
+    enabled = request_data.get("enabled", False)
+    interval_hours = request_data.get("interval_hours", 24)
+
+    # Validate the interval
+    from app.services.scheduler_service import VALID_INTERVALS
+    if interval_hours not in VALID_INTERVALS:
+        return JSONResponse(
+            content={"error": f"Invalid interval. Must be one of: {VALID_INTERVALS}"},
+            status_code=400,
+        )
+
+    # Save to database and restart the scheduler
+    save_schedule_settings(enabled, interval_hours)
+    restart_scheduler()
+
+    # Return the updated status
+    status = get_scheduler_status()
+    return JSONResponse(content={
+        "message": "Schedule updated successfully",
+        **status,
+    })
+
+
+# ============================================================
+# API ROUTES: RSS Feed Management
+# ============================================================
+# These endpoints let the Settings page add, remove, and toggle
+# RSS feed sources. Feeds are stored in the rss_feeds database
+# table and read during each data refresh.
+# ============================================================
+
+@app.get("/api/rss-feeds")
+def api_list_rss_feeds():
+    """Return all configured RSS feeds as JSON."""
+    return get_all_rss_feeds()
+
+
+@app.post("/api/rss-feeds")
+def api_add_rss_feed(feed_data: dict):
+    """
+    Add a new RSS feed source.
+
+    Args:
+        feed_data: JSON body with "name" and "url" fields.
+    """
+    name = feed_data.get("name", "").strip()
+    url = feed_data.get("url", "").strip()
+
+    if not name or not url:
+        return JSONResponse(
+            content={"error": "Both 'name' and 'url' are required."},
+            status_code=400,
+        )
+
+    new_id = add_rss_feed(name, url)
+    if new_id:
+        return JSONResponse(
+            content={"id": new_id, "message": "RSS feed added successfully"},
+            status_code=201,
+        )
+    else:
+        return JSONResponse(
+            content={"error": "This feed URL already exists."},
+            status_code=409,  # 409 = Conflict
+        )
+
+
+@app.delete("/api/rss-feeds/{feed_id}")
+def api_delete_rss_feed(feed_id: int):
+    """Remove an RSS feed source."""
+    success = delete_rss_feed(feed_id)
+    if success:
+        return JSONResponse(content={"message": "RSS feed removed"})
+    else:
+        return JSONResponse(
+            content={"error": "Feed not found"},
+            status_code=404,
+        )
+
+
+@app.post("/api/rss-feeds/{feed_id}/toggle")
+def api_toggle_rss_feed(feed_id: int):
+    """Toggle an RSS feed between active and inactive."""
+    success = toggle_rss_feed(feed_id)
+    if success:
+        return JSONResponse(content={"message": "Feed toggled"})
+    else:
+        return JSONResponse(
+            content={"error": "Feed not found"},
+            status_code=404,
         )
 
 

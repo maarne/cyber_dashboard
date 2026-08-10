@@ -264,9 +264,77 @@ def initialize_database():
         # - last_notified:        Timestamp of last notification (rate limiting)
         # - created_at:           When this webhook was configured
 
+        # --------------------------------------------------
+        # TABLE 7: rss_feeds
+        # Stores the list of RSS feed sources that the app
+        # monitors for security news. Users can add or remove
+        # feeds from the Settings page.
+        #
+        # BEGINNER CONCEPT — Separating Config from Code:
+        #   Instead of hardcoding feed URLs in config.py, we
+        #   store them in the database. This lets users manage
+        #   feeds without editing Python files.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rss_feeds (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL,
+                url        TEXT UNIQUE NOT NULL,
+                is_active  INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # Column explanations:
+        # - name:       Friendly label (e.g. "Krebs on Security")
+        # - url:        The RSS feed URL (must be unique)
+        # - is_active:  1 = enabled, 0 = paused
+        # - created_at: When this feed was added
+
         conn.commit()
 
     # When the "with" block ends here, the connection is
     # automatically closed. The database file is saved.
     print("✅ Database initialized successfully!")
     print(f"   Database file: {DATABASE_PATH}")
+
+    # Seed the default RSS feeds on first run
+    seed_default_rss_feeds()
+
+
+def seed_default_rss_feeds():
+    """
+    Populate the rss_feeds table with default security news sources
+    if it is empty. This runs on every startup but only INSERTs
+    feeds that don't already exist (using INSERT OR IGNORE).
+
+    PYTHON CONCEPT — Idempotent Operations:
+        An "idempotent" operation produces the same result no
+        matter how many times you run it. INSERT OR IGNORE is
+        idempotent — if the URL already exists, it silently
+        skips the insert instead of raising an error.
+    """
+    # These are the same feeds that were originally hardcoded
+    # in config.py. They serve as sensible defaults.
+    from app.config import RSS_FEEDS
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        # Check if the table already has feeds
+        cursor.execute("SELECT COUNT(*) as count FROM rss_feeds")
+        row = cursor.fetchone()
+
+        if row["count"] > 0:
+            # Table already has data — skip seeding
+            return
+
+        # Insert the default feeds
+        for feed in RSS_FEEDS:
+            cursor.execute("""
+                INSERT OR IGNORE INTO rss_feeds (name, url)
+                VALUES (?, ?)
+            """, (feed["name"], feed["url"]))
+
+        conn.commit()
+        print(f"   📡 Seeded {len(RSS_FEEDS)} default RSS feeds.")
+

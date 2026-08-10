@@ -113,6 +113,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // --- Schedule Toggle ---
+    // When the user toggles the schedule on/off, immediately
+    // send the updated settings to the server.
+    var scheduleToggle = document.getElementById('schedule-toggle');
+    if (scheduleToggle) {
+        scheduleToggle.addEventListener('change', function() {
+            saveScheduleSettings();
+        });
+    }
+
+    // --- Schedule Interval Radio Buttons ---
+    // When the user clicks a different interval, update the
+    // active pill styling and save the new settings.
+    var intervalRadios = document.querySelectorAll('input[name="schedule-interval"]');
+    intervalRadios.forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            // Update the visual "active" state on the pills
+            document.querySelectorAll('.interval-option').forEach(function(opt) {
+                opt.classList.remove('active');
+            });
+            radio.closest('.interval-option').classList.add('active');
+
+            saveScheduleSettings();
+        });
+    });
+
+    // --- RSS Feed Form ---
+    var addFeedForm = document.getElementById('add-feed-form');
+    if (addFeedForm) {
+        addFeedForm.addEventListener('submit', handleAddFeed);
+    }
+
+    // --- RSS Feed List Event Delegation (Toggle & Delete) ---
+    var rssFeedsList = document.getElementById('rss-feeds-list');
+    if (rssFeedsList) {
+        rssFeedsList.addEventListener('click', function(event) {
+            var button = event.target.closest('button');
+            if (button && button.classList.contains('feed-delete-btn')) {
+                handleDeleteFeed(button.dataset.feedId, button.dataset.feedName);
+            }
+        });
+
+        rssFeedsList.addEventListener('change', function(event) {
+            if (event.target.classList.contains('feed-toggle')) {
+                handleToggleFeed(event.target.dataset.feedId);
+            }
+        });
+    }
 });
 
 
@@ -404,6 +453,175 @@ async function handleTestWebhook(webhookId) {
             button.textContent = '🧪 Test';
             button.disabled = false;
         }
+    }
+}
+
+
+// =============================================================
+// SCHEDULE: Save Settings
+// =============================================================
+
+async function saveScheduleSettings() {
+    /**
+     * Read the current schedule UI state and POST it to the server.
+     *
+     * This function is called whenever the user toggles the
+     * schedule on/off OR changes the interval. It sends the
+     * updated settings to the API, which saves them to the
+     * database and restarts the background scheduler thread.
+     */
+    var enabled = document.getElementById('schedule-toggle').checked;
+
+    // Find the currently selected radio button.
+    // querySelector returns the FIRST matching element.
+    var selectedRadio = document.querySelector(
+        'input[name="schedule-interval"]:checked'
+    );
+    var intervalHours = selectedRadio ? parseInt(selectedRadio.value) : 24;
+
+    try {
+        var response = await fetch('/api/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enabled: enabled,
+                interval_hours: intervalHours,
+            }),
+        });
+
+        var data = await response.json();
+
+        if (response.ok) {
+            // Update the status display
+            var statusText = document.getElementById('schedule-status-text');
+            if (statusText) {
+                if (data.enabled) {
+                    statusText.innerHTML = '<span class="status-dot status-dot-active"></span> Running';
+                } else {
+                    statusText.innerHTML = '<span class="status-dot status-dot-inactive"></span> Disabled';
+                }
+            }
+
+            showToast(
+                enabled
+                    ? 'Schedule enabled — refreshing every ' + intervalHours + ' hours'
+                    : 'Schedule disabled',
+                'success'
+            );
+        } else {
+            showToast('Error: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        showToast('Network error: ' + error.message, 'error');
+    }
+}
+
+
+// =============================================================
+// RSS FEEDS: Add, Delete, Toggle
+// =============================================================
+
+async function handleAddFeed(event) {
+    /**
+     * Add a new RSS feed source via POST /api/rss-feeds.
+     */
+    event.preventDefault();
+
+    var nameInput = document.getElementById('feed-name-input');
+    var urlInput = document.getElementById('feed-url-input');
+
+    var name = nameInput.value.trim();
+    var url = urlInput.value.trim();
+
+    if (!name || !url) return;
+
+    try {
+        var response = await fetch('/api/rss-feeds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, url: url }),
+        });
+
+        var data = await response.json();
+
+        if (response.ok) {
+            showToast('RSS feed added successfully!', 'success');
+            nameInput.value = '';
+            urlInput.value = '';
+            window.location.reload();
+        } else {
+            showToast('Error: ' + (data.error || 'Failed to add feed'), 'error');
+        }
+    } catch (error) {
+        showToast('Network error: ' + error.message, 'error');
+    }
+}
+
+
+async function handleDeleteFeed(feedId, feedName) {
+    /**
+     * Remove an RSS feed source via DELETE /api/rss-feeds/{id}.
+     */
+    if (!confirm('Are you sure you want to remove "' + feedName + '"?')) {
+        return;
+    }
+
+    try {
+        var response = await fetch('/api/rss-feeds/' + feedId, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            showToast('RSS feed removed.', 'success');
+            var feedRow = document.querySelector('.feed-row[data-feed-id="' + feedId + '"]');
+            if (feedRow) {
+                feedRow.style.opacity = '0';
+                feedRow.style.transform = 'scale(0.95)';
+                setTimeout(function() {
+                    feedRow.remove();
+                    updateFeedCount();
+                }, 300);
+            }
+        } else {
+            showToast('Failed to remove RSS feed.', 'error');
+        }
+    } catch (error) {
+        showToast('Network error: ' + error.message, 'error');
+    }
+}
+
+
+async function handleToggleFeed(feedId) {
+    /**
+     * Toggle an RSS feed active/inactive via POST /api/rss-feeds/{id}/toggle.
+     */
+    try {
+        var response = await fetch('/api/rss-feeds/' + feedId + '/toggle', {
+            method: 'POST',
+        });
+
+        if (response.ok) {
+            showToast('RSS feed updated.', 'success');
+        } else {
+            showToast('Failed to update feed status.', 'error');
+        }
+    } catch (error) {
+        showToast('Network error: ' + error.message, 'error');
+    }
+}
+
+
+function updateFeedCount() {
+    /** Update feed count badge and empty state visibility. */
+    var rows = document.querySelectorAll('.feed-row');
+    var countEl = document.getElementById('feed-count');
+    if (countEl) {
+        countEl.textContent = rows.length;
+    }
+
+    var emptyState = document.getElementById('feeds-empty-state');
+    if (emptyState) {
+        emptyState.style.display = rows.length === 0 ? 'block' : 'none';
     }
 }
 

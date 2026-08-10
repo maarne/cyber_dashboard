@@ -1019,6 +1019,173 @@ body {
 
 
 /* =============================================================
+   SCHEDULED REFRESH SECTION
+   ============================================================= */
+
+.schedule-section {
+    margin-bottom: 2rem;
+}
+
+.schedule-card {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-card);
+}
+
+
+/* --- Toggle Row --- */
+
+.schedule-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.schedule-info h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 0.25rem;
+}
+
+.schedule-info p {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+
+/* --- Interval Selection --- */
+
+.schedule-interval {
+    margin-bottom: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+.interval-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 0.6rem;
+}
+
+.interval-options {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.interval-option {
+    cursor: pointer;
+    user-select: none;
+}
+
+.interval-option input[type="radio"] {
+    display: none;
+}
+
+.interval-pill {
+    display: inline-block;
+    padding: 0.45rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    transition: all var(--transition-speed) ease;
+}
+
+.interval-pill:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-border-hover);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.interval-option.active .interval-pill,
+.interval-option input[type="radio"]:checked + .interval-pill {
+    color: white;
+    background: linear-gradient(135deg, var(--color-accent), #6366f1);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+}
+
+
+/* --- Status Display --- */
+
+.schedule-status {
+    padding-top: 1rem;
+    border-top: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+.status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.status-row:last-child {
+    margin-bottom: 0;
+}
+
+.status-label {
+    color: var(--color-text-muted);
+    font-weight: 500;
+    min-width: 100px;
+}
+
+.status-value {
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+
+/* --- Status Dots (animated) --- */
+
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot-active {
+    background: var(--color-emerald);
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+    animation: statusPulse 2s ease-in-out infinite;
+}
+
+.status-dot-pending {
+    background: var(--color-amber);
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+    animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+.status-dot-inactive {
+    background: var(--color-text-muted);
+    opacity: 0.5;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+
+
+/* =============================================================
    WEBHOOK FORM
    ============================================================= */
 
@@ -1565,6 +1732,124 @@ select.form-input {
 
 
 /* =============================================================
+   RSS FEED SOURCES SECTION
+   ============================================================= */
+
+.rss-feeds-section {
+    margin-bottom: 2.5rem;
+}
+
+.feed-add-form {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-card);
+}
+
+.feed-form-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.feed-input-name {
+    flex: 1;
+    min-width: 200px;
+}
+
+.feed-input-url {
+    flex: 2;
+    min-width: 280px;
+}
+
+.btn-add-feed {
+    padding: 0.625rem 1.25rem;
+    white-space: nowrap;
+}
+
+.rss-feeds-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.feed-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--color-bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 0.875rem 1.25rem;
+    transition: all var(--transition-speed) ease;
+}
+
+.feed-row:hover {
+    border-color: var(--color-border-hover);
+    transform: translateX(2px);
+}
+
+.feed-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+    margin-right: 1rem;
+}
+
+.feed-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.feed-url {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 500px;
+}
+
+.feed-url:hover {
+    color: var(--color-accent-bright);
+    text-decoration: underline;
+}
+
+.feed-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.toggle-sm {
+    width: 36px;
+    height: 20px;
+}
+
+.toggle-sm .toggle-slider::before {
+    width: 14px;
+    height: 14px;
+    left: 3px;
+    bottom: 3px;
+}
+
+.toggle-sm .toggle-input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+}
+
+
+/* =============================================================
    SETTINGS PAGE — RESPONSIVE
    ============================================================= */
 
@@ -1572,6 +1857,17 @@ select.form-input {
     .settings-header {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .feed-form-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .feed-input-name,
+    .feed-input-url {
+        width: 100%;
+        min-width: 0;
     }
 
     .webhooks-list {
@@ -1586,4 +1882,5 @@ select.form-input {
         flex-direction: column;
     }
 }
+
 

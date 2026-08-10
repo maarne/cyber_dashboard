@@ -46,6 +46,118 @@ from app.config import RSS_FEEDS
 from app.database import get_connection
 
 
+# ============================================================
+# RSS FEED CRUD — Manage Feed Sources from the Database
+# ============================================================
+# These functions let the Settings page add, remove, and list
+# RSS feeds. Feeds are stored in the rss_feeds database table
+# instead of being hardcoded in config.py.
+# ============================================================
+
+
+def get_all_rss_feeds():
+    """
+    Retrieve all RSS feed configurations from the database.
+
+    Returns:
+        list: A list of dictionaries, each with id, name, url,
+              is_active, and created_at.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM rss_feeds
+            ORDER BY created_at ASC
+        """)
+        rows = cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_active_rss_feeds():
+    """
+    Retrieve only the ACTIVE RSS feeds (is_active = 1).
+
+    This is used by the fetch function so that disabled
+    feeds are skipped during refresh.
+
+    Returns:
+        list: Active feeds as a list of dictionaries.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM rss_feeds
+            WHERE is_active = 1
+            ORDER BY created_at ASC
+        """)
+        rows = cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+def add_rss_feed(name, url):
+    """
+    Add a new RSS feed to the database.
+
+    Args:
+        name: Friendly label for the feed.
+        url: The RSS feed URL.
+
+    Returns:
+        int: The ID of the newly created feed, or None if
+             the URL already exists (UNIQUE constraint).
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO rss_feeds (name, url)
+                VALUES (?, ?)
+            """, (name, url))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception:
+            # URL already exists (UNIQUE constraint violation)
+            return None
+
+
+def delete_rss_feed(feed_id):
+    """
+    Remove an RSS feed from the database.
+
+    Args:
+        feed_id: The ID of the feed to delete.
+
+    Returns:
+        bool: True if the feed was deleted.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rss_feeds WHERE id = ?", (feed_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def toggle_rss_feed(feed_id):
+    """
+    Toggle an RSS feed between active and inactive.
+
+    Args:
+        feed_id: The ID of the feed to toggle.
+
+    Returns:
+        bool: True if toggled successfully.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE rss_feeds
+            SET is_active = NOT is_active
+            WHERE id = ?
+        """, (feed_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
 def strip_html_tags(text):
     """
     Remove HTML tags from a string, leaving only plain text.
@@ -123,8 +235,16 @@ def fetch_and_store_rss():
     #   If each feed has 10 articles, the inner loop runs 50 times.
     # ----------------------------------------------------------
 
-    # Outer loop: iterate over each RSS feed configuration
-    for feed_config in RSS_FEEDS:
+    # Outer loop: iterate over each ACTIVE RSS feed from the database.
+    # We now read feeds from the database instead of the hardcoded
+    # config list. This lets users add/remove feeds from Settings.
+    active_feeds = get_active_rss_feeds()
+
+    if not active_feeds:
+        print("📡 No active RSS feeds configured.")
+        return 0
+
+    for feed_config in active_feeds:
         # Each feed_config is a dictionary with "name" and "url" keys.
         feed_name = feed_config["name"]
         feed_url = feed_config["url"]
