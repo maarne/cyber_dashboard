@@ -193,3 +193,41 @@ class DashboardSummary(BaseModel):
     active_exploits: int = 0
     total_articles: int = 0
     total_threats: int = 0
+
+
+# ============================================================
+# Webhook Configuration Schema
+# ============================================================
+# Represents a configured webhook endpoint for sending
+# automated notifications to external platforms like
+# Slack, Discord, Microsoft Teams, or any generic URL.
+#
+# PYTHON CONCEPT — Boolean Fields with Defaults:
+#   "is_active: bool = True" means this field defaults to True
+#   if the caller doesn't provide a value. This makes creating
+#   a new webhook simple — you only NEED to provide name,
+#   platform, and webhook_url.
+# ============================================================
+
+class WebhookSchema(BaseModel):
+    """
+    Represents a webhook configuration for notifications.
+
+    Attributes:
+        name:                Friendly label (e.g. "SOC Slack Channel")
+        platform:            Target platform: "slack", "discord", "teams", "generic"
+        webhook_url:         The full incoming webhook URL
+        is_active:           Whether this webhook is enabled
+        notify_critical_cves:  Send alerts for CRITICAL CVEs
+        notify_high_cves:      Send alerts for HIGH CVEs
+        notify_cisa_exploits:  Send alerts for new CISA entries
+    """
+
+    name: str
+    platform: str
+    webhook_url: str
+    is_active: bool = True
+    notify_critical_cves: bool = True
+    notify_high_cves: bool = True
+    notify_cisa_exploits: bool = True
+

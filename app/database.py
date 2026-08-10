@@ -228,9 +228,42 @@ def initialize_database():
             )
         """)
 
-        # conn.commit() saves all the changes we just made to
-        # the database file on disk. Without commit(), the
-        # changes would be lost when the connection closes!
+        # --------------------------------------------------
+        # TABLE 6: webhooks
+        # Stores webhook configurations for sending automated
+        # notifications to external platforms (Slack, Discord,
+        # Microsoft Teams, or any generic webhook endpoint).
+        #
+        # BEGINNER CONCEPT — Using INTEGER as Boolean:
+        #   SQLite does not have a native BOOLEAN type.
+        #   Instead, we use INTEGER with values 0 (False)
+        #   and 1 (True). The DEFAULT 1 means "enabled."
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                name                  TEXT NOT NULL,
+                platform              TEXT NOT NULL,
+                webhook_url           TEXT NOT NULL,
+                is_active             INTEGER DEFAULT 1,
+                notify_critical_cves  INTEGER DEFAULT 1,
+                notify_high_cves      INTEGER DEFAULT 1,
+                notify_cisa_exploits  INTEGER DEFAULT 1,
+                last_notified         TEXT,
+                created_at            TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # Column explanations:
+        # - name:                 Friendly label (e.g. "SOC Slack Channel")
+        # - platform:             "slack", "discord", "teams", or "generic"
+        # - webhook_url:          The full webhook URL provided by the platform
+        # - is_active:            1 = enabled, 0 = paused (toggle on/off)
+        # - notify_critical_cves: 1 = send alerts for CRITICAL CVEs
+        # - notify_high_cves:     1 = send alerts for HIGH CVEs
+        # - notify_cisa_exploits: 1 = send alerts for new CISA entries
+        # - last_notified:        Timestamp of last notification (rate limiting)
+        # - created_at:           When this webhook was configured
+
         conn.commit()
 
     # When the "with" block ends here, the connection is

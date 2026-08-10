@@ -1,0 +1,293 @@
+{#
+     =============================================================
+     app/templates/settings.html — Settings & Webhook Management
+     =============================================================
+
+     This page lets users manage webhook configurations for
+     automated security notifications. They can:
+     - Add new webhooks (Slack, Discord, Teams, Generic)
+     - Edit or delete existing webhooks
+     - Toggle webhooks active/inactive
+     - Send test notifications to verify setup
+
+     JINJA2 CONCEPTS:
+     - extends "base.html": Inherits the shared layout
+     - block content: Fills in the main content area
+     - for loop: Iterates over the webhooks list
+     - if/else: Conditional rendering
+     =============================================================
+#}
+
+{% extends "base.html" %}
+
+{% block title %}CyberDash — Settings{% endblock %}
+
+{% block content %}
+<main class="settings-page">
+
+    <!-- =========================================================
+         PAGE HEADER
+         ========================================================= -->
+    <div class="settings-header">
+        <div class="settings-header-text">
+            <h1>⚙️ Settings</h1>
+            <p class="settings-subtitle">Manage webhook notifications and integrations.</p>
+        </div>
+        <button id="add-webhook-btn" class="btn btn-primary">
+            ➕ Add Webhook
+        </button>
+    </div>
+
+    <!-- =========================================================
+         ADD / EDIT WEBHOOK FORM (hidden by default)
+         This form slides open when the user clicks "Add Webhook"
+         or "Edit" on an existing webhook.
+         ========================================================= -->
+    <div id="webhook-form-container" class="webhook-form-container" style="display: none;">
+        <div class="webhook-form-card">
+            <h2 id="form-title">Add New Webhook</h2>
+
+            <form id="webhook-form">
+                {# Hidden field to track whether we're creating or editing #}
+                <input type="hidden" id="webhook-id" value="">
+
+                <!-- Webhook Name -->
+                <div class="form-group">
+                    <label for="webhook-name">Webhook Name</label>
+                    <input type="text" id="webhook-name" placeholder="e.g. SOC Slack Channel"
+                           required class="form-input">
+                    <span class="form-hint">A friendly name to identify this webhook.</span>
+                </div>
+
+                <!-- Platform Selection -->
+                <div class="form-group">
+                    <label for="webhook-platform">Platform</label>
+                    <select id="webhook-platform" class="form-input" required>
+                        <option value="">Select a platform...</option>
+                        <option value="slack">🟣 Slack</option>
+                        <option value="discord">🟦 Discord</option>
+                        <option value="teams">🔵 Microsoft Teams</option>
+                        <option value="generic">⚪ Generic (HTTP POST)</option>
+                    </select>
+                    <span class="form-hint">Choose the platform this webhook connects to.</span>
+                </div>
+
+                <!-- Webhook URL -->
+                <div class="form-group">
+                    <label for="webhook-url">Webhook URL</label>
+                    <input type="url" id="webhook-url"
+                           placeholder="https://hooks.slack.com/services/..."
+                           required class="form-input">
+                    <span class="form-hint">The incoming webhook URL provided by your platform.</span>
+                </div>
+
+                <!-- Notification Preferences -->
+                <div class="form-group">
+                    <label>Notification Triggers</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notify-critical" checked>
+                            <span class="checkmark"></span>
+                            🚨 CRITICAL CVEs
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notify-high" checked>
+                            <span class="checkmark"></span>
+                            ⚠️ HIGH Severity CVEs
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="notify-cisa" checked>
+                            <span class="checkmark"></span>
+                            🔴 CISA Active Exploits
+                        </label>
+                    </div>
+                    <span class="form-hint">Choose which types of alerts trigger notifications.</span>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="form-submit-btn">
+                        💾 Save Webhook
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="form-cancel-btn">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         WEBHOOK LIST
+         Shows all configured webhooks in a card layout.
+         ========================================================= -->
+    <div class="webhooks-section">
+        <h2 class="section-title">
+            Configured Webhooks
+            <span class="webhook-count" id="webhook-count">{{ webhooks | length }}</span>
+        </h2>
+
+        <!-- Empty State (shown when no webhooks exist) -->
+        {% if webhooks | length == 0 %}
+        <div class="empty-state" id="empty-state">
+            <div class="empty-icon">🔔</div>
+            <h3>No Webhooks Configured</h3>
+            <p>Add your first webhook to start receiving automated security notifications.</p>
+            <p class="empty-hint">
+                Supported platforms: <strong>Slack</strong>, <strong>Discord</strong>,
+                <strong>Microsoft Teams</strong>, and any <strong>Generic HTTP endpoint</strong>.
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Webhook Cards Container -->
+        <div id="webhooks-list" class="webhooks-list">
+            {% for webhook in webhooks %}
+            <div class="webhook-card" data-webhook-id="{{ webhook.id }}">
+                <!-- Card Header: Platform icon + Name + Toggle -->
+                <div class="webhook-card-header">
+                    <div class="webhook-info">
+                        <!-- Platform Badge -->
+                        <span class="platform-badge platform-{{ webhook.platform }}">
+                            {% if webhook.platform == 'slack' %}🟣 Slack
+                            {% elif webhook.platform == 'discord' %}🟦 Discord
+                            {% elif webhook.platform == 'teams' %}🔵 Teams
+                            {% else %}⚪ Generic
+                            {% endif %}
+                        </span>
+                        <h3 class="webhook-name">{{ webhook.name }}</h3>
+                    </div>
+
+                    <!-- Active/Inactive Toggle -->
+                    <label class="toggle-switch" title="Toggle active/inactive">
+                        <input type="checkbox"
+                               class="toggle-input"
+                               data-webhook-id="{{ webhook.id }}"
+                               {% if webhook.is_active %}checked{% endif %}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Card Body: URL (masked) + notification preferences -->
+                <div class="webhook-card-body">
+                    <div class="webhook-url-display">
+                        <span class="url-label">URL:</span>
+                        <code class="url-masked">{{ webhook.webhook_url[:40] }}•••</code>
+                    </div>
+
+                    <div class="webhook-triggers">
+                        {% if webhook.notify_critical_cves %}
+                        <span class="trigger-tag trigger-critical">🚨 Critical</span>
+                        {% endif %}
+                        {% if webhook.notify_high_cves %}
+                        <span class="trigger-tag trigger-high">⚠️ High</span>
+                        {% endif %}
+                        {% if webhook.notify_cisa_exploits %}
+                        <span class="trigger-tag trigger-cisa">🔴 CISA</span>
+                        {% endif %}
+                    </div>
+
+                    {% if webhook.last_notified %}
+                    <div class="webhook-last-notified">
+                        Last notified: {{ webhook.last_notified }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Card Footer: Action Buttons -->
+                <div class="webhook-card-actions">
+                    <button class="btn btn-sm btn-test"
+                            data-webhook-id="{{ webhook.id }}"
+                            title="Send a test notification">
+                        🧪 Test
+                    </button>
+                    <button class="btn btn-sm btn-edit"
+                            data-webhook-id="{{ webhook.id }}"
+                            data-name="{{ webhook.name }}"
+                            data-platform="{{ webhook.platform }}"
+                            data-url="{{ webhook.webhook_url }}"
+                            data-critical="{{ webhook.notify_critical_cves }}"
+                            data-high="{{ webhook.notify_high_cves }}"
+                            data-cisa="{{ webhook.notify_cisa_exploits }}"
+                            title="Edit this webhook">
+                        ✏️ Edit
+                    </button>
+                    <button class="btn btn-sm btn-delete"
+                            data-webhook-id="{{ webhook.id }}"
+                            data-name="{{ webhook.name }}"
+                            title="Delete this webhook">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- =========================================================
+         HELP / INFO SECTION
+         Brief guide on how to get webhook URLs from each platform.
+         ========================================================= -->
+    <div class="settings-help">
+        <h2 class="section-title">📖 How to Get a Webhook URL</h2>
+
+        <div class="help-cards">
+            <div class="help-card">
+                <h3>🟣 Slack</h3>
+                <ol>
+                    <li>Go to <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Slack Incoming Webhooks</a></li>
+                    <li>Create a new app or use an existing one</li>
+                    <li>Enable "Incoming Webhooks" and add a new webhook</li>
+                    <li>Copy the webhook URL</li>
+                </ol>
+            </div>
+
+            <div class="help-card">
+                <h3>🟦 Discord</h3>
+                <ol>
+                    <li>Open your Discord server settings</li>
+                    <li>Go to <strong>Integrations → Webhooks</strong></li>
+                    <li>Click "New Webhook" and choose a channel</li>
+                    <li>Copy the webhook URL</li>
+                </ol>
+            </div>
+
+            <div class="help-card">
+                <h3>🔵 Microsoft Teams</h3>
+                <ol>
+                    <li>In your Teams channel, click <strong>⋯ → Connectors</strong></li>
+                    <li>Search for "Incoming Webhook" and configure it</li>
+                    <li>Give it a name and copy the webhook URL</li>
+                </ol>
+            </div>
+
+            <div class="help-card">
+                <h3>⚪ Generic</h3>
+                <p>
+                    Any HTTP endpoint that accepts <code>POST</code> requests
+                    with a JSON body. CyberDash will send a payload with
+                    <code>title</code>, <code>message</code>, and <code>items</code> fields.
+                </p>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <h3>🗑️ Delete Webhook</h3>
+        <p>Are you sure you want to delete <strong id="delete-webhook-name"></strong>?</p>
+        <p class="modal-warning">This action cannot be undone.</p>
+        <div class="modal-actions">
+            <button id="confirm-delete-btn" class="btn btn-danger">Delete</button>
+            <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', path='js/settings.js') }}"></script>
+{% endblock %}
