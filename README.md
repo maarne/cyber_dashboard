@@ -15,7 +15,7 @@ This project aggregates vulnerability data, active exploit alerts, security news
 ### 1. Set Up the Virtual Environment
 
 ```bash
-cd /home/maarne/apps/antigravity/cyber_dashboard
+cd cyber_dashboard
 
 # Create a virtual environment (only needed once)
 python3 -m venv .venv
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 ```bash
 # Make sure you are in the project root directory
-cd /home/maarne/apps/antigravity/cyber_dashboard
+cd cyber_dashboard
 
 # Start the web server
 python -m app.main

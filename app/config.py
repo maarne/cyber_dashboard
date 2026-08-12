@@ -20,6 +20,7 @@
 # "import" brings code from other modules into this file.
 # "pathlib" is a built-in Python module for working with
 # file system paths (folders and files) in a clean way.
+import os
 from pathlib import Path
 
 
@@ -41,8 +42,10 @@ BASE_DIR = Path(__file__).parent.parent
 APP_DIR = Path(__file__).parent
 
 # The full file path to our SQLite database file.
-# It will be created automatically inside the project root.
-DATABASE_PATH = BASE_DIR / "cyber_dashboard.db"
+# By default, it is created inside the project root, but can be
+# overridden via the DATABASE_PATH environment variable (e.g. for Azure).
+_db_env = os.getenv("DATABASE_PATH")
+DATABASE_PATH = Path(_db_env) if _db_env else BASE_DIR / "cyber_dashboard.db"
 
 
 # ============================================================
