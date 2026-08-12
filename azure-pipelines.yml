@@ -8,7 +8,7 @@ trigger:
 
 variables:
   # Azure Resource Manager connection created during pipeline creation
-  azureServiceConnectionId: $(azureServiceConnectionId)
+  azureServiceConnectionId: '21873dc2-9960-450e-8684-dbd380230f52'
 
   # Web app name
   webAppName: 'cyberdash-dev'
