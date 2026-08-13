@@ -231,3 +231,22 @@ class WebhookSchema(BaseModel):
     notify_high_cves: bool = True
     notify_cisa_exploits: bool = True
 
+
+# ============================================================
+# Detection Rule Schema
+# ============================================================
+class DetectionRuleSchema(BaseModel):
+    """
+    Represents a Sigma or YARA detection rule.
+    """
+
+    title: str
+    rule_type: str = "Sigma"
+    mitre_ttp: Optional[str] = None
+    severity: Optional[str] = "HIGH"
+    target_cve: Optional[str] = None
+    description: Optional[str] = None
+    code_content: str
+    target_siem: Optional[str] = "Generic"
+    deployment_guide: Optional[str] = None
+

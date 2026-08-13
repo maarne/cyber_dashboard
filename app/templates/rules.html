@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+
+{% block title %}CyberDash — Detection Rule Repository{% endblock %}
+
+{% block content %}
+<main class="settings-page">
+
+    <!-- =========================================================
+         PAGE HEADER
+         ========================================================= -->
+    <div class="settings-header">
+        <div class="settings-header-text">
+            <h1>🧬 MITRE ATT&CK® TTP & Detection Rule Repository</h1>
+            <p class="settings-subtitle">Production-ready Sigma (SIEM) & YARA (Malware) detection rules mapped to MITRE ATT&CK TTPs with step-by-step product deployment guides.</p>
+        </div>
+        <button id="add-rule-btn" class="btn btn-primary" onclick="openRuleModal('add')" {% if not is_authenticated %}disabled title="Login required to add detection rules"{% endif %}>
+            ➕ Add Detection Rule
+        </button>
+    </div>
+
+    <!-- =========================================================
+         SEARCH & FILTER BAR
+         ========================================================= -->
+    <div class="date-filter-card" style="margin-bottom: 2rem;">
+        <form method="GET" action="/rules" class="date-filter-form" style="gap: 1rem; flex-wrap: wrap;">
+            <div class="date-input-group" style="flex: 2; min-width: 260px;">
+                <label for="rule-search" style="font-weight: 600; color: #9ca3af; margin-bottom: 4px; display: block;">Search Detection Rules</label>
+                <input type="text" id="rule-search" name="search" value="{{ search }}" placeholder="Search rule title, MITRE TTP (T1190), CVE, or keyword (e.g. Log4j, Mimikatz, PowerShell)..." class="form-input" style="width: 100%;">
+            </div>
+
+            <div class="date-input-group" style="flex: 1; min-width: 160px;">
+                <label for="rule-type-select" style="font-weight: 600; color: #9ca3af; margin-bottom: 4px; display: block;">Rule Type</label>
+                <select id="rule-type-select" name="rule_type" class="form-input" style="width: 100%;" onchange="this.form.submit()">
+                    <option value="ALL" {% if rule_type == 'ALL' %}selected{% endif %}>All Types (Sigma & YARA)</option>
+                    <option value="SIGMA" {% if rule_type == 'SIGMA' %}selected{% endif %}>⚙️ Sigma (SIEM Log Detection)</option>
+                    <option value="YARA" {% if rule_type == 'YARA' %}selected{% endif %}>🛡️ YARA (Malware Signature)</option>
+                </select>
+            </div>
+
+            <div class="date-input-group" style="flex: 1; min-width: 160px;">
+                <label for="siem-select" style="font-weight: 600; color: #9ca3af; margin-bottom: 4px; display: block;">Target SIEM / Scanner</label>
+                <select id="siem-select" name="siem" class="form-input" style="width: 100%;" onchange="this.form.submit()">
+                    <option value="ALL" {% if siem == 'ALL' %}selected{% endif %}>All Platforms</option>
+                    <option value="SPLUNK" {% if siem == 'SPLUNK' %}selected{% endif %}>Splunk</option>
+                    <option value="SENTINEL" {% if siem == 'SENTINEL' %}selected{% endif %}>Microsoft Sentinel</option>
+                    <option value="ELASTIC" {% if siem == 'ELASTIC' %}selected{% endif %}>Elastic / EQL</option>
+                    <option value="YARA" {% if siem == 'YARA' %}selected{% endif %}>YARA Endpoint Scanner</option>
+                </select>
+            </div>
+
+            <div style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                <button type="submit" class="btn btn-primary">🔍 Filter</button>
+                {% if search or rule_type != 'ALL' or siem != 'ALL' %}
+                <a href="/rules" class="btn btn-secondary">Clear Filters</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- =========================================================
+         DETECTION RULES GRID
+         ========================================================= -->
+    <div class="webhooks-section">
+        <h2 class="section-title">
+            Repository Detection Rules
+            <span class="webhook-count">{{ rules | length }}</span>
+        </h2>
+
+        {% if rules | length == 0 %}
+        <div class="empty-state">
+            <div class="empty-icon">🧬</div>
+            <h3>No Detection Rules Found</h3>
+            <p>No detection rules match your current filter parameters.</p>
+            <a href="/rules" class="btn btn-primary" style="margin-top: 1rem;">Reset Search Filters</a>
+        </div>
+        {% endif %}
+
+        <div class="detection-rules-grid">
+            {% for rule in rules %}
+            <div class="rule-card" data-rule-id="{{ rule.id }}">
+                <!-- Card Header -->
+                <div class="rule-card-header">
+                    <div class="rule-title-area">
+                        <div class="rule-badges">
+                            <span class="rule-type-badge {% if rule.rule_type == 'Sigma' %}type-sigma{% else %}type-yara{% endif %}">
+                                {% if rule.rule_type == 'Sigma' %}⚙️ Sigma{% else %}🛡️ YARA{% endif %}
+                            </span>
+                            <span class="rule-sev-badge {% if rule.severity == 'CRITICAL' %}status-critical{% else %}status-high{% endif %}">
+                                {{ rule.severity }}
+                            </span>
+                            {% if rule.target_siem %}
+                            <span class="rule-siem-badge">💻 {{ rule.target_siem }}</span>
+                            {% endif %}
+                        </div>
+                        <h3 class="rule-title">{{ rule.title }}</h3>
+                    </div>
+                </div>
+
+                <!-- Card Body -->
+                <div class="rule-card-body">
+                    <p class="rule-description">{{ rule.description }}</p>
+
+                    <div class="rule-tags-row">
+                        {% if rule.mitre_ttp %}
+                        {% set ttp_info = get_mitre_ttp(rule.mitre_ttp) %}
+                        <div class="ttp-tooltip-wrapper">
+                            <a href="https://attack.mitre.org/techniques/{{ ttp_info.id }}/" target="_blank" rel="noopener" class="actor-ttp-tag" title="Click to view technique on MITRE ATT&CK">
+                                ⚔️ {{ rule.mitre_ttp }}
+                            </a>
+                            <div class="ttp-popover">
+                                <div class="ttp-popover-header">
+                                    <span class="ttp-popover-id">⚔️ {{ ttp_info.id }}</span>
+                                    <span class="ttp-popover-tactic">🎯 {{ ttp_info.tactic }}</span>
+                                </div>
+                                <h4 class="ttp-popover-title">{{ ttp_info.name }}</h4>
+                                <p class="ttp-popover-desc">{{ ttp_info.description }}</p>
+                                <div class="ttp-popover-footer">
+                                    <span>📅 Last Modified: <strong>{{ ttp_info.last_modified }}</strong></span>
+                                    <span class="ttp-popover-link">🔗 attack.mitre.org ↗</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if rule.target_cve and rule.target_cve != 'N/A' %}
+                        {% set cve_info = get_cve_details(rule.target_cve) %}
+                        <div class="cve-tooltip-wrapper">
+                            <a href="/?search={{ cve_info.cve_id }}" class="actor-cve-tag" title="Click to filter dashboard for {{ cve_info.cve_id }}">
+                                💥 {{ cve_info.cve_id }}
+                            </a>
+                            <div class="cve-popover">
+                                <div class="cve-popover-header">
+                                    <span class="cve-popover-id">💥 {{ cve_info.cve_id }}</span>
+                                    <span class="cve-popover-sev {% if cve_info.severity == 'CRITICAL' %}sev-critical{% elif cve_info.severity == 'HIGH' %}sev-high{% else %}sev-med{% endif %}">
+                                        {{ cve_info.severity }} {% if cve_info.cvss_score %}({{ cve_info.cvss_score }}){% endif %}
+                                    </span>
+                                </div>
+                                <h4 class="cve-popover-title">{{ cve_info.name }}</h4>
+                                {% if cve_info.is_cisa_kev %}
+                                <div class="cve-popover-kev">🚨 Actively Exploited in the Wild (CISA KEV)</div>
+                                {% endif %}
+                                <p class="cve-popover-desc">{{ cve_info.description }}</p>
+                                <div class="cve-popover-footer">
+                                    <span>📅 Published: <strong>{{ cve_info.published_date }}</strong></span>
+                                    <span class="cve-popover-product">💻 {{ cve_info.vendor_product }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Code Block -->
+                    <div class="rule-code-wrapper">
+                        <div class="rule-code-header">
+                            <span class="code-lang-label">
+                                {% if rule.rule_type == 'Sigma' %}YAML (Sigma Standard){% else %}YARA Rule Definition{% endif %}
+                            </span>
+                            <div class="code-actions">
+                                <button type="button" class="btn btn-sm btn-primary" data-rule-id="{{ rule.id }}" onclick="openDeployGuideModal(this.dataset.ruleId)" title="View product deployment instructions for Splunk, Sentinel, Elastic, QRadar, YARA">
+                                    📖 How to Deploy
+                                </button>
+                                <button type="button" class="btn btn-sm btn-secondary copy-rule-btn" onclick="copyRuleToClipboard('rule-code-{{ rule.id }}', this)" title="Copy rule text to clipboard">
+                                    📋 Copy Rule
+                                </button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="downloadRuleFile('rule-code-{{ rule.id }}', '{{ rule.title }}', '{{ rule.rule_type }}')" title="Download rule file">
+                                    💾 Download
+                                </button>
+                            </div>
+                        </div>
+                        <pre class="rule-code-block"><code id="rule-code-{{ rule.id }}">{{ rule.code_content }}</code></pre>
+                    </div>
+
+                    <!-- Hidden raw deployment guide text -->
+                    <template id="rule-guide-template-{{ rule.id }}">{{ rule.deployment_guide or '' }}</template>
+                </div>
+
+                <!-- Card Footer Actions (Admin Only) -->
+                {% if is_authenticated %}
+                <div class="webhook-card-actions" style="margin-top: 1rem;">
+                    <button class="btn btn-sm btn-edit" data-rule-id="{{ rule.id }}" onclick="openRuleModal('edit', this.dataset.ruleId)">✏️ Edit Rule</button>
+                    <button class="btn btn-sm btn-delete" data-rule-id="{{ rule.id }}" data-rule-title="{{ rule.title }}" onclick="handleDeleteRule(this.dataset.ruleId, this.dataset.ruleTitle)">🗑️ Delete</button>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- =========================================================
+         PRODUCT DEPLOYMENT INSTRUCTIONS MODAL
+         ========================================================= -->
+    <div id="guide-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 750px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="guide-modal-title">📖 Product Deployment Instructions</h3>
+                <button type="button" class="modal-close" onclick="closeDeployGuideModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div id="guide-modal-content" class="markdown-rendered-content">
+                    <!-- Rendered Deployment Guide Content inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="closeDeployGuideModal()">Close Guide</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         ADD / EDIT RULE MODAL (Admin Only)
+         ========================================================= -->
+    <div id="rule-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="rule-modal-title">➕ Add Detection Rule</h3>
+                <button type="button" class="modal-close" onclick="closeRuleModal()">&times;</button>
+            </div>
+            <form id="rule-form" onsubmit="submitRuleForm(event)">
+                <input type="hidden" id="rule-form-id" value="">
+                <div class="modal-body">
+                    <div id="rule-form-error" class="alert alert-danger" style="display: none;"></div>
+                    
+                    <div class="form-group">
+                        <label for="rule-form-title">Rule Title</label>
+                        <input type="text" id="rule-form-title" class="form-input" placeholder="e.g. Detects Log4j JNDI RCE Exploit" required>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="rule-form-type">Rule Type</label>
+                            <select id="rule-form-type" class="form-input" required>
+                                <option value="Sigma">⚙️ Sigma (SIEM Log)</option>
+                                <option value="YARA">🛡️ YARA (Malware Payload)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="rule-form-severity">Severity</label>
+                            <select id="rule-form-severity" class="form-input" required>
+                                <option value="CRITICAL">🚨 CRITICAL</option>
+                                <option value="HIGH" selected>⚠️ HIGH</option>
+                                <option value="MEDIUM">🟡 MEDIUM</option>
+                                <option value="LOW">🔵 LOW</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="rule-form-ttp">MITRE ATT&CK TTP</label>
+                            <input type="text" id="rule-form-ttp" class="form-input" placeholder="e.g. T1190 - Exploit Public-Facing App">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="rule-form-cve">Target CVE</label>
+                            <input type="text" id="rule-form-cve" class="form-input" placeholder="e.g. CVE-2021-44228">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rule-form-siem">Target SIEM / Platform</label>
+                        <input type="text" id="rule-form-siem" class="form-input" placeholder="e.g. Splunk / Sentinel / Elastic">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rule-form-description">Description</label>
+                        <input type="text" id="rule-form-description" class="form-input" placeholder="Brief technical summary of what this rule detects...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rule-form-code">Rule Code Syntax (YAML / YARA)</label>
+                        <textarea id="rule-form-code" class="form-input" rows="7" style="font-family: var(--font-mono); font-size: 0.85rem;" required placeholder="title: My Sigma Rule..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rule-form-guide">Product Deployment Guide & Instructions (Markdown)</label>
+                        <textarea id="rule-form-guide" class="form-input" rows="5" style="font-family: var(--font-mono); font-size: 0.85rem;" placeholder="### Splunk Deployment&#10;Run SPL query..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeRuleModal()">Cancel</button>
+                    <button type="submit" id="rule-form-submit-btn" class="btn btn-primary">Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function copyRuleToClipboard(codeElementId, buttonElem) {
+    var codeElem = document.getElementById(codeElementId);
+    if (!codeElem) return;
+    var text = codeElem.textContent || codeElem.innerText;
+
+    function showSuccess() {
+        if (typeof showToast === 'function') {
+            showToast('Detection rule copied to clipboard!', 'success');
+        }
+        if (buttonElem) {
+            var origText = buttonElem.innerHTML;
+            buttonElem.innerHTML = '✅ Copied!';
+            setTimeout(function() {
+                buttonElem.innerHTML = origText;
+            }, 2000);
+        }
+    }
+
+    function fallbackCopy(val) {
+        var textArea = document.createElement("textarea");
+        textArea.value = val;
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            var successful = document.execCommand('copy');
+            if (successful) {
+                showSuccess();
+            } else {
+                if (typeof showToast === 'function') showToast('Failed to copy rule.', 'error');
+            }
+        } catch (err) {
+            if (typeof showToast === 'function') showToast('Failed to copy rule.', 'error');
+        }
+        document.body.removeChild(textArea);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            showSuccess();
+        }).catch(function() {
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function downloadRuleFile(codeElementId, ruleTitle, ruleType) {
+    var codeElem = document.getElementById(codeElementId);
+    if (!codeElem) return;
+
+    var ext = (ruleType.toUpperCase() === 'YARA') ? '.yar' : '.yml';
+    var filename = ruleTitle.toLowerCase().replace(/[^a-z0-9]+/g, '_') + ext;
+    var blob = new Blob([codeElem.textContent], { type: 'text/plain;charset=utf-8' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    showToast('Downloaded ' + filename, 'info');
+}
+
+function openDeployGuideModal(ruleId) {
+    var tmpl = document.getElementById('rule-guide-template-' + ruleId);
+    var guideModal = document.getElementById('guide-modal');
+    var guideContent = document.getElementById('guide-modal-content');
+
+    if (!tmpl || !guideContent) return;
+
+    var guideRaw = tmpl.innerHTML || '';
+    if (!guideRaw.trim()) {
+        guideRaw = '### ℹ️ General SIEM & Scanner Deployment\nNo product-specific deployment guide has been added for this rule yet.';
+    }
+
+    // Convert basic markdown to clean HTML tags
+    var formattedHtml = guideRaw
+        .replace(/### (.*)/g, '<h3 style="color:#60a5fa; margin-top:1rem; margin-bottom:0.5rem; font-size:1.1rem;">$1</h3>')
+        .replace(/#### (.*)/g, '<h4 style="color:#f3f4f6; margin-top:0.75rem; margin-bottom:0.25rem; font-size:0.95rem;">$1</h4>')
+        .replace(/```(spl|kql|eql|bash|yara|yaml)?\n([\s\S]*?)\n```/g, '<pre class="rule-code-block" style="margin: 0.5rem 0; border-radius: 8px;"><code style="color:#a7f3d0;">$2</code></pre>')
+        .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1); color:#60a5fa; padding:2px 6px; border-radius:4px;">$1</code>')
+        .replace(/\n/g, '<br>');
+
+    guideContent.innerHTML = formattedHtml;
+    if (guideModal) guideModal.style.display = 'flex';
+}
+
+function closeDeployGuideModal() {
+    var guideModal = document.getElementById('guide-modal');
+    if (guideModal) guideModal.style.display = 'none';
+}
+
+function openRuleModal(mode, ruleId) {
+    var modal = document.getElementById('rule-modal');
+    var modalTitle = document.getElementById('rule-modal-title');
+    var form = document.getElementById('rule-form');
+    var errorMsg = document.getElementById('rule-form-error');
+
+    if (errorMsg) errorMsg.style.display = 'none';
+
+    if (mode === 'add') {
+        if (modalTitle) modalTitle.textContent = '➕ Add Detection Rule';
+        if (form) form.reset();
+        document.getElementById('rule-form-id').value = '';
+        if (modal) modal.style.display = 'flex';
+    } else if (mode === 'edit' && ruleId) {
+        if (modalTitle) modalTitle.textContent = '✏️ Edit Detection Rule';
+        fetch('/api/detection-rules/' + ruleId).then(function(res) { return res.json(); }).then(function(data) {
+            document.getElementById('rule-form-id').value = data.id;
+            document.getElementById('rule-form-title').value = data.title || '';
+            document.getElementById('rule-form-type').value = data.rule_type || 'Sigma';
+            document.getElementById('rule-form-severity').value = data.severity || 'HIGH';
+            document.getElementById('rule-form-ttp').value = data.mitre_ttp || '';
+            document.getElementById('rule-form-cve').value = data.target_cve || '';
+            document.getElementById('rule-form-siem').value = data.target_siem || '';
+            document.getElementById('rule-form-description').value = data.description || '';
+            document.getElementById('rule-form-code').value = data.code_content || '';
+            document.getElementById('rule-form-guide').value = data.deployment_guide || '';
+            if (modal) modal.style.display = 'flex';
+        });
+    }
+}
+
+function closeRuleModal() {
+    var modal = document.getElementById('rule-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitRuleForm(event) {
+    event.preventDefault();
+    var ruleId = document.getElementById('rule-form-id').value;
+    var errorMsg = document.getElementById('rule-form-error');
+    var submitBtn = document.getElementById('rule-form-submit-btn');
+
+    var payload = {
+        title: document.getElementById('rule-form-title').value,
+        rule_type: document.getElementById('rule-form-type').value,
+        severity: document.getElementById('rule-form-severity').value,
+        mitre_ttp: document.getElementById('rule-form-ttp').value,
+        target_cve: document.getElementById('rule-form-cve').value,
+        target_siem: document.getElementById('rule-form-siem').value,
+        description: document.getElementById('rule-form-description').value,
+        code_content: document.getElementById('rule-form-code').value,
+        deployment_guide: document.getElementById('rule-form-guide').value
+    };
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+    }
+
+    try {
+        var url = ruleId ? '/api/detection-rules/' + ruleId : '/api/detection-rules';
+        var method = ruleId ? 'PUT' : 'POST';
+
+        var response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        var data = await response.json();
+        if (response.ok) {
+            showToast('Detection rule saved successfully!', 'success');
+            closeRuleModal();
+            setTimeout(function() { window.location.reload(); }, 500);
+        } else {
+            if (errorMsg) {
+                errorMsg.textContent = data.error || data.detail || 'Failed to save detection rule.';
+                errorMsg.style.display = 'block';
+            }
+        }
+    } catch (err) {
+        if (errorMsg) {
+            errorMsg.textContent = 'Network error. Failed to save rule.';
+            errorMsg.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Rule';
+        }
+    }
+}
+
+async function handleDeleteRule(ruleId, title) {
+    if (!confirm('Are you sure you want to delete "' + title + '"?')) return;
+    try {
+        var response = await fetch('/api/detection-rules/' + ruleId, { method: 'DELETE' });
+        if (response.ok) {
+            showToast('Detection rule deleted.', 'success');
+            setTimeout(function() { window.location.reload(); }, 500);
+        } else {
+            showToast('Failed to delete detection rule.', 'error');
+        }
+    } catch (err) {
+        showToast('Network error.', 'error');
+    }
+}
+</script>
+{% endblock %}

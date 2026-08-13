@@ -33,9 +33,14 @@
                     <option value="Defense" {% if sector == 'Defense' %}selected{% endif %}>🛡️ Defense & Military</option>
                     <option value="Financial" {% if sector == 'Financial' %}selected{% endif %}>🏦 Financial & Banking</option>
                     <option value="Healthcare" {% if sector == 'Healthcare' %}selected{% endif %}>🏥 Healthcare & Pharma</option>
-                    <option value="Critical Infrastructure" {% if sector == 'Critical Infrastructure' %}selected{% endif %}>⚡ Critical Infrastructure / Energy</option>
-                    <option value="Cryptocurrency" {% if sector == 'Cryptocurrency' %}selected{% endif %}>🪙 Cryptocurrency & Blockchain</option>
+                    <option value="Telecommunications" {% if sector == 'Telecommunications' %}selected{% endif %}>📡 Telecommunications & ISPs</option>
+                    <option value="Energy" {% if sector == 'Energy' %}selected{% endif %}>⚡ Energy, Utilities & SCADA</option>
+                    <option value="Critical Infrastructure" {% if sector == 'Critical Infrastructure' %}selected{% endif %}>🏭 Critical Infrastructure</option>
                     <option value="Technology" {% if sector == 'Technology' %}selected{% endif %}>💻 Technology & Cloud Providers</option>
+                    <option value="Cryptocurrency" {% if sector == 'Cryptocurrency' %}selected{% endif %}>🪙 Cryptocurrency & Blockchain</option>
+                    <option value="Manufacturing" {% if sector == 'Manufacturing' %}selected{% endif %}>⚙️ Manufacturing & Supply Chain</option>
+                    <option value="Hospitality" {% if sector == 'Hospitality' %}selected{% endif %}>🏨 Retail & Hospitality</option>
+                    <option value="Education" {% if sector == 'Education' %}selected{% endif %}>🎓 Education & Research</option>
                 </select>
             </div>
 
@@ -77,7 +82,9 @@
                                 {% if 'Russia' in actor.origin %}🇷🇺 {{ actor.origin }}
                                 {% elif 'North Korea' in actor.origin %}🇰🇵 {{ actor.origin }}
                                 {% elif 'China' in actor.origin %}🇨🇳 {{ actor.origin }}
-                                {% else %}🏴‍☠️ {{ actor.origin }}
+                                {% elif 'Iran' in actor.origin %}🇮🇷 {{ actor.origin }}
+                                {% elif 'Cybercrime' in actor.origin or 'RaaS' in actor.origin or 'International' in actor.origin %}🏴‍☠️ {{ actor.origin }}
+                                {% else %}🌐 {{ actor.origin }}
                                 {% endif %}
                             </span>
                             <span class="actor-status-badge {% if 'Critical' in actor.status %}status-critical{% else %}status-high{% endif %}">
@@ -123,9 +130,29 @@
                         <span class="actor-meta-label">Exploited Vulnerabilities (CVEs):</span>
                         <div class="actor-tags-group">
                             {% for cve in actor.associated_cves.split(',') %}
-                            <a href="/?search={{ cve.strip() }}" class="actor-cve-tag" title="Search dashboard for {{ cve.strip() }}">
-                                💥 {{ cve.strip() }}
-                            </a>
+                            {% set cve_info = get_cve_details(cve) %}
+                            <div class="cve-tooltip-wrapper">
+                                <a href="/?search={{ cve_info.cve_id }}" class="actor-cve-tag" title="Click to filter dashboard for {{ cve_info.cve_id }}">
+                                    💥 {{ cve_info.cve_id }}
+                                </a>
+                                <div class="cve-popover">
+                                    <div class="cve-popover-header">
+                                        <span class="cve-popover-id">💥 {{ cve_info.cve_id }}</span>
+                                        <span class="cve-popover-sev {% if cve_info.severity == 'CRITICAL' %}sev-critical{% elif cve_info.severity == 'HIGH' %}sev-high{% else %}sev-med{% endif %}">
+                                            {{ cve_info.severity }} {% if cve_info.cvss_score %}({{ cve_info.cvss_score }}){% endif %}
+                                        </span>
+                                    </div>
+                                    <h4 class="cve-popover-title">{{ cve_info.name }}</h4>
+                                    {% if cve_info.is_cisa_kev %}
+                                    <div class="cve-popover-kev">🚨 Actively Exploited in the Wild (CISA KEV)</div>
+                                    {% endif %}
+                                    <p class="cve-popover-desc">{{ cve_info.description }}</p>
+                                    <div class="cve-popover-footer">
+                                        <span>📅 Published: <strong>{{ cve_info.published_date }}</strong></span>
+                                        <span class="cve-popover-product">💻 {{ cve_info.vendor_product }}</span>
+                                    </div>
+                                </div>
+                            </div>
                             {% endfor %}
                         </div>
                     </div>
@@ -137,10 +164,24 @@
                         <span class="actor-meta-label">MITRE ATT&CK® TTPs:</span>
                         <div class="actor-tags-group">
                             {% for ttp in actor.mitre_ttps.split(',') %}
-                            {% set clean_ttp = ttp.strip() %}
-                            <a href="https://attack.mitre.org/techniques/{{ clean_ttp }}/" target="_blank" rel="noopener" class="actor-ttp-tag" title="View {{ clean_ttp }} on MITRE ATT&CK framework">
-                                ⚔️ {{ clean_ttp }}
-                            </a>
+                            {% set ttp_info = get_mitre_ttp(ttp) %}
+                            <div class="ttp-tooltip-wrapper">
+                                <a href="https://attack.mitre.org/techniques/{{ ttp_info.id }}/" target="_blank" rel="noopener" class="actor-ttp-tag" title="Click to view technique on MITRE ATT&CK">
+                                    ⚔️ {{ ttp_info.id }}
+                                </a>
+                                <div class="ttp-popover">
+                                    <div class="ttp-popover-header">
+                                        <span class="ttp-popover-id">⚔️ {{ ttp_info.id }}</span>
+                                        <span class="ttp-popover-tactic">🎯 {{ ttp_info.tactic }}</span>
+                                    </div>
+                                    <h4 class="ttp-popover-title">{{ ttp_info.name }}</h4>
+                                    <p class="ttp-popover-desc">{{ ttp_info.description }}</p>
+                                    <div class="ttp-popover-footer">
+                                        <span>📅 Last Modified: <strong>{{ ttp_info.last_modified }}</strong></span>
+                                        <span class="ttp-popover-link">🔗 attack.mitre.org ↗</span>
+                                    </div>
+                                </div>
+                            </div>
                             {% endfor %}
                         </div>
                     </div>

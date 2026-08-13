@@ -323,6 +323,49 @@ def initialize_database():
             )
         """)
 
+        # --------------------------------------------------
+        # TABLE 10: detection_rules
+        # Stores Sigma and YARA detection rules mapped to TTPs.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detection_rules (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                title           TEXT UNIQUE NOT NULL,
+                rule_type       TEXT NOT NULL,
+                mitre_ttp       TEXT,
+                severity        TEXT DEFAULT 'HIGH',
+                target_cve      TEXT,
+                description     TEXT,
+                code_content    TEXT NOT NULL,
+                target_siem     TEXT DEFAULT 'Generic',
+                deployment_guide TEXT,
+                created_at      TEXT DEFAULT (datetime('now')),
+                updated_at      TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
+        # Migration: Ensure deployment_guide column exists on existing DBs
+        try:
+            cursor.execute("ALTER TABLE detection_rules ADD COLUMN deployment_guide TEXT")
+        except Exception:
+            pass  # Column already exists
+
+        # Deduplication: Remove any duplicate detection rules by title
+        cursor.execute("""
+            DELETE FROM detection_rules
+            WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM detection_rules
+                GROUP BY LOWER(TRIM(title))
+            )
+        """)
+
+        # Migration: Add Unique Index on title to guarantee no duplicates
+        try:
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_detection_rules_title ON detection_rules(title)")
+        except Exception:
+            pass
+
         conn.commit()
 
     # When the "with" block ends here, the connection is
@@ -340,6 +383,10 @@ def initialize_database():
     # Seed default threat actors
     from app.services.threat_actor_service import seed_default_threat_actors
     seed_default_threat_actors()
+
+    # Seed default detection rules
+    from app.services.rule_service import seed_default_detection_rules
+    seed_default_detection_rules()
 
 
 def seed_default_rss_feeds():

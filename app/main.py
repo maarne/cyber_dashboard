@@ -97,7 +97,7 @@ from app.services.webhook_service import (
 
 # Import the WebhookSchema Pydantic model for validating
 # webhook form data sent from the Settings page.
-from app.models.schemas import WebhookSchema
+from app.models.schemas import WebhookSchema, DetectionRuleSchema
 
 # Import the background scheduler service.
 # This module manages a daemon thread that automatically
@@ -115,6 +115,21 @@ from app.services.threat_actor_service import (
     get_all_threat_actors,
     get_threat_actor_by_id,
 )
+
+# Import detection rule repository service
+from app.services.rule_service import (
+    get_all_detection_rules,
+    get_rule_by_id,
+    save_detection_rule,
+    update_detection_rule,
+    delete_detection_rule,
+)
+
+# Import MITRE ATT&CK intelligence service
+from app.services.mitre_service import get_mitre_ttp_details
+
+# Import CVE intelligence service
+from app.services.cve_intel_service import get_cve_details
 
 
 # ============================================================
@@ -193,6 +208,8 @@ app.mount(
 # FastAPI will look in this directory for the template file.
 # ============================================================
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
+templates.env.globals["get_mitre_ttp"] = get_mitre_ttp_details
+templates.env.globals["get_cve_details"] = get_cve_details
 
 
 # ============================================================
@@ -579,6 +596,88 @@ def api_get_threat_actor_detail(actor_id: int):
     if actor:
         return actor
     return JSONResponse(status_code=404, content={"error": "Threat actor not found"})
+
+
+@app.get("/api/mitre-ttps/{ttp_id}")
+def api_get_mitre_ttp_info(ttp_id: str):
+    """Return MITRE ATT&CK technique details (title, tactic, description, last modified)."""
+    return get_mitre_ttp_details(ttp_id)
+
+
+@app.get("/api/cve-intel/{cve_id}")
+def api_get_cve_intel_info(cve_id: str):
+    """Return CVE intelligence details (severity, CVSS, CISA KEV status, description)."""
+    return get_cve_details(cve_id)
+
+
+# ============================================================
+# PAGE ROUTE: Detection Rule Repository (GET /rules)
+# ============================================================
+
+@app.get("/rules")
+def detection_rules_page(request: Request, rule_type: str = "ALL", search: str = None, siem: str = "ALL"):
+    """
+    Render the MITRE ATT&CK TTP & Detection Rule Repository page.
+    """
+    rules = get_all_detection_rules(rule_type=rule_type, search=search, siem=siem)
+    current_user = get_current_user_optional(request)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="rules.html",
+        context={
+            "request": request,
+            "rules": rules,
+            "rule_type": rule_type.upper() if rule_type else "ALL",
+            "search": search or "",
+            "siem": siem.upper() if siem else "ALL",
+            "is_authenticated": current_user is not None,
+            "current_user": current_user or "",
+        },
+    )
+
+
+@app.get("/api/detection-rules")
+def api_list_detection_rules(rule_type: str = "ALL", search: str = None, siem: str = "ALL"):
+    """Return detection rules as JSON with optional filtering."""
+    return get_all_detection_rules(rule_type=rule_type, search=search, siem=siem)
+
+
+@app.get("/api/detection-rules/{rule_id}")
+def api_get_detection_rule_detail(rule_id: int):
+    """Return a single detection rule by ID."""
+    rule = get_rule_by_id(rule_id)
+    if rule:
+        return rule
+    return JSONResponse(status_code=404, content={"error": "Detection rule not found"})
+
+
+@app.post("/api/detection-rules")
+def api_create_detection_rule(rule: DetectionRuleSchema, current_user: str = Depends(require_admin)):
+    """Create a new detection rule (Admin only)."""
+    new_id = save_detection_rule(rule.model_dump())
+    return JSONResponse(
+        content={"id": new_id, "message": "Detection rule created successfully"},
+        status_code=201,
+    )
+
+
+@app.put("/api/detection-rules/{rule_id}")
+def api_update_detection_rule(rule_id: int, rule: DetectionRuleSchema, current_user: str = Depends(require_admin)):
+    """Update an existing detection rule (Admin only)."""
+    success = update_detection_rule(rule_id, rule.model_dump())
+    if success:
+        return JSONResponse(content={"message": "Detection rule updated successfully"})
+    return JSONResponse(status_code=404, content={"error": "Detection rule not found"})
+
+
+@app.delete("/api/detection-rules/{rule_id}")
+def api_delete_detection_rule(rule_id: int, current_user: str = Depends(require_admin)):
+    """Delete a detection rule (Admin only)."""
+    success = delete_detection_rule(rule_id)
+    if success:
+        return JSONResponse(content={"message": "Detection rule deleted successfully"})
+    return JSONResponse(status_code=404, content={"error": "Detection rule not found"})
 
 
 # ============================================================
