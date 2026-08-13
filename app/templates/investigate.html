@@ -3,17 +3,15 @@
 {% block title %}CyberDash — Threat Intelligence & IOC Investigator{% endblock %}
 
 {% block content %}
-<main class="container">
+<main class="settings-page">
     <!-- =========================================================
-         PAGE HERO HEADER
+         PAGE HEADER
          ========================================================= -->
-    <div class="threat-actors-hero">
-        <div class="hero-content">
-            <h1 class="page-title">
-                🔍 Threat Intelligence &amp; IOC Investigator
-            </h1>
-            <p class="page-subtitle">
-                Automated multi-source triage for IP addresses, domains, URLs, and file hashes (MD5 / SHA256).
+    <div class="settings-header">
+        <div class="settings-header-text">
+            <h1>🔍 Threat Intelligence &amp; IOC Investigator</h1>
+            <p class="settings-subtitle">
+                Automated multi-source SOC triage for IP addresses, domains, URLs, and file hashes (MD5 / SHA256).
                 Enrich indicators with GeoIP, ASN telemetry, Feodo &amp; URLhaus CTI, and threat actor correlations.
             </p>
         </div>
@@ -22,33 +20,33 @@
     <!-- =========================================================
          IOC SEARCH & QUICK SAMPLES
          ========================================================= -->
-    <div class="feed-add-form" style="margin-bottom: 2rem;">
-        <form method="GET" action="/investigate" id="ioc-search-form">
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 300px; position: relative;">
+    <div class="date-filter-card" style="margin-bottom: 2.5rem; width: 100%;">
+        <form method="GET" action="/investigate" id="ioc-search-form" style="width: 100%;">
+            <div style="display: flex; gap: 0.875rem; width: 100%; align-items: center;">
+                <div style="flex: 1; position: relative;">
                     <input type="text"
                            id="ioc-input"
                            name="ioc"
                            value="{{ ioc }}"
                            placeholder="Enter IP (e.g. 185.220.101.5), Domain, URL, or Hash (MD5 / SHA256)..."
                            class="form-input"
-                           style="width: 100%; font-size: 1rem; padding: 0.85rem 1rem;"
+                           style="width: 100%; font-size: 1rem; padding: 0.85rem 1.25rem; font-family: var(--font-mono); background: rgba(15, 23, 42, 0.85); border: 1px solid var(--color-border);"
                            required
                            autofocus>
                 </div>
-                <button type="submit" class="btn btn-primary" style="padding: 0.85rem 1.5rem; font-size: 1rem;">
+                <button type="submit" class="btn btn-primary" style="padding: 0.85rem 1.75rem; font-size: 0.95rem; font-weight: 600; white-space: nowrap;">
                     ⚡ Investigate
                 </button>
                 {% if ioc %}
-                <a href="/investigate" class="btn btn-secondary" style="padding: 0.85rem 1rem;">
+                <a href="/investigate" class="btn btn-secondary" style="padding: 0.85rem 1.25rem; text-decoration: none; white-space: nowrap;">
                     Clear
                 </a>
                 {% endif %}
             </div>
 
             <!-- Quick Preset Sample Pills -->
-            <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="font-size: 0.8rem; color: #9ca3af; font-weight: 600;">⚡ Sample Indicators:</span>
+            <div style="margin-top: 1.25rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 1rem;">
+                <span style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">⚡ Sample Indicators:</span>
                 <button type="button" class="btn btn-sm btn-secondary" onclick="loadSampleIOC('185.220.101.5')">
                     🧅 Tor Exit IP
                 </button>
@@ -72,7 +70,7 @@
     <!-- =========================================================
          INVESTIGATION DOSSIER VIEW
          ========================================================= -->
-    <div class="investigation-dossier-wrapper" id="investigation-report">
+    <div class="investigation-dossier-wrapper" id="investigation-report" style="margin-bottom: 2.5rem;">
         
         <!-- Verdict Banner Card -->
         <div class="dossier-verdict-card {% if dossier.verdict == 'CRITICAL' %}verdict-critical{% elif dossier.verdict == 'HIGH' %}verdict-high{% elif dossier.verdict == 'MEDIUM' %}verdict-medium{% elif dossier.verdict == 'CLEAN' %}verdict-clean{% else %}verdict-unknown{% endif %}">
@@ -112,7 +110,7 @@
             {% if dossier.pivots %}
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto;">
                 {% for name, url in dossier.pivots.items() %}
-                <a href="{{ url }}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary" style="font-size: 0.8rem;">
+                <a href="{{ url }}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary" style="font-size: 0.8rem; text-decoration: none;">
                     🔗 {{ name }} ↗
                 </a>
                 {% endfor %}
@@ -273,12 +271,17 @@
     <!-- =========================================================
          RECENT INVESTIGATION HISTORY
          ========================================================= -->
-    <div class="webhooks-section" style="margin-top: 3rem;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-            <h2 class="section-title" style="margin-bottom: 0;">
-                🕒 Recent Investigations
-                <span class="webhook-count">{{ history | length }}</span>
-            </h2>
+    <div class="webhooks-section" style="margin-top: 2rem;">
+        <div class="section-header" style="margin-bottom: 1.25rem;">
+            <div>
+                <h2 class="section-title">
+                    🕒 Recent Investigations
+                    <span class="webhook-count">{{ history | length }}</span>
+                </h2>
+                <p class="section-subtitle">
+                    Fast lookup history and recent SOC triage reports for instant re-analysis.
+                </p>
+            </div>
             {% if is_authenticated and history | length > 0 %}
             <button type="button" class="btn btn-sm btn-delete" onclick="handleClearHistory()">
                 🗑️ Clear History
@@ -297,19 +300,19 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Indicator</th>
-                        <th>Type</th>
-                        <th>Verdict</th>
-                        <th>Score</th>
-                        <th>Country / Region</th>
-                        <th>Date &amp; Time</th>
-                        <th>Action</th>
+                        <th style="width: 28%;">Indicator</th>
+                        <th style="width: 10%;">Type</th>
+                        <th style="width: 12%;">Verdict</th>
+                        <th style="width: 12%;">Score</th>
+                        <th style="width: 15%;">Country / Region</th>
+                        <th style="width: 13%;">Date &amp; Time</th>
+                        <th style="width: 10%; text-align: right;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in history %}
                     <tr>
-                        <td style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; color: #f3f4f6; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <td style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; color: #f3f4f6; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             {{ item.indicator }}
                         </td>
                         <td>
@@ -333,8 +336,8 @@
                         </td>
                         <td>{{ item.geo_country or 'N/A' }}</td>
                         <td style="font-size: 0.8rem; color: #9ca3af;">{{ item.created_at }}</td>
-                        <td>
-                            <a href="/investigate?ioc={{ item.indicator }}" class="btn btn-sm btn-primary">
+                        <td style="text-align: right;">
+                            <a href="/investigate?ioc={{ item.indicator }}" class="btn btn-sm btn-primary" style="text-decoration: none;">
                                 Re-Triage ↗
                             </a>
                         </td>
