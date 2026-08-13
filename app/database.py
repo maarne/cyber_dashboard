@@ -62,6 +62,9 @@ def get_connection():
     Returns:
         sqlite3.Connection: An open connection to the database.
     """
+    # Ensure the parent directory exists (e.g. /home/data on Azure App Service)
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     # sqlite3.connect() opens the database file. If the file
     # does not exist yet, SQLite creates it automatically!
     # str(DATABASE_PATH) converts our Path object to a string
