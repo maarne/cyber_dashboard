@@ -48,6 +48,27 @@ from app.config import HTTP_TIMEOUT_SECONDS
 # ============================================================
 
 
+def mask_webhook_url(url: str) -> str:
+    """
+    Mask a webhook URL to prevent secret tokens/keys from being exposed in UI/DOM.
+    Example: https://hooks.slack.com/services/T00/B00/XXXXXX -> https://hooks.slack.com/services/••••••••
+    """
+    if not url:
+        return ""
+    try:
+        parts = url.split("://", 1)
+        if len(parts) == 2:
+            scheme, rest = parts
+            path_parts = rest.split("/", 2)
+            if len(path_parts) >= 2:
+                domain_and_base = f"{scheme}://{path_parts[0]}/{path_parts[1]}"
+                return f"{domain_and_base}/••••••••"
+            return f"{scheme}://{path_parts[0]}/••••••••"
+    except Exception:
+        pass
+    return "https://••••••••"
+
+
 def get_all_webhooks():
     """
     Retrieve all webhook configurations from the database.
@@ -63,7 +84,12 @@ def get_all_webhooks():
         """)
         rows = cursor.fetchall()
 
-    return [dict(row) for row in rows]
+    webhooks = []
+    for row in rows:
+        item = dict(row)
+        item["masked_url"] = mask_webhook_url(item.get("webhook_url", ""))
+        webhooks.append(item)
+    return webhooks
 
 
 def get_webhook_by_id(webhook_id):
@@ -131,19 +157,13 @@ def save_webhook(data):
 def update_webhook(webhook_id, data):
     """
     Update an existing webhook configuration.
-
-    SQL CONCEPT — UPDATE ... SET ... WHERE:
-        UPDATE webhooks SET name = ? WHERE id = ?
-        This changes the "name" column for the row where id matches.
-        The WHERE clause ensures we only update ONE specific row.
-
-    Args:
-        webhook_id: The ID of the webhook to update.
-        data: A dictionary with the fields to update.
-
-    Returns:
-        bool: True if a row was updated, False if the ID was not found.
     """
+    webhook_url = data["webhook_url"]
+    if "••••" in webhook_url:
+        existing = get_webhook_by_id(webhook_id)
+        if existing:
+            webhook_url = existing["webhook_url"]
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -159,7 +179,7 @@ def update_webhook(webhook_id, data):
         """, (
             data["name"],
             data["platform"],
-            data["webhook_url"],
+            webhook_url,
             1 if data.get("is_active", True) else 0,
             1 if data.get("notify_critical_cves", True) else 0,
             1 if data.get("notify_high_cves", True) else 0,

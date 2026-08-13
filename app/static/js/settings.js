@@ -47,6 +47,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var addBtn = document.getElementById('add-webhook-btn');
     if (addBtn) {
         addBtn.addEventListener('click', function() {
+            if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
+                openLoginModal('Log in as administrator to add webhooks.');
+                return;
+            }
             showForm('add');
         });
     }
@@ -90,10 +94,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (webhooksList) {
         webhooksList.addEventListener('click', function(event) {
             var target = event.target;
-
-            // Find the closest button (handles clicking on emoji inside button)
             var button = target.closest('button');
             if (!button) return;
+
+            if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
+                openLoginModal('Log in as administrator to manage webhooks.');
+                return;
+            }
 
             var webhookId = button.dataset.webhookId;
 
@@ -106,31 +113,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Toggle switch listener (delegated)
         webhooksList.addEventListener('change', function(event) {
             if (event.target.classList.contains('toggle-input')) {
+                if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
+                    event.target.checked = !event.target.checked;
+                    openLoginModal('Log in as administrator to toggle webhooks.');
+                    return;
+                }
                 handleToggleWebhook(event.target.dataset.webhookId);
             }
         });
     }
 
     // --- Schedule Toggle ---
-    // When the user toggles the schedule on/off, immediately
-    // send the updated settings to the server.
     var scheduleToggle = document.getElementById('schedule-toggle');
     if (scheduleToggle) {
-        scheduleToggle.addEventListener('change', function() {
+        scheduleToggle.addEventListener('change', function(e) {
+            if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
+                e.preventDefault();
+                scheduleToggle.checked = !scheduleToggle.checked;
+                openLoginModal('Log in as administrator to change auto-refresh schedules.');
+                return;
+            }
             saveScheduleSettings();
         });
     }
 
     // --- Schedule Interval Radio Buttons ---
-    // When the user clicks a different interval, update the
-    // active pill styling and save the new settings.
     var intervalRadios = document.querySelectorAll('input[name="schedule-interval"]');
     intervalRadios.forEach(function(radio) {
-        radio.addEventListener('change', function() {
-            // Update the visual "active" state on the pills
+        radio.addEventListener('change', function(e) {
+            if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
+                e.preventDefault();
+                openLoginModal('Log in as administrator to change refresh intervals.');
+                return;
+            }
             document.querySelectorAll('.interval-option').forEach(function(opt) {
                 opt.classList.remove('active');
             });

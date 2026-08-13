@@ -49,7 +49,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body>
+<body data-is-authenticated="{{ 'true' if is_authenticated else 'false' }}" data-current-user="{{ current_user or '' }}">
     <!-- =========================================================
          HEADER / NAVIGATION BAR
          ========================================================= -->
@@ -63,8 +63,15 @@
 
             <!-- Header Action Buttons -->
             <div class="header-actions">
-                <!-- Settings link — takes users to the webhook
-                     and notification configuration page. -->
+                {% if is_authenticated %}
+                    <span class="auth-badge auth-badge-admin" title="Logged in as Admin">👤 {{ current_user }}</span>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="handleLogout()">🚪 Logout</button>
+                {% else %}
+                    <span class="auth-badge auth-badge-readonly" title="Read-only mode. Login to edit settings or refresh feeds.">🔒 View Only</span>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="openLoginModal()">🔑 Login</button>
+                {% endif %}
+
+                <!-- Settings link -->
                 <a href="/settings" class="btn btn-secondary" id="settings-link">
                     ⚙️ Settings
                 </a>
@@ -106,6 +113,36 @@
         <div style="text-align: center;">
             <div class="spinner"></div>
             <p class="spinner-text">Refreshing feeds...</p>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         LOGIN MODAL
+         ========================================================= -->
+    <div id="login-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">🔑 Admin Login</h3>
+                <button type="button" class="modal-close" onclick="closeLoginModal()">&times;</button>
+            </div>
+            <form id="login-form" onsubmit="submitLogin(event)">
+                <div class="modal-body">
+                    <p class="modal-subtitle">Log in as administrator to modify settings and refresh feeds.</p>
+                    <div id="login-error-msg" class="alert alert-danger" style="display: none;"></div>
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" class="form-control" placeholder="admin" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">Cancel</button>
+                    <button type="submit" id="login-submit-btn" class="btn btn-primary">Log In</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -194,27 +194,101 @@ function filterNewsCards() {
 
 
 // =============================================================
-// REFRESH DATA — Fetch fresh data from the server
-// =============================================================
-// When the user clicks "Refresh Feeds", we:
-// 1. Show a loading spinner
-// 2. Send a POST request to our API endpoint
-// 3. Reload the page when the data is ready
-//
-// JAVASCRIPT CONCEPT — async/await:
-//   "async" marks a function as asynchronous (it can wait).
-//   "await" pauses execution until a Promise resolves.
-//   This makes asynchronous code read like synchronous code.
-//
-//   Without async/await, we'd need nested callbacks:
-//     fetch(url).then(response => response.json()).then(data => ...)
-//
-//   With async/await:
-//     const response = await fetch(url);
-//     const data = await response.json();
+// AUTHENTICATION & LOGIN MODAL HANDLERS
 // =============================================================
 
+function isUserAuthenticated() {
+    return document.body.dataset.isAuthenticated === 'true';
+}
+
+function openLoginModal(message) {
+    var modal = document.getElementById('login-modal');
+    var errorMsg = document.getElementById('login-error-msg');
+    var subtitle = document.querySelector('.modal-subtitle');
+    if (errorMsg) errorMsg.style.display = 'none';
+    if (subtitle && message) {
+        subtitle.textContent = message;
+    } else if (subtitle) {
+        subtitle.textContent = 'Log in as administrator to modify settings and refresh feeds.';
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeLoginModal() {
+    var modal = document.getElementById('login-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitLogin(event) {
+    event.preventDefault();
+    var usernameInput = document.getElementById('login-username');
+    var passwordInput = document.getElementById('login-password');
+    var errorMsg = document.getElementById('login-error-msg');
+    var submitBtn = document.getElementById('login-submit-btn');
+
+    if (!usernameInput || !passwordInput) return;
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Logging in...';
+    }
+
+    try {
+        var response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: usernameInput.value.trim(),
+                password: passwordInput.value
+            })
+        });
+
+        var data = await response.json();
+        if (response.ok && data.status === 'success') {
+            showToast('Logged in successfully!', 'success');
+            closeLoginModal();
+            setTimeout(function() { window.location.reload(); }, 500);
+        } else {
+            if (errorMsg) {
+                errorMsg.textContent = data.message || 'Invalid username or password.';
+                errorMsg.style.display = 'block';
+            }
+        }
+    } catch (err) {
+        if (errorMsg) {
+            errorMsg.textContent = 'Login failed. Network error.';
+            errorMsg.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Log In';
+        }
+    }
+}
+
+async function handleLogout() {
+    try {
+        var response = await fetch('/api/auth/logout', { method: 'POST' });
+        if (response.ok) {
+            showToast('Logged out successfully.', 'info');
+            setTimeout(function() { window.location.reload(); }, 500);
+        }
+    } catch (err) {
+        console.error('Logout error:', err);
+    }
+}
+
+
+// =============================================================
+// REFRESH DATA — Fetch fresh data from the server
+// =============================================================
 async function refreshAllFeeds() {
+    if (!isUserAuthenticated()) {
+        openLoginModal('Admin authentication required to refresh feeds.');
+        return;
+    }
+
     // Get the refresh button and disable it to prevent double-clicks
     var refreshBtn = document.getElementById('refresh-btn');
     if (refreshBtn) {
@@ -226,11 +300,19 @@ async function refreshAllFeeds() {
     showSpinner();
 
     try {
-        // fetch() sends an HTTP request from the browser to our server.
-        // The { method: 'POST' } part tells it to use a POST request.
         var response = await fetch('/api/refresh', {
             method: 'POST'
         });
+
+        if (response.status === 401) {
+            hideSpinner();
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 Refresh Feeds';
+            }
+            openLoginModal('Session expired. Please log in again.');
+            return;
+        }
 
         // Check if the server responded successfully
         if (response.ok) {

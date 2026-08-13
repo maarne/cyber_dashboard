@@ -49,6 +49,17 @@ DATABASE_PATH = Path(_db_env) if _db_env else BASE_DIR / "cyber_dashboard.db"
 
 
 # ============================================================
+# SECURITY & AUTHENTICATION CONFIGURATION
+# ============================================================
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "cyberdash-secret-key-change-in-production-2026")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+DEFAULT_ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "cyberdash123!")
+
+
+# ============================================================
 # EXTERNAL API ENDPOINTS
 # ============================================================
 # These are the URLs where we fetch security data from.

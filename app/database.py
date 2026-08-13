@@ -287,11 +287,20 @@ def initialize_database():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        # Column explanations:
-        # - name:       Friendly label (e.g. "Krebs on Security")
-        # - url:        The RSS feed URL (must be unique)
-        # - is_active:  1 = enabled, 0 = paused
-        # - created_at: When this feed was added
+
+        # --------------------------------------------------
+        # TABLE 8: users
+        # Stores user accounts and secure hashed passwords.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                username        TEXT UNIQUE NOT NULL,
+                password_hash   TEXT NOT NULL,
+                created_at      TEXT DEFAULT (datetime('now')),
+                updated_at      TEXT DEFAULT (datetime('now'))
+            )
+        """)
 
         conn.commit()
 
@@ -302,6 +311,10 @@ def initialize_database():
 
     # Seed the default RSS feeds on first run
     seed_default_rss_feeds()
+
+    # Seed the default admin user on first run
+    from app.services.auth_service import seed_default_admin_user
+    seed_default_admin_user()
 
 
 def seed_default_rss_feeds():

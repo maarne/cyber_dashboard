@@ -33,10 +33,20 @@
             <h1>⚙️ Settings</h1>
             <p class="settings-subtitle">Manage scheduled refreshes, webhook notifications, and integrations.</p>
         </div>
-        <button id="add-webhook-btn" class="btn btn-primary">
+        <button id="add-webhook-btn" class="btn btn-primary" {% if not is_authenticated %}disabled title="Login required to add webhooks"{% endif %}>
             ➕ Add Webhook
         </button>
     </div>
+
+    {% if not is_authenticated %}
+    <div class="banner-readonly" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; color: #fbbf24;">
+            <span style="font-size: 1.25rem;">🔒</span>
+            <span><strong>View Only Mode:</strong> You are currently viewing settings as a guest. Log in as administrator to edit parameters, manage webhooks, or toggle RSS sources.</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openLoginModal('Log in as admin to modify settings.')">🔑 Login as Admin</button>
+    </div>
+    {% endif %}
 
     <!-- =========================================================
          SCHEDULED REFRESH SECTION
@@ -54,10 +64,11 @@
                     <h3>Auto-Refresh Feeds</h3>
                     <p>Automatically fetch the latest CVEs, CISA exploits, news, and threat intel on a recurring schedule.</p>
                 </div>
-                <label class="toggle-switch" title="Enable or disable scheduled refresh">
+                <label class="toggle-switch" title="{% if not is_authenticated %}Login required to change schedule{% else %}Enable or disable scheduled refresh{% endif %}">
                     <input type="checkbox" class="toggle-input"
                            id="schedule-toggle"
-                           {% if schedule.enabled %}checked{% endif %}>
+                           {% if schedule.enabled %}checked{% endif %}
+                           {% if not is_authenticated %}disabled{% endif %}>
                     <span class="toggle-slider"></span>
                 </label>
             </div>
@@ -68,22 +79,26 @@
                 <div class="interval-options">
                     <label class="interval-option {% if schedule.interval_hours == 6 %}active{% endif %}">
                         <input type="radio" name="schedule-interval" value="6"
-                               {% if schedule.interval_hours == 6 %}checked{% endif %}>
+                               {% if schedule.interval_hours == 6 %}checked{% endif %}
+                               {% if not is_authenticated %}disabled{% endif %}>
                         <span class="interval-pill">6 hours</span>
                     </label>
                     <label class="interval-option {% if schedule.interval_hours == 12 %}active{% endif %}">
                         <input type="radio" name="schedule-interval" value="12"
-                               {% if schedule.interval_hours == 12 %}checked{% endif %}>
+                               {% if schedule.interval_hours == 12 %}checked{% endif %}
+                               {% if not is_authenticated %}disabled{% endif %}>
                         <span class="interval-pill">12 hours</span>
                     </label>
                     <label class="interval-option {% if schedule.interval_hours == 24 %}active{% endif %}">
                         <input type="radio" name="schedule-interval" value="24"
-                               {% if schedule.interval_hours == 24 %}checked{% endif %}>
+                               {% if schedule.interval_hours == 24 %}checked{% endif %}
+                               {% if not is_authenticated %}disabled{% endif %}>
                         <span class="interval-pill">24 hours</span>
                     </label>
                     <label class="interval-option {% if schedule.interval_hours == 48 %}active{% endif %}">
                         <input type="radio" name="schedule-interval" value="48"
-                               {% if schedule.interval_hours == 48 %}checked{% endif %}>
+                               {% if schedule.interval_hours == 48 %}checked{% endif %}
+                               {% if not is_authenticated %}disabled{% endif %}>
                         <span class="interval-pill">48 hours</span>
                     </label>
                 </div>
@@ -240,11 +255,12 @@
                     </div>
 
                     <!-- Active/Inactive Toggle -->
-                    <label class="toggle-switch" title="Toggle active/inactive">
+                    <label class="toggle-switch" title="{% if not is_authenticated %}Login required to toggle webhooks{% else %}Toggle active/inactive{% endif %}">
                         <input type="checkbox"
                                class="toggle-input"
                                data-webhook-id="{{ webhook.id }}"
-                               {% if webhook.is_active %}checked{% endif %}>
+                               {% if webhook.is_active %}checked{% endif %}
+                               {% if not is_authenticated %}disabled{% endif %}>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -253,7 +269,7 @@
                 <div class="webhook-card-body">
                     <div class="webhook-url-display">
                         <span class="url-label">URL:</span>
-                        <code class="url-masked">{{ webhook.webhook_url[:40] }}•••</code>
+                        <code class="url-masked">{{ webhook.masked_url }}</code>
                     </div>
 
                     <div class="webhook-triggers">
@@ -279,24 +295,27 @@
                 <div class="webhook-card-actions">
                     <button class="btn btn-sm btn-test"
                             data-webhook-id="{{ webhook.id }}"
-                            title="Send a test notification">
+                            title="{% if not is_authenticated %}Login required to test webhooks{% else %}Send a test notification{% endif %}"
+                            {% if not is_authenticated %}disabled{% endif %}>
                         🧪 Test
                     </button>
                     <button class="btn btn-sm btn-edit"
                             data-webhook-id="{{ webhook.id }}"
                             data-name="{{ webhook.name }}"
                             data-platform="{{ webhook.platform }}"
-                            data-url="{{ webhook.webhook_url }}"
+                            data-url="{{ webhook.masked_url }}"
                             data-critical="{{ webhook.notify_critical_cves }}"
                             data-high="{{ webhook.notify_high_cves }}"
                             data-cisa="{{ webhook.notify_cisa_exploits }}"
-                            title="Edit this webhook">
+                            title="{% if not is_authenticated %}Login required to edit webhooks{% else %}Edit this webhook{% endif %}"
+                            {% if not is_authenticated %}disabled{% endif %}>
                         ✏️ Edit
                     </button>
                     <button class="btn btn-sm btn-delete"
                             data-webhook-id="{{ webhook.id }}"
                             data-name="{{ webhook.name }}"
-                            title="Delete this webhook">
+                            title="{% if not is_authenticated %}Login required to delete webhooks{% else %}Delete this webhook{% endif %}"
+                            {% if not is_authenticated %}disabled{% endif %}>
                         🗑️ Delete
                     </button>
                 </div>
@@ -319,12 +338,14 @@
         <div class="feed-add-form">
             <form id="add-feed-form" class="feed-form-row">
                 <input type="text" id="feed-name-input"
-                       placeholder="Feed name (e.g. BleepingComputer)"
-                       required class="form-input feed-input-name">
+                       placeholder="{% if not is_authenticated %}Login required to add feeds{% else %}Feed name (e.g. BleepingComputer){% endif %}"
+                       required class="form-input feed-input-name"
+                       {% if not is_authenticated %}disabled{% endif %}>
                 <input type="url" id="feed-url-input"
-                       placeholder="RSS feed URL (e.g. https://example.com/feed/)"
-                       required class="form-input feed-input-url">
-                <button type="submit" class="btn btn-primary btn-add-feed">
+                       placeholder="{% if not is_authenticated %}Login required to add feeds{% else %}RSS feed URL (e.g. https://example.com/feed/){% endif %}"
+                       required class="form-input feed-input-url"
+                       {% if not is_authenticated %}disabled{% endif %}>
+                <button type="submit" class="btn btn-primary btn-add-feed" {% if not is_authenticated %}disabled title="Login required to add feeds"{% endif %}>
                     ➕ Add
                 </button>
             </form>
@@ -342,16 +363,18 @@
                     </a>
                 </div>
                 <div class="feed-actions">
-                    <label class="toggle-switch toggle-sm" title="Enable or disable this feed">
+                    <label class="toggle-switch toggle-sm" title="{% if not is_authenticated %}Login required to toggle feeds{% else %}Enable or disable this feed{% endif %}">
                         <input type="checkbox" class="toggle-input feed-toggle"
                                data-feed-id="{{ feed.id }}"
-                               {% if feed.is_active %}checked{% endif %}>
+                               {% if feed.is_active %}checked{% endif %}
+                               {% if not is_authenticated %}disabled{% endif %}>
                         <span class="toggle-slider"></span>
                     </label>
                     <button class="btn btn-sm btn-delete feed-delete-btn"
                             data-feed-id="{{ feed.id }}"
                             data-feed-name="{{ feed.name }}"
-                            title="Remove this feed">
+                            title="{% if not is_authenticated %}Login required to remove feeds{% else %}Remove this feed{% endif %}"
+                            {% if not is_authenticated %}disabled{% endif %}>
                         🗑️
                     </button>
                 </div>

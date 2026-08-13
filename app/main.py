@@ -35,7 +35,8 @@
 # -------------------------------------------------------
 # FastAPI is the web framework class. We create one instance
 # of it, and that instance IS our web application.
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, Cookie, Depends, HTTPException, status
+from pydantic import BaseModel
 
 # StaticFiles lets us serve CSS, JS, and image files.
 # Jinja2Templates lets us render HTML templates with data.
@@ -44,6 +45,15 @@ from fastapi.templating import Jinja2Templates
 
 # JSONResponse lets us return JSON data from API endpoints.
 from fastapi.responses import JSONResponse
+
+# Import auth service
+from app.services.auth_service import (
+    verify_password,
+    create_access_token,
+    verify_access_token,
+    get_user_by_username,
+    update_user_password,
+)
 
 # Import our own modules (from the app/ package)
 from app.config import APP_DIR
@@ -118,6 +128,37 @@ app = FastAPI(
     description="A Python-based dashboard aggregating CVEs, exploits, news, and threat intel.",
     version="1.0.0",
 )
+
+
+# ============================================================
+# AUTHENTICATION MODELS & DEPENDENCIES
+# ============================================================
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+def get_current_user_optional(request: Request) -> str | None:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+    if token:
+        return verify_access_token(token)
+    return None
+
+def require_admin(current_user: str = Depends(get_current_user_optional)) -> str:
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please log in as an administrator.",
+        )
+    return current_user
 
 
 # ============================================================
@@ -217,6 +258,7 @@ def dashboard_home(request: Request, start_date: str = None, end_date: str = Non
     articles = get_rss_articles(limit=50, start_date=start_date, end_date=end_date)
     threats = get_threat_indicators(limit=50, start_date=start_date, end_date=end_date)
     rss_sources = get_rss_sources()
+    current_user = get_current_user_optional(request)
 
     return templates.TemplateResponse(
         request=request,
@@ -231,6 +273,8 @@ def dashboard_home(request: Request, start_date: str = None, end_date: str = Non
             "rss_sources": rss_sources,
             "start_date": start_date or "",
             "end_date": end_date or "",
+            "is_authenticated": current_user is not None,
+            "current_user": current_user or "",
         },
     )
 
@@ -238,17 +282,67 @@ def dashboard_home(request: Request, start_date: str = None, end_date: str = Non
 # ============================================================
 # API ROUTE: Refresh All Feeds (POST /api/refresh)
 # ============================================================
-# This endpoint triggers a fresh data fetch from all external
-# sources. It's called by the "Refresh Feeds" button in the UI.
-#
-# POST is used instead of GET because this action CHANGES data
-# (it writes new records to the database). By convention:
-#   - GET = read/retrieve data (no side effects)
-#   - POST = create/modify data (has side effects)
+# AUTHENTICATION API ENDPOINTS
 # ============================================================
 
+@app.post("/api/auth/login")
+def api_login(credentials: LoginRequest):
+    user = get_user_by_username(credentials.username.strip())
+    if not user or not verify_password(credentials.password, user["password_hash"]):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"status": "error", "message": "Invalid username or password"},
+        )
+    token = create_access_token(user["username"])
+    res = JSONResponse(content={"status": "success", "username": user["username"]})
+    res.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        max_age=86400,
+    )
+    return res
+
+
+@app.post("/api/auth/logout")
+def api_logout():
+    res = JSONResponse(content={"status": "success", "message": "Logged out successfully"})
+    res.delete_cookie("access_token")
+    return res
+
+
+@app.get("/api/auth/me")
+def api_get_current_user_info(request: Request):
+    user = get_current_user_optional(request)
+    return {
+        "is_authenticated": user is not None,
+        "username": user or "",
+    }
+
+
+@app.post("/api/auth/change-password")
+def api_change_password(req: ChangePasswordRequest, current_user: str = Depends(require_admin)):
+    user = get_user_by_username(current_user)
+    if not user or not verify_password(req.current_password, user["password_hash"]):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "Current password is incorrect."},
+        )
+    if len(req.new_password.strip()) < 6:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"error": "New password must be at least 6 characters long."},
+        )
+    update_user_password(current_user, req.new_password.strip())
+    return JSONResponse(content={"message": "Password updated successfully."})
+
+
+# ============================================================
+# API ROUTE: Refresh All Feeds (POST /api/refresh) — Admin Only
+# ============================================================
 @app.post("/api/refresh")
-def refresh_all_feeds():
+def refresh_all_feeds(current_user: str = Depends(require_admin)):
     """
     Fetch fresh data from all external sources, store in the database,
     and send webhook notifications if new CRITICAL/HIGH CVEs or
@@ -421,6 +515,8 @@ def settings_page(request: Request):
     webhooks = get_all_webhooks()
     schedule = get_scheduler_status()
     rss_feeds = get_all_rss_feeds()
+    current_user = get_current_user_optional(request)
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
@@ -429,6 +525,8 @@ def settings_page(request: Request):
             "webhooks": webhooks,
             "schedule": schedule,
             "rss_feeds": rss_feeds,
+            "is_authenticated": current_user is not None,
+            "current_user": current_user or "",
         },
     )
 
@@ -455,7 +553,7 @@ def api_list_webhooks():
 
 
 @app.post("/api/webhooks")
-def api_create_webhook(webhook: WebhookSchema):
+def api_create_webhook(webhook: WebhookSchema, current_user: str = Depends(require_admin)):
     """
     Create a new webhook configuration.
 
@@ -482,7 +580,7 @@ def api_create_webhook(webhook: WebhookSchema):
 
 
 @app.put("/api/webhooks/{webhook_id}")
-def api_update_webhook(webhook_id: int, webhook: WebhookSchema):
+def api_update_webhook(webhook_id: int, webhook: WebhookSchema, current_user: str = Depends(require_admin)):
     """
     Update an existing webhook configuration.
 
@@ -506,7 +604,7 @@ def api_update_webhook(webhook_id: int, webhook: WebhookSchema):
 
 
 @app.delete("/api/webhooks/{webhook_id}")
-def api_delete_webhook(webhook_id: int):
+def api_delete_webhook(webhook_id: int, current_user: str = Depends(require_admin)):
     """
     Delete a webhook configuration.
 
@@ -524,7 +622,7 @@ def api_delete_webhook(webhook_id: int):
 
 
 @app.post("/api/webhooks/{webhook_id}/toggle")
-def api_toggle_webhook(webhook_id: int):
+def api_toggle_webhook(webhook_id: int, current_user: str = Depends(require_admin)):
     """
     Toggle a webhook between active and inactive.
 
@@ -547,7 +645,7 @@ def api_toggle_webhook(webhook_id: int):
 
 
 @app.post("/api/webhooks/{webhook_id}/test")
-def api_test_webhook(webhook_id: int):
+def api_test_webhook(webhook_id: int, current_user: str = Depends(require_admin)):
     """
     Send a test notification to a specific webhook.
 
@@ -584,7 +682,7 @@ def api_get_schedule():
 
 
 @app.post("/api/schedule")
-def api_update_schedule(request_data: dict):
+def api_update_schedule(request_data: dict, current_user: str = Depends(require_admin)):
     """
     Update the automatic refresh schedule.
 
@@ -636,7 +734,7 @@ def api_list_rss_feeds():
 
 
 @app.post("/api/rss-feeds")
-def api_add_rss_feed(feed_data: dict):
+def api_add_rss_feed(feed_data: dict, current_user: str = Depends(require_admin)):
     """
     Add a new RSS feed source.
 
@@ -666,7 +764,7 @@ def api_add_rss_feed(feed_data: dict):
 
 
 @app.delete("/api/rss-feeds/{feed_id}")
-def api_delete_rss_feed(feed_id: int):
+def api_delete_rss_feed(feed_id: int, current_user: str = Depends(require_admin)):
     """Remove an RSS feed source."""
     success = delete_rss_feed(feed_id)
     if success:
@@ -679,7 +777,7 @@ def api_delete_rss_feed(feed_id: int):
 
 
 @app.post("/api/rss-feeds/{feed_id}/toggle")
-def api_toggle_rss_feed(feed_id: int):
+def api_toggle_rss_feed(feed_id: int, current_user: str = Depends(require_admin)):
     """Toggle an RSS feed between active and inactive."""
     success = toggle_rss_feed(feed_id)
     if success:
