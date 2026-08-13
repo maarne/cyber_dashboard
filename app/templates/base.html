@@ -42,10 +42,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
-    <!-- Our custom CSS stylesheet.
-         url_for('static', path='...') generates the correct URL
-         for files in our static/ directory. -->
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <!-- Our custom CSS stylesheet. -->
+    <link rel="stylesheet" href="/static/css/style.css">
 
     <!-- Any extra head content from child templates -->
     {% block extra_head %}{% endblock %}
@@ -118,7 +116,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Our custom JavaScript file -->
-    <script src="{{ url_for('static', path='js/dashboard.js') }}"></script>
+    <script src="/static/js/dashboard.js"></script>
 
     <!-- Any extra scripts from child templates -->
     {% block extra_scripts %}{% endblock %}
