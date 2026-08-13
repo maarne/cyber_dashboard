@@ -43,19 +43,26 @@ stages:
       workingDirectory: $(projectRoot)
       displayName: "Install requirements & validate build"
 
-# Security Scans
+# Security Scans (Trivy)
     - script: |
-        # Ensure Docker socket permissions
-        sudo chmod 666 /var/run/docker.sock
-
-        # Run Horusec via its official Docker image
+        mkdir -p $(Build.ArtifactStagingDirectory)/trivy
         docker run --rm \
-          -v /var/run/docker.sock:/var/run/docker.sock \
           -v $(projectRoot):/src \
-          horuszup/horusec-cli:latest \
-          horusec start -p /src -e="true" -o="json" -O="/src/horusec-report.json"
-      displayName: 'Run Horusec SAST'
-      continueOnError: true # Set to true if you don't want security vulnerabilities to block deployment
+          -v $(Build.ArtifactStagingDirectory)/trivy:/output \
+          aquasec/trivy:latest fs \
+          --scanners config,vuln,secret \
+          --format template --template "@contrib/html.tpl" \
+          -o /output/trivy-report.html \
+          /src
+      displayName: 'Run Trivy Security Scan'
+      continueOnError: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Trivy Security Report'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy/trivy-report.html'
+        ArtifactName: 'Trivy_Security_Report'
+        publishLocation: 'Container'
 
 # Create archive for deployment
     - task: ArchiveFiles@2
