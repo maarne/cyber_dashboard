@@ -279,6 +279,110 @@ async function handleLogout() {
     }
 }
 
+// User Dropdown Menu Handlers
+function toggleUserDropdown(event) {
+    if (event) event.stopPropagation();
+    var menu = document.getElementById('user-dropdown-menu');
+    if (menu) {
+        var isVisible = menu.style.display === 'block';
+        menu.style.display = isVisible ? 'none' : 'block';
+    }
+}
+
+document.addEventListener('click', function(event) {
+    var menu = document.getElementById('user-dropdown-menu');
+    var container = document.querySelector('.user-dropdown-container');
+    if (menu && container && !container.contains(event.target)) {
+        menu.style.display = 'none';
+    }
+});
+
+// Change Password Modal Handlers
+function openChangePasswordModal() {
+    var menu = document.getElementById('user-dropdown-menu');
+    if (menu) menu.style.display = 'none';
+
+    var modal = document.getElementById('change-password-modal');
+    var errorMsg = document.getElementById('password-error-msg');
+    var form = document.getElementById('change-password-form');
+    if (errorMsg) errorMsg.style.display = 'none';
+    if (form) form.reset();
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeChangePasswordModal() {
+    var modal = document.getElementById('change-password-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitChangePassword(event) {
+    event.preventDefault();
+    var currentPwdInput = document.getElementById('current-password-input');
+    var newPwdInput = document.getElementById('new-password-input');
+    var confirmPwdInput = document.getElementById('confirm-password-input');
+    var errorMsg = document.getElementById('password-error-msg');
+    var submitBtn = document.getElementById('change-password-submit-btn');
+
+    if (!currentPwdInput || !newPwdInput || !confirmPwdInput) return;
+
+    var currentPwd = currentPwdInput.value;
+    var newPwd = newPwdInput.value.trim();
+    var confirmPwd = confirmPwdInput.value.trim();
+
+    if (newPwd.length < 6) {
+        if (errorMsg) {
+            errorMsg.textContent = 'New password must be at least 6 characters long.';
+            errorMsg.style.display = 'block';
+        }
+        return;
+    }
+
+    if (newPwd !== confirmPwd) {
+        if (errorMsg) {
+            errorMsg.textContent = 'New password and confirmation do not match.';
+            errorMsg.style.display = 'block';
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Updating...';
+    }
+
+    try {
+        var response = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_password: currentPwd,
+                new_password: newPwd
+            })
+        });
+
+        var data = await response.json();
+        if (response.ok) {
+            showToast('Password updated successfully!', 'success');
+            closeChangePasswordModal();
+        } else {
+            if (errorMsg) {
+                errorMsg.textContent = data.error || data.detail || 'Failed to update password.';
+                errorMsg.style.display = 'block';
+            }
+        }
+    } catch (err) {
+        if (errorMsg) {
+            errorMsg.textContent = 'Network error. Failed to update password.';
+            errorMsg.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Update Password';
+        }
+    }
+}
+
 
 // =============================================================
 // REFRESH DATA — Fetch fresh data from the server

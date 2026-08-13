@@ -64,8 +64,23 @@
             <!-- Header Action Buttons -->
             <div class="header-actions">
                 {% if is_authenticated %}
-                    <span class="auth-badge auth-badge-admin" title="Logged in as Admin">👤 {{ current_user }}</span>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="handleLogout()">🚪 Logout</button>
+                    <div class="user-dropdown-container">
+                        <button type="button" class="auth-badge auth-badge-admin user-dropdown-toggle" onclick="toggleUserDropdown(event)" title="Admin account options">
+                            👤 {{ current_user }} <span class="dropdown-caret">▼</span>
+                        </button>
+                        <div id="user-dropdown-menu" class="user-dropdown-menu" style="display: none;">
+                            <div class="dropdown-header">
+                                <span class="dropdown-user-name">Signed in as <strong>{{ current_user }}</strong></span>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <button type="button" class="dropdown-item" onclick="openChangePasswordModal()">
+                                🔑 Change Password
+                            </button>
+                            <button type="button" class="dropdown-item dropdown-item-danger" onclick="handleLogout()">
+                                🚪 Logout
+                            </button>
+                        </div>
+                    </div>
                 {% else %}
                     <span class="auth-badge auth-badge-readonly" title="Read-only mode. Login to edit settings or refresh feeds.">🔒 View Only</span>
                     <button type="button" class="btn btn-primary btn-sm" onclick="openLoginModal()">🔑 Login</button>
@@ -141,6 +156,40 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">Cancel</button>
                     <button type="submit" id="login-submit-btn" class="btn btn-primary">Log In</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         CHANGE PASSWORD MODAL
+         ========================================================= -->
+    <div id="change-password-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">🔑 Change Admin Password</h3>
+                <button type="button" class="modal-close" onclick="closeChangePasswordModal()">&times;</button>
+            </div>
+            <form id="change-password-form" onsubmit="submitChangePassword(event)">
+                <div class="modal-body">
+                    <p class="modal-subtitle">Update your password securely. Minimum 6 characters required.</p>
+                    <div id="password-error-msg" class="alert alert-danger" style="display: none;"></div>
+                    <div class="form-group">
+                        <label for="current-password-input">Current Password</label>
+                        <input type="password" id="current-password-input" class="form-input" required autocomplete="current-password" placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-password-input">New Password</label>
+                        <input type="password" id="new-password-input" class="form-input" required minlength="6" autocomplete="new-password" placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirm-password-input">Confirm New Password</label>
+                        <input type="password" id="confirm-password-input" class="form-input" required minlength="6" autocomplete="new-password" placeholder="••••••••">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                    <button type="submit" id="change-password-submit-btn" class="btn btn-primary">Update Password</button>
                 </div>
             </form>
         </div>
