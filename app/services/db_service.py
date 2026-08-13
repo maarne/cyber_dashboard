@@ -51,9 +51,13 @@ def _build_where_clause(base_conditions=None, start_date=None, end_date=None, da
     # Add non-date base conditions (e.g. severity = ?)
     if base_conditions:
         for condition_str, param_val in base_conditions:
-            conditions.append(condition_str)
+            if condition_str:
+                conditions.append(condition_str)
             if param_val is not None:
-                params.append(param_val)
+                if isinstance(param_val, (list, tuple)):
+                    params.extend(param_val)
+                else:
+                    params.append(param_val)
 
     # Add start_date filter if provided
     if start_date:
@@ -71,20 +75,27 @@ def _build_where_clause(base_conditions=None, start_date=None, end_date=None, da
     return "", params
 
 
-def get_recent_cves(limit=50, severity_filter=None, start_date=None, end_date=None):
+def get_recent_cves(limit=50, severity_filter=None, start_date=None, end_date=None, search_query=None):
     """
-    Retrieve CVEs from the database with optional severity and date range filtering.
+    Retrieve CVEs from the database with optional severity, date range, and keyword/CVE ID search filtering.
 
     Args:
         limit: Maximum number of CVEs to return.
         severity_filter: Filter by severity (CRITICAL, HIGH, etc.)
         start_date: Start date string 'YYYY-MM-DD'
         end_date: End date string 'YYYY-MM-DD'
+        search_query: Search string to match CVE ID or description
     """
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        base_conds = [("severity = ?", severity_filter)] if severity_filter else []
+        base_conds = []
+        if severity_filter:
+            base_conds.append(("severity = ?", severity_filter))
+        if search_query:
+            pattern = f"%{search_query.strip()}%"
+            base_conds.append(("(cve_id LIKE ? OR description LIKE ?)", (pattern, pattern)))
+
         where_str, params = _build_where_clause(
             base_conditions=base_conds,
             start_date=start_date,

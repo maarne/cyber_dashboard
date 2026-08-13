@@ -87,6 +87,18 @@ function initSearchAndFilter() {
     // --- Search Input ---
     var searchInput = document.getElementById('cve-search');
     if (searchInput) {
+        // Read URL query parameter ?search= or ?q= if input is empty
+        var urlParams = new URLSearchParams(window.location.search);
+        var urlSearch = urlParams.get('search') || urlParams.get('q');
+        if (urlSearch && !searchInput.value) {
+            searchInput.value = urlSearch;
+        }
+
+        // Trigger initial card filter if search input is populated
+        if (searchInput.value.trim().length > 0) {
+            filterCVECards();
+        }
+
         // "input" event fires every time the user types a character
         searchInput.addEventListener('input', function() {
             filterCVECards();

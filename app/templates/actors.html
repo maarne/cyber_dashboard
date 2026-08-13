@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}CyberDash — Threat Actors Directory{% endblock %}
+
+{% block content %}
+<main class="settings-page">
+
+    <!-- =========================================================
+         PAGE HEADER
+         ========================================================= -->
+    <div class="settings-header">
+        <div class="settings-header-text">
+            <h1>🕵️ Threat Actors & Ransomware Groups</h1>
+            <p class="settings-subtitle">Cyber Threat Intelligence (CTI) profiles on active nation-state APTs, RaaS operations, and cybercrime syndicates.</p>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         SEARCH & FILTER BAR
+         ========================================================= -->
+    <div class="date-filter-card" style="margin-bottom: 2rem;">
+        <form method="GET" action="/actors" class="date-filter-form" style="gap: 1rem; flex-wrap: wrap;">
+            <div class="date-input-group" style="flex: 2; min-width: 260px;">
+                <label for="actor-search" style="font-weight: 600; color: #9ca3af; margin-bottom: 4px; display: block;">Search Threat Intelligence</label>
+                <input type="text" id="actor-search" name="search" value="{{ search }}" placeholder="Search actor name, alias, CVE, or TTP (e.g. Midnight Blizzard, LockBit, T1190)..." class="form-input" style="width: 100%;">
+            </div>
+            
+            <div class="date-input-group" style="flex: 1; min-width: 200px;">
+                <label for="actor-sector" style="font-weight: 600; color: #9ca3af; margin-bottom: 4px; display: block;">Target Industry / Sector</label>
+                <select id="actor-sector" name="sector" class="form-input" style="width: 100%;" onchange="this.form.submit()">
+                    <option value="">All Industry Sectors</option>
+                    <option value="Government" {% if sector == 'Government' %}selected{% endif %}>🏛️ Government & Diplomacy</option>
+                    <option value="Defense" {% if sector == 'Defense' %}selected{% endif %}>🛡️ Defense & Military</option>
+                    <option value="Financial" {% if sector == 'Financial' %}selected{% endif %}>🏦 Financial & Banking</option>
+                    <option value="Healthcare" {% if sector == 'Healthcare' %}selected{% endif %}>🏥 Healthcare & Pharma</option>
+                    <option value="Critical Infrastructure" {% if sector == 'Critical Infrastructure' %}selected{% endif %}>⚡ Critical Infrastructure / Energy</option>
+                    <option value="Cryptocurrency" {% if sector == 'Cryptocurrency' %}selected{% endif %}>🪙 Cryptocurrency & Blockchain</option>
+                    <option value="Technology" {% if sector == 'Technology' %}selected{% endif %}>💻 Technology & Cloud Providers</option>
+                </select>
+            </div>
+
+            <div style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                <button type="submit" class="btn btn-primary">🔍 Filter</button>
+                {% if search or sector %}
+                <a href="/actors" class="btn btn-secondary">Clear Filters</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- =========================================================
+         THREAT ACTOR CARDS GRID
+         ========================================================= -->
+    <div class="webhooks-section">
+        <h2 class="section-title">
+            Active Threat Actor Profiles
+            <span class="webhook-count">{{ actors | length }}</span>
+        </h2>
+
+        {% if actors | length == 0 %}
+        <div class="empty-state">
+            <div class="empty-icon">🕵️</div>
+            <h3>No Threat Actors Found</h3>
+            <p>No threat actor profiles match your current search query or sector filter.</p>
+            <a href="/actors" class="btn btn-primary" style="margin-top: 1rem;">Reset Search Filters</a>
+        </div>
+        {% endif %}
+
+        <div class="threat-actors-grid">
+            {% for actor in actors %}
+            <div class="actor-card">
+                <!-- Card Header -->
+                <div class="actor-card-header">
+                    <div class="actor-title-area">
+                        <div class="actor-badges">
+                            <span class="actor-origin-badge">
+                                {% if 'Russia' in actor.origin %}🇷🇺 {{ actor.origin }}
+                                {% elif 'North Korea' in actor.origin %}🇰🇵 {{ actor.origin }}
+                                {% elif 'China' in actor.origin %}🇨🇳 {{ actor.origin }}
+                                {% else %}🏴‍☠️ {{ actor.origin }}
+                                {% endif %}
+                            </span>
+                            <span class="actor-status-badge {% if 'Critical' in actor.status %}status-critical{% else %}status-high{% endif %}">
+                                🚨 {{ actor.status }}
+                            </span>
+                        </div>
+                        <h3 class="actor-name">{{ actor.name }}</h3>
+                        <p class="actor-threat-type">Type: <strong>{{ actor.threat_type }}</strong></p>
+                    </div>
+                </div>
+
+                <!-- Card Body -->
+                <div class="actor-card-body">
+                    <p class="actor-description">{{ actor.description }}</p>
+
+                    <!-- Aliases -->
+                    {% if actor.aliases %}
+                    <div class="actor-meta-row">
+                        <span class="actor-meta-label">Known Aliases:</span>
+                        <div class="actor-tags-group">
+                            {% for alias in actor.aliases.split(',') %}
+                            <span class="actor-alias-tag">{{ alias.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Target Sectors -->
+                    {% if actor.target_sectors %}
+                    <div class="actor-meta-row">
+                        <span class="actor-meta-label">Target Sectors:</span>
+                        <div class="actor-tags-group">
+                            {% for sec in actor.target_sectors.split(',') %}
+                            <span class="actor-sector-tag">🎯 {{ sec.strip() }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Associated Exploited CVEs -->
+                    {% if actor.associated_cves %}
+                    <div class="actor-meta-row">
+                        <span class="actor-meta-label">Exploited Vulnerabilities (CVEs):</span>
+                        <div class="actor-tags-group">
+                            {% for cve in actor.associated_cves.split(',') %}
+                            <a href="/?search={{ cve.strip() }}" class="actor-cve-tag" title="Search dashboard for {{ cve.strip() }}">
+                                💥 {{ cve.strip() }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- MITRE ATT&CK TTPs -->
+                    {% if actor.mitre_ttps %}
+                    <div class="actor-meta-row">
+                        <span class="actor-meta-label">MITRE ATT&CK® TTPs:</span>
+                        <div class="actor-tags-group">
+                            {% for ttp in actor.mitre_ttps.split(',') %}
+                            {% set clean_ttp = ttp.strip() %}
+                            <a href="https://attack.mitre.org/techniques/{{ clean_ttp }}/" target="_blank" rel="noopener" class="actor-ttp-tag" title="View {{ clean_ttp }} on MITRE ATT&CK framework">
+                                ⚔️ {{ clean_ttp }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</main>
+{% endblock %}

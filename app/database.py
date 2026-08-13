@@ -302,6 +302,27 @@ def initialize_database():
             )
         """)
 
+        # --------------------------------------------------
+        # TABLE 9: threat_actors
+        # Stores threat actor and ransomware group profiles.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS threat_actors (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                name             TEXT UNIQUE NOT NULL,
+                aliases          TEXT,
+                origin           TEXT,
+                threat_type      TEXT,
+                target_sectors   TEXT,
+                description      TEXT,
+                associated_cves  TEXT,
+                mitre_ttps       TEXT,
+                status           TEXT DEFAULT 'Active / High Threat',
+                created_at       TEXT DEFAULT (datetime('now')),
+                updated_at       TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
         conn.commit()
 
     # When the "with" block ends here, the connection is
@@ -309,12 +330,16 @@ def initialize_database():
     print("✅ Database initialized successfully!")
     print(f"   Database file: {DATABASE_PATH}")
 
-    # Seed the default RSS feeds on first run
+    # Seed default RSS feeds
     seed_default_rss_feeds()
 
-    # Seed the default admin user on first run
+    # Seed default admin user
     from app.services.auth_service import seed_default_admin_user
     seed_default_admin_user()
+
+    # Seed default threat actors
+    from app.services.threat_actor_service import seed_default_threat_actors
+    seed_default_threat_actors()
 
 
 def seed_default_rss_feeds():

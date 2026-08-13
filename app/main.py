@@ -110,6 +110,12 @@ from app.services.scheduler_service import (
     save_schedule_settings,
 )
 
+# Import threat actor intelligence service
+from app.services.threat_actor_service import (
+    get_all_threat_actors,
+    get_threat_actor_by_id,
+)
+
 
 # ============================================================
 # CREATE THE FastAPI APPLICATION
@@ -248,12 +254,14 @@ def on_startup():
 # ============================================================
 
 @app.get("/")
-def dashboard_home(request: Request, start_date: str = None, end_date: str = None):
+def dashboard_home(request: Request, start_date: str = None, end_date: str = None, search: str = None, q: str = None):
     """
-    Render the main dashboard page with data filtered by optional date range.
+    Render the main dashboard page with data filtered by optional date range or search query.
     """
+    search_query = (search or q or "").strip()
     summary = get_dashboard_summary(start_date=start_date, end_date=end_date)
-    cves = get_recent_cves(limit=50, start_date=start_date, end_date=end_date)
+    cve_limit = 100 if search_query else 50
+    cves = get_recent_cves(limit=cve_limit, start_date=start_date, end_date=end_date, search_query=search_query)
     cisa_exploits = get_cisa_exploits(limit=50, start_date=start_date, end_date=end_date)
     articles = get_rss_articles(limit=50, start_date=start_date, end_date=end_date)
     threats = get_threat_indicators(limit=50, start_date=start_date, end_date=end_date)
@@ -273,6 +281,7 @@ def dashboard_home(request: Request, start_date: str = None, end_date: str = Non
             "rss_sources": rss_sources,
             "start_date": start_date or "",
             "end_date": end_date or "",
+            "search_query": search_query,
             "is_authenticated": current_user is not None,
             "current_user": current_user or "",
         },
@@ -529,6 +538,47 @@ def settings_page(request: Request):
             "current_user": current_user or "",
         },
     )
+
+
+# ============================================================
+# PAGE ROUTE: Threat Actors Directory (GET /actors)
+# ============================================================
+
+@app.get("/actors")
+def threat_actors_page(request: Request, search: str = None, sector: str = None):
+    """
+    Render the Threat Actors & Ransomware Groups directory page.
+    """
+    actors = get_all_threat_actors(search=search, sector=sector)
+    current_user = get_current_user_optional(request)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="actors.html",
+        context={
+            "request": request,
+            "actors": actors,
+            "search": search or "",
+            "sector": sector or "",
+            "is_authenticated": current_user is not None,
+            "current_user": current_user or "",
+        },
+    )
+
+
+@app.get("/api/threat-actors")
+def api_get_threat_actors(search: str = None, sector: str = None):
+    """Return threat actor profiles as JSON with optional search and sector filters."""
+    return get_all_threat_actors(search=search, sector=sector)
+
+
+@app.get("/api/threat-actors/{actor_id}")
+def api_get_threat_actor_detail(actor_id: int):
+    """Return a single threat actor profile by ID."""
+    actor = get_threat_actor_by_id(actor_id)
+    if actor:
+        return actor
+    return JSONResponse(status_code=404, content={"error": "Threat actor not found"})
 
 
 # ============================================================
