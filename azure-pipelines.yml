@@ -43,6 +43,17 @@ stages:
       workingDirectory: $(projectRoot)
       displayName: "Install requirements & validate build"
 
+# Security Scans
+    - script: |
+        # Download and install Horusec CLI
+        curl -fsSL https://raw.githubusercontent.com/ZupIT/horusec/main/deployments/scripts/install.sh | bash -s latest
+        
+        # Run Horusec SAST scan on project directory
+        horusec start -p="$(projectRoot)" -e="true" -o="json" -O="$(Build.ArtifactStagingDirectory)/horusec-report.json"
+      displayName: 'Run Horusec SAST Security Scan'
+      continueOnError: false # Set to true if you don't want security vulnerabilities to block deployment
+
+# Create archive for deployment
     - task: ArchiveFiles@2
       displayName: 'Archive files'
       inputs:
