@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberDash — Initial Security Setup</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .setup-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            background: radial-gradient(circle at 50% 20%, rgba(30, 58, 138, 0.25) 0%, rgba(10, 15, 30, 1) 70%);
+        }
+
+        .setup-card {
+            width: 100%;
+            max-width: 540px;
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: var(--radius-xl, 16px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(59, 130, 246, 0.15);
+            padding: 2.5rem;
+            animation: fadeInCard 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes fadeInCard {
+            from { opacity: 0; transform: translateY(12px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .setup-hero {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .setup-hero-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 68px;
+            height: 68px;
+            font-size: 2.2rem;
+            background: rgba(59, 130, 246, 0.15);
+            border: 2px solid rgba(59, 130, 246, 0.4);
+            border-radius: 20px;
+            margin-bottom: 1rem;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            animation: pulseGlow 3s infinite ease-in-out;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+            50% { box-shadow: 0 0 32px rgba(59, 130, 246, 0.55); border-color: rgba(96, 165, 250, 0.8); }
+        }
+
+        .setup-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+            margin: 0 0 0.5rem 0;
+        }
+
+        .setup-subtitle {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .setup-checklist {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            margin-top: 0.6rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        .setup-check-item {
+            color: #94a3b8;
+            transition: color 0.15s ease;
+        }
+
+        .setup-btn-submit {
+            width: 100%;
+            padding: 0.85rem;
+            font-size: 1rem;
+            font-weight: 700;
+            margin-top: 1.5rem;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.35);
+        }
+    </style>
+</head>
+<body class="theme-dark">
+    <div class="setup-wrapper">
+        <div class="setup-card">
+            <!-- Hero Header -->
+            <div class="setup-hero">
+                <div class="setup-hero-badge">🛡️</div>
+                <h1 class="setup-title">Welcome to CyberDash</h1>
+                <p class="setup-subtitle">
+                    Initialize your primary administrator credentials to secure the environment and configure baseline governance.
+                </p>
+            </div>
+
+            <!-- Error Banner -->
+            <div id="setup-error-banner" class="alert alert-danger" style="display: none; margin-bottom: 1.5rem;"></div>
+
+            <!-- Setup Form -->
+            <form id="setup-form" onsubmit="handleSetupSubmit(event)">
+                <!-- Admin Username -->
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label for="setup-username" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem;">
+                        Administrator Username
+                    </label>
+                    <input type="text" id="setup-username" class="form-input" value="admin" required autocomplete="username">
+                    <span class="form-hint" style="font-size: 0.75rem; color: #64748b;">Primary superuser account with full governance permissions.</span>
+                </div>
+
+                <!-- Admin Password -->
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label for="setup-password" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem; margin-bottom: 0;">
+                            Administrator Password
+                        </label>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="handleGenerateSetupPassword()" style="font-size: 0.75rem; padding: 2px 8px;">
+                            🎲 Generate Strong Password
+                        </button>
+                    </div>
+                    <div style="position: relative;">
+                        <input type="password" id="setup-password" class="form-input" placeholder="Enter secure password..." required autocomplete="new-password" oninput="evaluateSetupPassword()" style="padding-right: 2.5rem; font-family: var(--font-mono);">
+                        <button type="button" onclick="togglePasswordVisibility('setup-password', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: #94a3b8; font-size: 0.9rem;" title="Show/Hide Password">👁️</button>
+                    </div>
+
+                    <!-- Live Password Policy Checklist -->
+                    <div class="setup-checklist" id="setup-checklist">
+                        <div id="setup-check-length" class="setup-check-item">⚪ Minimum <span id="policy-min-len">{{ password_policy.min_length }}</span> Characters</div>
+                        <div id="setup-check-upper" class="setup-check-item">⚪ Uppercase Letter (A-Z)</div>
+                        <div id="setup-check-lower" class="setup-check-item">⚪ Lowercase Letter (a-z)</div>
+                        <div id="setup-check-number" class="setup-check-item">⚪ Numeric Digit (0-9)</div>
+                        <div id="setup-check-special" class="setup-check-item">⚪ Special Character (!@#$%...)</div>
+                    </div>
+                </div>
+
+                <!-- Confirm Password -->
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label for="setup-confirm-password" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem;">
+                        Confirm Password
+                    </label>
+                    <div style="position: relative;">
+                        <input type="password" id="setup-confirm-password" class="form-input" placeholder="Re-type password..." required autocomplete="new-password" oninput="evaluateSetupPassword()" style="padding-right: 2.5rem; font-family: var(--font-mono);">
+                        <button type="button" onclick="togglePasswordVisibility('setup-confirm-password', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: #94a3b8; font-size: 0.9rem;" title="Show/Hide Password">👁️</button>
+                    </div>
+                    <div id="setup-match-msg" style="font-size: 0.75rem; margin-top: 4px; display: none;"></div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="setup-submit-btn" class="btn btn-primary setup-btn-submit">
+                    🚀 Complete Setup &amp; Launch CyberDash
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        const MIN_LEN = {{ password_policy.min_length }};
+        const REQ_UPPER = {{ 'true' if password_policy.require_uppercase else 'false' }};
+        const REQ_LOWER = {{ 'true' if password_policy.require_lowercase else 'false' }};
+        const REQ_NUM = {{ 'true' if password_policy.require_numbers else 'false' }};
+        const REQ_SPECIAL = {{ 'true' if password_policy.require_special else 'false' }};
+
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🔒';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
+
+        function evaluateSetupPassword() {
+            const pwd = document.getElementById('setup-password').value;
+            const confirm = document.getElementById('setup-confirm-password').value;
+
+            const checkLen = document.getElementById('setup-check-length');
+            const checkUpper = document.getElementById('setup-check-upper');
+            const checkLower = document.getElementById('setup-check-lower');
+            const checkNum = document.getElementById('setup-check-number');
+            const checkSpecial = document.getElementById('setup-check-special');
+            const matchMsg = document.getElementById('setup-match-msg');
+
+            if (!pwd) {
+                resetCheckItem(checkLen, 'Minimum ' + MIN_LEN + ' Characters');
+                resetCheckItem(checkUpper, 'Uppercase Letter (A-Z)');
+                resetCheckItem(checkLower, 'Lowercase Letter (a-z)');
+                resetCheckItem(checkNum, 'Numeric Digit (0-9)');
+                resetCheckItem(checkSpecial, 'Special Character (!@#$%...)');
+            } else {
+                updateCheck(checkLen, pwd.length >= MIN_LEN, 'Minimum ' + MIN_LEN + ' Characters');
+                updateCheck(checkUpper, !REQ_UPPER || /[A-Z]/.test(pwd), 'Uppercase Letter (A-Z)', !REQ_UPPER);
+                updateCheck(checkLower, !REQ_LOWER || /[a-z]/.test(pwd), 'Lowercase Letter (a-z)', !REQ_LOWER);
+                updateCheck(checkNum, !REQ_NUM || /[0-9]/.test(pwd), 'Numeric Digit (0-9)', !REQ_NUM);
+                updateCheck(checkSpecial, !REQ_SPECIAL || /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`]/.test(pwd), 'Special Character (!@#$%...)', !REQ_SPECIAL);
+            }
+
+            if (confirm) {
+                matchMsg.style.display = 'block';
+                if (pwd === confirm) {
+                    matchMsg.textContent = '✅ Passwords match';
+                    matchMsg.style.color = '#34d399';
+                } else {
+                    matchMsg.textContent = '❌ Passwords do not match';
+                    matchMsg.style.color = '#f87171';
+                }
+            } else {
+                matchMsg.style.display = 'none';
+            }
+        }
+
+        function resetCheckItem(el, text) {
+            if (!el) return;
+            el.textContent = '⚪ ' + text;
+            el.style.color = '#94a3b8';
+        }
+
+        function updateCheck(el, passed, text, optional) {
+            if (!el) return;
+            if (optional) {
+                el.textContent = '➖ ' + text + ' (Optional)';
+                el.style.color = '#64748b';
+            } else if (passed) {
+                el.textContent = '✅ ' + text;
+                el.style.color = '#34d399';
+            } else {
+                el.textContent = '❌ ' + text;
+                el.style.color = '#f87171';
+            }
+        }
+
+        async function handleGenerateSetupPassword() {
+            try {
+                const res = await fetch('/api/security/generate-password');
+                const data = await res.json();
+                if (data.password) {
+                    const pwdInput = document.getElementById('setup-password');
+                    const confirmInput = document.getElementById('setup-confirm-password');
+                    pwdInput.value = data.password;
+                    confirmInput.value = data.password;
+                    pwdInput.type = 'text';
+                    confirmInput.type = 'text';
+
+                    evaluateSetupPassword();
+                    if (navigator.clipboard) {
+                        await navigator.clipboard.writeText(data.password);
+                        showToast('Generated & copied strong compliant password!', 'success');
+                    } else {
+                        showToast('Generated password: ' + data.password, 'success');
+                    }
+                }
+            } catch (e) {
+                showToast('Failed to generate password.', 'error');
+            }
+        }
+
+        async function handleSetupSubmit(event) {
+            event.preventDefault();
+            const username = document.getElementById('setup-username').value.trim();
+            const password = document.getElementById('setup-password').value;
+            const confirm = document.getElementById('setup-confirm-password').value;
+            const errorBanner = document.getElementById('setup-error-banner');
+            const submitBtn = document.getElementById('setup-submit-btn');
+
+            errorBanner.style.display = 'none';
+
+            if (!username) {
+                showError('Administrator username is required.');
+                return;
+            }
+
+            if (password !== confirm) {
+                showError('Passwords do not match. Please verify and re-type.');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Securing Environment...';
+
+            try {
+                const res = await fetch('/api/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast('Administrator initialized successfully! Launching...', 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/';
+                    }, 800);
+                } else {
+                    showError(data.error || 'Failed to complete setup.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '🚀 Complete Setup & Launch CyberDash';
+                }
+            } catch (e) {
+                showError('Network error while completing setup. Please check connection.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Complete Setup & Launch CyberDash';
+            }
+        }
+
+        function showError(msg) {
+            const banner = document.getElementById('setup-error-banner');
+            if (banner) {
+                banner.textContent = msg;
+                banner.style.display = 'block';
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('toast-fade');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

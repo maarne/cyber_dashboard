@@ -290,17 +290,37 @@ def initialize_database():
 
         # --------------------------------------------------
         # TABLE 8: users
-        # Stores user accounts and secure hashed passwords.
+        # Stores user accounts, roles (admin/analyst/viewer),
+        # and secure bcrypt-hashed passwords.
         # --------------------------------------------------
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 username        TEXT UNIQUE NOT NULL,
                 password_hash   TEXT NOT NULL,
+                role            TEXT DEFAULT 'viewer',
+                last_login      TEXT,
                 created_at      TEXT DEFAULT (datetime('now')),
                 updated_at      TEXT DEFAULT (datetime('now'))
             )
         """)
+
+        # Migration: Ensure role & last_login columns exist on users
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'viewer'")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
+        except Exception:
+            pass
+
+        # Ensure admin user has role='admin'
+        try:
+            cursor.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND (role IS NULL OR role = 'viewer')")
+        except Exception:
+            pass
 
         # --------------------------------------------------
         # TABLE 9: threat_actors
@@ -361,6 +381,34 @@ def initialize_database():
             )
         """)
 
+        # --------------------------------------------------
+        # TABLE 12: audit_logs
+        # Tamper-evident cryptographic audit log chained with SHA-256.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp       TEXT DEFAULT (datetime('now')),
+                username        TEXT NOT NULL,
+                role            TEXT NOT NULL,
+                action          TEXT NOT NULL,
+                resource_type   TEXT,
+                resource_id     TEXT,
+                status          TEXT NOT NULL,
+                ip_address      TEXT,
+                details         TEXT,
+                prev_hash       TEXT,
+                integrity_hash  TEXT NOT NULL
+            )
+        """)
+
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(username)")
+        except Exception:
+            pass
+
         # Migration: Ensure deployment_guide column exists on existing DBs
         try:
             cursor.execute("ALTER TABLE detection_rules ADD COLUMN deployment_guide TEXT")
@@ -387,6 +435,30 @@ def initialize_database():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_threat_indicators_val ON threat_indicators(indicator_value)")
         except Exception:
             pass
+
+        # --------------------------------------------------
+        # TABLE 13: security_policies
+        # Stores minimum password requirement configurations.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS security_policies (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                min_length         INTEGER DEFAULT 10,
+                require_uppercase  INTEGER DEFAULT 1,
+                require_lowercase  INTEGER DEFAULT 1,
+                require_numbers    INTEGER DEFAULT 1,
+                require_special    INTEGER DEFAULT 1,
+                updated_at         TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
+        # Initialize default security policy if empty
+        cursor.execute("SELECT COUNT(*) as count FROM security_policies")
+        if cursor.fetchone()["count"] == 0:
+            cursor.execute("""
+                INSERT INTO security_policies (min_length, require_uppercase, require_lowercase, require_numbers, require_special)
+                VALUES (10, 1, 1, 1, 1)
+            """)
 
         conn.commit()
 

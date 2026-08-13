@@ -2871,5 +2871,193 @@ select:disabled,
     gap: 0.75rem;
 }
 
+/* =============================================================
+   RBAC & AUDIT LEDGER STYLES
+   ============================================================= */
+
+.role-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.role-pill-admin {
+    background: rgba(192, 132, 252, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(192, 132, 252, 0.3);
+}
+
+.role-pill-analyst {
+    background: rgba(96, 165, 250, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.role-pill-viewer {
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.auth-badge-analyst {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.auth-badge-viewer {
+    background: rgba(100, 116, 139, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+.audit-action-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.audit-action-tag[class*="auth_login_success"] {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.audit-action-tag[class*="auth_login_failed"] {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.audit-action-tag[class*="user_"] {
+    background: rgba(192, 132, 252, 0.15);
+    color: #d8b4fe;
+    border-color: rgba(192, 132, 252, 0.3);
+}
+
+.audit-action-tag[class*="rule_"] {
+    background: rgba(56, 189, 248, 0.15);
+    color: #7dd3fc;
+    border-color: rgba(56, 189, 248, 0.3);
+}
+
+.audit-action-tag[class*="webhook_"] {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fde68a;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.alert-success-glass {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+}
+
+.alert-danger-glass {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+}
+
+/* =============================================================
+   SETTINGS TABS & CATEGORIZATION
+   ============================================================= */
+
+.settings-tabs-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 2rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.settings-tabs-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.settings-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.15rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #94a3b8;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.settings-tab-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-tab-btn.active {
+    color: #ffffff;
+    background: rgba(59, 130, 246, 0.18);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+
+.settings-tab-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.2);
+    border-radius: 9999px;
+    line-height: 1;
+}
+
+.settings-tab-btn.active .settings-tab-badge {
+    background: rgba(59, 130, 246, 0.4);
+    color: #ffffff;
+}
+
+.settings-tab-panel {
+    display: none;
+    animation: fadeInTab 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.settings-tab-panel.active {
+    display: block;
+}
+
+@keyframes fadeInTab {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
 
 

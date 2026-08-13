@@ -250,3 +250,49 @@ class DetectionRuleSchema(BaseModel):
     target_siem: Optional[str] = "Generic"
     deployment_guide: Optional[str] = None
 
+
+# ============================================================
+# User & RBAC Authentication Schemas
+# ============================================================
+
+class LoginRequest(BaseModel):
+    """Payload for user authentication."""
+    username: str
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    """Payload for password update."""
+    current_password: str
+    new_password: str
+
+
+class UserCreateSchema(BaseModel):
+    """Payload for administrative user creation."""
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class UserUpdateRoleSchema(BaseModel):
+    """Payload for updating user RBAC role."""
+    role: str
+
+
+class PasswordPolicySchema(BaseModel):
+    """Payload for updating password security requirements."""
+    min_length: int = 10
+    require_uppercase: bool = True
+    require_lowercase: bool = True
+    require_numbers: bool = True
+    require_special: bool = True
+
+
+class InitialSetupSchema(BaseModel):
+    """Payload for the first-time administrator initialization wizard."""
+    username: str = "admin"
+    password: str
+
+
+
+

@@ -13,7 +13,7 @@
             <h1>🧬 MITRE ATT&CK® TTP & Detection Rule Repository</h1>
             <p class="settings-subtitle">Production-ready Sigma (SIEM) & YARA (Malware) detection rules mapped to MITRE ATT&CK TTPs with step-by-step product deployment guides.</p>
         </div>
-        <button id="add-rule-btn" class="btn btn-primary" onclick="openRuleModal('add')" {% if not is_authenticated %}disabled title="Login required to add detection rules"{% endif %}>
+        <button id="add-rule-btn" class="btn btn-primary" onclick="openRuleModal('add')" {% if not is_analyst %}disabled title="Analyst or Admin permissions required to add detection rules"{% endif %}>
             ➕ Add Detection Rule
         </button>
     </div>
@@ -173,8 +173,8 @@
                     <template id="rule-guide-template-{{ rule.id }}">{{ rule.deployment_guide or '' }}</template>
                 </div>
 
-                <!-- Card Footer Actions (Admin Only) -->
-                {% if is_authenticated %}
+                <!-- Card Footer Actions (Analyst & Admin Only) -->
+                {% if is_analyst %}
                 <div class="webhook-card-actions" style="margin-top: 1rem;">
                     <button class="btn btn-sm btn-edit" data-rule-id="{{ rule.id }}" onclick="openRuleModal('edit', this.dataset.ruleId)">✏️ Edit Rule</button>
                     <button class="btn btn-sm btn-delete" data-rule-id="{{ rule.id }}" data-rule-title="{{ rule.title }}" onclick="handleDeleteRule(this.dataset.ruleId, this.dataset.ruleTitle)">🗑️ Delete</button>

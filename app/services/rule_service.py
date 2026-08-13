@@ -88,15 +88,15 @@ def save_detection_rule(data: dict):
             (title, rule_type, mitre_ttp, severity, target_cve, description, code_content, target_siem, deployment_guide)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            data["title"].strip(),
-            data.get("rule_type", "Sigma").strip(),
-            data.get("mitre_ttp", "").strip(),
-            data.get("severity", "HIGH").upper().strip(),
-            data.get("target_cve", "").strip(),
-            data.get("description", "").strip(),
-            data["code_content"].strip(),
-            data.get("target_siem", "Generic").strip(),
-            data.get("deployment_guide", "").strip(),
+            str(data.get("title") or "").strip(),
+            str(data.get("rule_type") or "Sigma").strip(),
+            str(data.get("mitre_ttp") or "").strip(),
+            str(data.get("severity") or "HIGH").upper().strip(),
+            str(data.get("target_cve") or "").strip(),
+            str(data.get("description") or "").strip(),
+            str(data.get("code_content") or "").strip(),
+            str(data.get("target_siem") or "Generic").strip(),
+            str(data.get("deployment_guide") or "").strip(),
         ))
         conn.commit()
         return cursor.lastrowid
@@ -122,15 +122,15 @@ def update_detection_rule(rule_id: int, data: dict):
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (
-            data["title"].strip(),
-            data.get("rule_type", "Sigma").strip(),
-            data.get("mitre_ttp", "").strip(),
-            data.get("severity", "HIGH").upper().strip(),
-            data.get("target_cve", "").strip(),
-            data.get("description", "").strip(),
-            data["code_content"].strip(),
-            data.get("target_siem", "Generic").strip(),
-            data.get("deployment_guide", "").strip(),
+            str(data.get("title") or "").strip(),
+            str(data.get("rule_type") or "Sigma").strip(),
+            str(data.get("mitre_ttp") or "").strip(),
+            str(data.get("severity") or "HIGH").upper().strip(),
+            str(data.get("target_cve") or "").strip(),
+            str(data.get("description") or "").strip(),
+            str(data.get("code_content") or "").strip(),
+            str(data.get("target_siem") or "Generic").strip(),
+            str(data.get("deployment_guide") or "").strip(),
             rule_id,
         ))
         conn.commit()

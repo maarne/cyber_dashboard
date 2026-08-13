@@ -1,26 +1,19 @@
 {#
      =============================================================
-     app/templates/settings.html — Settings & Webhook Management
+     app/templates/settings.html — Settings & Governance Console
      =============================================================
 
-     This page lets users manage webhook configurations for
-     automated security notifications. They can:
-     - Add new webhooks (Slack, Discord, Teams, Generic)
-     - Edit or delete existing webhooks
-     - Toggle webhooks active/inactive
-     - Send test notifications to verify setup
-
-     JINJA2 CONCEPTS:
-     - extends "base.html": Inherits the shared layout
-     - block content: Fills in the main content area
-     - for loop: Iterates over the webhooks list
-     - if/else: Conditional rendering
-     =============================================================
+     Organized into 4 categorized tabs:
+     1. 🔔 Notifications & Webhooks (Webhooks, testing, setup guides)
+     2. 📡 Feeds & Automation (Scheduled auto-refreshes, RSS sources)
+     3. 👥 User Governance & RBAC (Admin-only user lifecycle & roles)
+     4. 🛡️ Security & Compliance (Password policy, strength tester,
+        1-click generator, and tamper-evident SHA-256 audit ledger)
 #}
 
 {% extends "base.html" %}
 
-{% block title %}CyberDash — Settings{% endblock %}
+{% block title %}CyberDash — Settings & Security Console{% endblock %}
 
 {% block content %}
 <main class="settings-page">
@@ -30,425 +23,768 @@
          ========================================================= -->
     <div class="settings-header">
         <div class="settings-header-text">
-            <h1>⚙️ Settings</h1>
-            <p class="settings-subtitle">Manage scheduled refreshes, webhook notifications, and integrations.</p>
+            <h1>⚙️ Settings &amp; Security Console</h1>
+            <p class="settings-subtitle">Configure automated intelligence feeds, webhook alerting, enterprise user roles, password policies, and tamper-evident audit ledgers.</p>
         </div>
-        <button id="add-webhook-btn" class="btn btn-primary" {% if not is_authenticated %}disabled title="Login required to add webhooks"{% endif %}>
-            ➕ Add Webhook
-        </button>
     </div>
 
     {% if not is_authenticated %}
     <div class="banner-readonly" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
         <div style="display: flex; align-items: center; gap: 0.75rem; color: #fbbf24;">
             <span style="font-size: 1.25rem;">🔒</span>
-            <span><strong>View Only Mode:</strong> You are currently viewing settings as a guest. Log in as administrator to edit parameters, manage webhooks, or toggle RSS sources.</span>
+            <span><strong>View Only Mode:</strong> You are currently viewing settings as a guest. Log in as administrator to edit parameters, configure password policies, or manage webhooks.</span>
         </div>
         <button type="button" class="btn btn-primary btn-sm" onclick="openLoginModal('Log in as admin to modify settings.')">🔑 Login as Admin</button>
     </div>
     {% endif %}
 
     <!-- =========================================================
-         SCHEDULED REFRESH SECTION
-         Lets users configure automatic data refreshes on a timer.
+         SETTINGS CATEGORY TABS
          ========================================================= -->
-    <div class="schedule-section">
-        <h2 class="section-title">
-            ⏰ Scheduled Refresh
-        </h2>
+    <div class="settings-tabs-nav" id="settings-tab-bar">
+        <button type="button" class="settings-tab-btn active" data-tab="webhooks" onclick="switchSettingsTab('webhooks')">
+            🔔 Notifications &amp; Webhooks
+            <span class="settings-tab-badge" id="tab-badge-webhooks">{{ webhooks | length }}</span>
+        </button>
 
-        <div class="schedule-card">
-            <!-- Schedule Toggle Row -->
-            <div class="schedule-toggle-row">
-                <div class="schedule-info">
-                    <h3>Auto-Refresh Feeds</h3>
-                    <p>Automatically fetch the latest CVEs, CISA exploits, news, and threat intel on a recurring schedule.</p>
-                </div>
-                <label class="toggle-switch" title="{% if not is_authenticated %}Login required to change schedule{% else %}Enable or disable scheduled refresh{% endif %}">
-                    <input type="checkbox" class="toggle-input"
-                           id="schedule-toggle"
-                           {% if schedule.enabled %}checked{% endif %}
-                           {% if not is_authenticated %}disabled{% endif %}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
+        <button type="button" class="settings-tab-btn" data-tab="feeds" onclick="switchSettingsTab('feeds')">
+            📡 Feeds &amp; Automation
+            <span class="settings-tab-badge" id="tab-badge-feeds">{{ rss_feeds | length }}</span>
+        </button>
 
-            <!-- Interval Selection (radio buttons) -->
-            <div class="schedule-interval" id="schedule-interval-group">
-                <label class="interval-label">Refresh Every:</label>
-                <div class="interval-options">
-                    <label class="interval-option {% if schedule.interval_hours == 6 %}active{% endif %}">
-                        <input type="radio" name="schedule-interval" value="6"
-                               {% if schedule.interval_hours == 6 %}checked{% endif %}
-                               {% if not is_authenticated %}disabled{% endif %}>
-                        <span class="interval-pill">6 hours</span>
-                    </label>
-                    <label class="interval-option {% if schedule.interval_hours == 12 %}active{% endif %}">
-                        <input type="radio" name="schedule-interval" value="12"
-                               {% if schedule.interval_hours == 12 %}checked{% endif %}
-                               {% if not is_authenticated %}disabled{% endif %}>
-                        <span class="interval-pill">12 hours</span>
-                    </label>
-                    <label class="interval-option {% if schedule.interval_hours == 24 %}active{% endif %}">
-                        <input type="radio" name="schedule-interval" value="24"
-                               {% if schedule.interval_hours == 24 %}checked{% endif %}
-                               {% if not is_authenticated %}disabled{% endif %}>
-                        <span class="interval-pill">24 hours</span>
-                    </label>
-                    <label class="interval-option {% if schedule.interval_hours == 48 %}active{% endif %}">
-                        <input type="radio" name="schedule-interval" value="48"
-                               {% if schedule.interval_hours == 48 %}checked{% endif %}
-                               {% if not is_authenticated %}disabled{% endif %}>
-                        <span class="interval-pill">48 hours</span>
-                    </label>
-                </div>
-            </div>
+        {% if is_admin %}
+        <button type="button" class="settings-tab-btn" data-tab="users" onclick="switchSettingsTab('users')">
+            👥 User Governance &amp; RBAC
+            <span class="settings-tab-badge" id="tab-badge-users">{{ users | length }}</span>
+        </button>
+        {% endif %}
 
-            <!-- Status Display -->
-            <div class="schedule-status" id="schedule-status">
-                <div class="status-row">
-                    <span class="status-label">Status:</span>
-                    <span class="status-value" id="schedule-status-text">
-                        {% if schedule.is_running %}
-                            <span class="status-dot status-dot-active"></span> Running
-                        {% elif schedule.enabled %}
-                            <span class="status-dot status-dot-pending"></span> Starting...
-                        {% else %}
-                            <span class="status-dot status-dot-inactive"></span> Disabled
-                        {% endif %}
-                    </span>
-                </div>
-                {% if schedule.last_refresh %}
-                <div class="status-row">
-                    <span class="status-label">Last refresh:</span>
-                    <span class="status-value" id="schedule-last-refresh">{{ schedule.last_refresh }}</span>
-                </div>
-                {% endif %}
-                {% if schedule.next_refresh %}
-                <div class="status-row">
-                    <span class="status-label">Next refresh:</span>
-                    <span class="status-value" id="schedule-next-refresh">{{ schedule.next_refresh }}</span>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+        {% if is_analyst %}
+        <button type="button" class="settings-tab-btn" data-tab="security" onclick="switchSettingsTab('security')">
+            🛡️ Security &amp; Compliance
+            <span class="settings-tab-badge" id="tab-badge-security">{{ audit_logs | length }}</span>
+        </button>
+        {% endif %}
     </div>
 
+
     <!-- =========================================================
-         ADD / EDIT WEBHOOK FORM (hidden by default)
-         This form slides open when the user clicks "Add Webhook"
-         or "Edit" on an existing webhook.
+         TAB PANEL 1: NOTIFICATIONS & WEBHOOKS
          ========================================================= -->
-    <div id="webhook-form-container" class="webhook-form-container" style="display: none;">
-        <div class="webhook-form-card">
-            <h2 id="form-title">Add New Webhook</h2>
+    <div class="settings-tab-panel active" id="panel-webhooks">
+        <div class="section-header" style="margin-bottom: 1.5rem;">
+            <div>
+                <h2 class="section-title">
+                    🔔 Webhook Alerting Endpoints
+                    <span class="webhook-count" id="webhook-count">{{ webhooks | length }}</span>
+                </h2>
+                <p class="section-subtitle">
+                    Dispatch real-time alerts to Slack, Discord, Microsoft Teams, or custom HTTP endpoints when critical vulnerabilities or zero-days emerge.
+                </p>
+            </div>
+            <button id="add-webhook-btn" class="btn btn-primary" {% if not is_admin %}disabled title="Admin privileges required to add webhooks"{% endif %}>
+                ➕ Add Webhook
+            </button>
+        </div>
 
+        <!-- Add/Edit Form Card (hidden by default) -->
+        <div id="webhook-form-card" class="webhook-form-card" style="display: none;">
+            <h3 id="form-title">Add Webhook</h3>
             <form id="webhook-form">
-                {# Hidden field to track whether we're creating or editing #}
-                <input type="hidden" id="webhook-id" value="">
-
-                <!-- Webhook Name -->
+                <!-- Name -->
                 <div class="form-group">
-                    <label for="webhook-name">Webhook Name</label>
-                    <input type="text" id="webhook-name" placeholder="e.g. SOC Slack Channel"
-                           required class="form-input">
-                    <span class="form-hint">A friendly name to identify this webhook.</span>
+                    <label for="webhook-name">Friendly Name</label>
+                    <input type="text" id="webhook-name" name="name"
+                           placeholder="e.g. SOC Slack Channel, Security Discord"
+                           required>
+                    <span class="form-hint">A label to help you identify this webhook.</span>
                 </div>
 
-                <!-- Platform Selection -->
+                <!-- Platform -->
                 <div class="form-group">
                     <label for="webhook-platform">Platform</label>
-                    <select id="webhook-platform" class="form-input" required>
-                        <option value="">Select a platform...</option>
+                    <select id="webhook-platform" name="platform">
                         <option value="slack">🟣 Slack</option>
                         <option value="discord">🟦 Discord</option>
                         <option value="teams">🔵 Microsoft Teams</option>
-                        <option value="generic">⚪ Generic (HTTP POST)</option>
+                        <option value="generic">⚪ Generic (Custom HTTP POST)</option>
                     </select>
-                    <span class="form-hint">Choose the platform this webhook connects to.</span>
                 </div>
 
                 <!-- Webhook URL -->
                 <div class="form-group">
                     <label for="webhook-url">Webhook URL</label>
-                    <input type="url" id="webhook-url"
+                    <input type="url" id="webhook-url" name="webhook_url"
                            placeholder="https://hooks.slack.com/services/..."
-                           required class="form-input">
+                           required>
                     <span class="form-hint">The incoming webhook URL provided by your platform.</span>
                 </div>
 
                 <!-- Notification Preferences -->
                 <div class="form-group">
-                    <label>Notification Triggers</label>
+                    <label>Notify On:</label>
                     <div class="checkbox-group">
                         <label class="checkbox-label">
-                            <input type="checkbox" id="notify-critical" checked>
-                            <span class="checkmark"></span>
-                            🚨 CRITICAL CVEs
+                            <input type="checkbox" id="notify-critical" name="notify_critical_cves" checked>
+                            <span>🚨 CRITICAL CVEs (CVSS ≥ 9.0)</span>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" id="notify-high" checked>
-                            <span class="checkmark"></span>
-                            ⚠️ HIGH Severity CVEs
+                            <input type="checkbox" id="notify-high" name="notify_high_cves" checked>
+                            <span>⚠️ HIGH Severity CVEs (CVSS 7.0–8.9)</span>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" id="notify-cisa" checked>
-                            <span class="checkmark"></span>
-                            🔴 CISA Active Exploits
+                            <input type="checkbox" id="notify-cisa" name="notify_cisa_exploits" checked>
+                            <span>🎯 CISA Known Exploited Vulnerabilities</span>
                         </label>
                     </div>
-                    <span class="form-hint">Choose which types of alerts trigger notifications.</span>
                 </div>
 
                 <!-- Form Actions -->
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="form-submit-btn">
-                        💾 Save Webhook
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="form-cancel-btn">
-                        Cancel
-                    </button>
+                    <button type="submit" class="btn btn-primary" id="form-submit-btn">Save Webhook</button>
+                    <button type="button" class="btn btn-secondary" id="form-cancel-btn">Cancel</button>
                 </div>
             </form>
         </div>
-    </div>
 
-    <!-- =========================================================
-         WEBHOOK LIST
-         Shows all configured webhooks in a card layout.
-         ========================================================= -->
-    <div class="webhooks-section">
-        <h2 class="section-title">
-            Configured Webhooks
-            <span class="webhook-count" id="webhook-count">{{ webhooks | length }}</span>
-        </h2>
-
-        <!-- Empty State (shown when no webhooks exist) -->
-        {% if webhooks | length == 0 %}
-        <div class="empty-state" id="empty-state">
-            <div class="empty-icon">🔔</div>
-            <h3>No Webhooks Configured</h3>
-            <p>Add your first webhook to start receiving automated security notifications.</p>
-            <p class="empty-hint">
-                Supported platforms: <strong>Slack</strong>, <strong>Discord</strong>,
-                <strong>Microsoft Teams</strong>, and any <strong>Generic HTTP endpoint</strong>.
-            </p>
-        </div>
-        {% endif %}
-
-        <!-- Webhook Cards Container -->
-        <div id="webhooks-list" class="webhooks-list">
+        <!-- Webhooks List -->
+        <div class="webhooks-list" id="webhooks-list">
             {% for webhook in webhooks %}
-            <div class="webhook-card" data-webhook-id="{{ webhook.id }}">
-                <!-- Card Header: Platform icon + Name + Toggle -->
+            <div class="webhook-card" data-id="{{ webhook.id }}">
                 <div class="webhook-card-header">
-                    <div class="webhook-info">
-                        <!-- Platform Badge -->
-                        <span class="platform-badge platform-{{ webhook.platform }}">
-                            {% if webhook.platform == 'slack' %}🟣 Slack
-                            {% elif webhook.platform == 'discord' %}🟦 Discord
-                            {% elif webhook.platform == 'teams' %}🔵 Teams
-                            {% else %}⚪ Generic
-                            {% endif %}
+                    <div class="webhook-card-title">
+                        <span class="platform-icon platform-{{ webhook.platform }}">
+                            {% if webhook.platform == "slack" %}🟣
+                            {% elif webhook.platform == "discord" %}🟦
+                            {% elif webhook.platform == "teams" %}🔵
+                            {% else %}⚪{% endif %}
                         </span>
-                        <h3 class="webhook-name">{{ webhook.name }}</h3>
+                        <div>
+                            <h3>{{ webhook.name }}</h3>
+                            <span class="platform-badge">{{ webhook.platform | upper }}</span>
+                        </div>
                     </div>
 
-                    <!-- Active/Inactive Toggle -->
-                    <label class="toggle-switch" title="{% if not is_authenticated %}Login required to toggle webhooks{% else %}Toggle active/inactive{% endif %}">
-                        <input type="checkbox"
-                               class="toggle-input"
-                               data-webhook-id="{{ webhook.id }}"
+                    <label class="toggle-switch" title="{% if not is_admin %}Admin privileges required to toggle webhooks{% else %}Enable or disable this webhook{% endif %}">
+                        <input type="checkbox" class="toggle-input webhook-toggle"
+                               data-id="{{ webhook.id }}"
                                {% if webhook.is_active %}checked{% endif %}
-                               {% if not is_authenticated %}disabled{% endif %}>
+                               {% if not is_admin %}disabled{% endif %}>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
 
-                <!-- Card Body: URL (masked) + notification preferences -->
-                <div class="webhook-card-body">
-                    <div class="webhook-url-display">
-                        <span class="url-label">URL:</span>
-                        <code class="url-masked">{{ webhook.masked_url }}</code>
-                    </div>
-
-                    <div class="webhook-triggers">
-                        {% if webhook.notify_critical_cves %}
-                        <span class="trigger-tag trigger-critical">🚨 Critical</span>
-                        {% endif %}
-                        {% if webhook.notify_high_cves %}
-                        <span class="trigger-tag trigger-high">⚠️ High</span>
-                        {% endif %}
-                        {% if webhook.notify_cisa_exploits %}
-                        <span class="trigger-tag trigger-cisa">🔴 CISA</span>
-                        {% endif %}
-                    </div>
-
-                    {% if webhook.last_notified %}
-                    <div class="webhook-last-notified">
-                        Last notified: {{ webhook.last_notified }}
-                    </div>
-                    {% endif %}
+                <div class="webhook-card-url" title="{{ webhook.webhook_url }}">
+                    <code>{{ webhook.webhook_url }}</code>
                 </div>
 
-                <!-- Card Footer: Action Buttons -->
+                <div class="webhook-card-events">
+                    <span class="event-tag {% if webhook.notify_critical_cves %}active{% endif %}">🚨 Critical CVEs</span>
+                    <span class="event-tag {% if webhook.notify_high_cves %}active{% endif %}">⚠️ High CVEs</span>
+                    <span class="event-tag {% if webhook.notify_cisa_exploits %}active{% endif %}">🎯 CISA KEV</span>
+                </div>
+
                 <div class="webhook-card-actions">
-                    <button class="btn btn-sm btn-test"
-                            data-webhook-id="{{ webhook.id }}"
-                            title="{% if not is_authenticated %}Login required to test webhooks{% else %}Send a test notification{% endif %}"
-                            {% if not is_authenticated %}disabled{% endif %}>
+                    <button class="btn btn-sm btn-test" data-id="{{ webhook.id }}" title="Send a test notification">
                         🧪 Test
                     </button>
-                    <button class="btn btn-sm btn-edit"
-                            data-webhook-id="{{ webhook.id }}"
-                            data-name="{{ webhook.name }}"
-                            data-platform="{{ webhook.platform }}"
-                            data-url="{{ webhook.masked_url }}"
-                            data-critical="{{ webhook.notify_critical_cves }}"
-                            data-high="{{ webhook.notify_high_cves }}"
-                            data-cisa="{{ webhook.notify_cisa_exploits }}"
-                            title="{% if not is_authenticated %}Login required to edit webhooks{% else %}Edit this webhook{% endif %}"
-                            {% if not is_authenticated %}disabled{% endif %}>
+                    <button class="btn btn-sm btn-edit" data-id="{{ webhook.id }}" {% if not is_admin %}disabled{% endif %}>
                         ✏️ Edit
                     </button>
-                    <button class="btn btn-sm btn-delete"
-                            data-webhook-id="{{ webhook.id }}"
-                            data-name="{{ webhook.name }}"
-                            title="{% if not is_authenticated %}Login required to delete webhooks{% else %}Delete this webhook{% endif %}"
-                            {% if not is_authenticated %}disabled{% endif %}>
+                    <button class="btn btn-sm btn-delete" data-id="{{ webhook.id }}" data-name="{{ webhook.name }}" {% if not is_admin %}disabled{% endif %}>
                         🗑️ Delete
                     </button>
                 </div>
             </div>
             {% endfor %}
         </div>
-    </div>
 
-    <!-- =========================================================
-         RSS FEED SOURCES
-         Lets users add, remove, and toggle RSS news feeds.
-         ========================================================= -->
-    <div class="rss-feeds-section">
-        <h2 class="section-title">
-            📡 News Feed Sources
-            <span class="webhook-count" id="feed-count">{{ rss_feeds | length }}</span>
-        </h2>
-
-        <!-- Add Feed Form (inline) -->
-        <div class="feed-add-form">
-            <form id="add-feed-form" class="feed-form-row">
-                <input type="text" id="feed-name-input"
-                       placeholder="{% if not is_authenticated %}Login required to add feeds{% else %}Feed name (e.g. BleepingComputer){% endif %}"
-                       required class="form-input feed-input-name"
-                       {% if not is_authenticated %}disabled{% endif %}>
-                <input type="url" id="feed-url-input"
-                       placeholder="{% if not is_authenticated %}Login required to add feeds{% else %}RSS feed URL (e.g. https://example.com/feed/){% endif %}"
-                       required class="form-input feed-input-url"
-                       {% if not is_authenticated %}disabled{% endif %}>
-                <button type="submit" class="btn btn-primary btn-add-feed" {% if not is_authenticated %}disabled title="Login required to add feeds"{% endif %}>
-                    ➕ Add
-                </button>
-            </form>
-        </div>
-
-        <!-- Feed List -->
-        <div id="rss-feeds-list" class="rss-feeds-list">
-            {% for feed in rss_feeds %}
-            <div class="feed-row" data-feed-id="{{ feed.id }}">
-                <div class="feed-info">
-                    <span class="feed-name">{{ feed.name }}</span>
-                    <a href="{{ feed.url }}" target="_blank" rel="noopener"
-                       class="feed-url" title="{{ feed.url }}">
-                        {{ feed.url[:60] }}{% if feed.url | length > 60 %}…{% endif %}
-                    </a>
-                </div>
-                <div class="feed-actions">
-                    <label class="toggle-switch toggle-sm" title="{% if not is_authenticated %}Login required to toggle feeds{% else %}Enable or disable this feed{% endif %}">
-                        <input type="checkbox" class="toggle-input feed-toggle"
-                               data-feed-id="{{ feed.id }}"
-                               {% if feed.is_active %}checked{% endif %}
-                               {% if not is_authenticated %}disabled{% endif %}>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <button class="btn btn-sm btn-delete feed-delete-btn"
-                            data-feed-id="{{ feed.id }}"
-                            data-feed-name="{{ feed.name }}"
-                            title="{% if not is_authenticated %}Login required to remove feeds{% else %}Remove this feed{% endif %}"
-                            {% if not is_authenticated %}disabled{% endif %}>
-                        🗑️
-                    </button>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-
-        {% if rss_feeds | length == 0 %}
-        <div class="empty-state" id="feeds-empty-state">
-            <div class="empty-icon">📡</div>
-            <h3>No RSS Feeds Configured</h3>
-            <p>Add an RSS feed URL above to start monitoring security news sources.</p>
+        {% if webhooks | length == 0 %}
+        <div class="empty-state" id="empty-state">
+            <div class="empty-icon">🔔</div>
+            <h3>No Webhooks Configured</h3>
+            <p>Add a webhook above to receive automated security alerts in Slack, Discord, or Microsoft Teams.</p>
         </div>
         {% endif %}
-    </div>
 
-    <!-- =========================================================
-         HELP / INFO SECTION
-         Brief guide on how to get webhook URLs from each platform.
-         ========================================================= -->
-    <div class="settings-help">
-        <h2 class="section-title">📖 How to Get a Webhook URL</h2>
+        <!-- Webhook Integration Documentation -->
+        <div class="settings-help" style="margin-top: 2.5rem;">
+            <h2 class="section-title">📖 Webhook Platform Setup Guides</h2>
+            <div class="help-cards">
+                <div class="help-card">
+                    <h3>🟣 Slack</h3>
+                    <ol>
+                        <li>Go to <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Slack Incoming Webhooks</a></li>
+                        <li>Create a new app or use an existing one</li>
+                        <li>Enable "Incoming Webhooks" and add a new webhook</li>
+                        <li>Copy the webhook URL</li>
+                    </ol>
+                </div>
 
-        <div class="help-cards">
-            <div class="help-card">
-                <h3>🟣 Slack</h3>
-                <ol>
-                    <li>Go to <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Slack Incoming Webhooks</a></li>
-                    <li>Create a new app or use an existing one</li>
-                    <li>Enable "Incoming Webhooks" and add a new webhook</li>
-                    <li>Copy the webhook URL</li>
-                </ol>
-            </div>
+                <div class="help-card">
+                    <h3>🟦 Discord</h3>
+                    <ol>
+                        <li>Open your Discord server settings</li>
+                        <li>Go to <strong>Integrations → Webhooks</strong></li>
+                        <li>Click "New Webhook" and choose a channel</li>
+                        <li>Copy the webhook URL</li>
+                    </ol>
+                </div>
 
-            <div class="help-card">
-                <h3>🟦 Discord</h3>
-                <ol>
-                    <li>Open your Discord server settings</li>
-                    <li>Go to <strong>Integrations → Webhooks</strong></li>
-                    <li>Click "New Webhook" and choose a channel</li>
-                    <li>Copy the webhook URL</li>
-                </ol>
-            </div>
+                <div class="help-card">
+                    <h3>🔵 Microsoft Teams</h3>
+                    <ol>
+                        <li>In your Teams channel, click <strong>⋯ → Connectors</strong></li>
+                        <li>Search for "Incoming Webhook" and configure it</li>
+                        <li>Give it a name and copy the webhook URL</li>
+                    </ol>
+                </div>
 
-            <div class="help-card">
-                <h3>🔵 Microsoft Teams</h3>
-                <ol>
-                    <li>In your Teams channel, click <strong>⋯ → Connectors</strong></li>
-                    <li>Search for "Incoming Webhook" and configure it</li>
-                    <li>Give it a name and copy the webhook URL</li>
-                </ol>
-            </div>
-
-            <div class="help-card">
-                <h3>⚪ Generic</h3>
-                <p>
-                    Any HTTP endpoint that accepts <code>POST</code> requests
-                    with a JSON body. CyberDash will send a payload with
-                    <code>title</code>, <code>message</code>, and <code>items</code> fields.
-                </p>
+                <div class="help-card">
+                    <h3>⚪ Generic</h3>
+                    <p>
+                        Any HTTP endpoint that accepts <code>POST</code> requests with a JSON body containing <code>title</code>, <code>message</code>, and <code>items</code> fields.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
+
+
+    <!-- =========================================================
+         TAB PANEL 2: FEEDS & AUTOMATION
+         ========================================================= -->
+    <div class="settings-tab-panel" id="panel-feeds">
+        <!-- Scheduled Refresh Section -->
+        <div class="schedule-section" style="margin-bottom: 2.5rem;">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">⏰ Auto-Refresh Scheduler</h2>
+                    <p class="section-subtitle">Automatically poll external threat databases (NVD, CISA, Feodo, URLhaus, RSS news) in the background.</p>
+                </div>
+            </div>
+
+            <div class="schedule-card">
+                <div class="schedule-toggle-row">
+                    <div class="schedule-info">
+                        <h3>Background Daemon Scheduler</h3>
+                        <p>When enabled, CyberDash periodically updates vulnerability and threat databases without manual intervention.</p>
+                    </div>
+                    <label class="toggle-switch" title="{% if not is_admin %}Admin privileges required to change schedule{% else %}Enable or disable scheduled refresh{% endif %}">
+                        <input type="checkbox" class="toggle-input"
+                               id="schedule-toggle"
+                               {% if schedule.enabled %}checked{% endif %}
+                               {% if not is_admin %}disabled{% endif %}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="schedule-interval" id="schedule-interval-group">
+                    <label class="interval-label">Refresh Interval:</label>
+                    <div class="interval-options">
+                        <label class="interval-option {% if schedule.interval_hours == 6 %}active{% endif %}">
+                            <input type="radio" name="schedule-interval" value="6"
+                                   {% if schedule.interval_hours == 6 %}checked{% endif %}
+                                   {% if not is_admin %}disabled{% endif %}>
+                            <span class="interval-pill">6 hours</span>
+                        </label>
+                        <label class="interval-option {% if schedule.interval_hours == 12 %}active{% endif %}">
+                            <input type="radio" name="schedule-interval" value="12"
+                                   {% if schedule.interval_hours == 12 %}checked{% endif %}
+                                   {% if not is_admin %}disabled{% endif %}>
+                            <span class="interval-pill">12 hours</span>
+                        </label>
+                        <label class="interval-option {% if schedule.interval_hours == 24 %}active{% endif %}">
+                            <input type="radio" name="schedule-interval" value="24"
+                                   {% if schedule.interval_hours == 24 %}checked{% endif %}
+                                   {% if not is_admin %}disabled{% endif %}>
+                            <span class="interval-pill">24 hours (Default)</span>
+                        </label>
+                        <label class="interval-option {% if schedule.interval_hours == 48 %}active{% endif %}">
+                            <input type="radio" name="schedule-interval" value="48"
+                                   {% if schedule.interval_hours == 48 %}checked{% endif %}
+                                   {% if not is_admin %}disabled{% endif %}>
+                            <span class="interval-pill">48 hours</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="schedule-status-bar" id="schedule-status-bar">
+                    <span class="status-dot {% if schedule.enabled %}online{% else %}offline{% endif %}"></span>
+                    <span id="schedule-status-text">
+                        {% if schedule.enabled %}
+                            Scheduler is active — runs every {{ schedule.interval_hours }} hour(s)
+                            {% if schedule.next_run %} (next: {{ schedule.next_run }}){% endif %}
+                        {% else %}
+                            Scheduler is paused
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RSS Feeds Manager -->
+        <div class="webhooks-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        📡 RSS Security News Sources
+                        <span class="webhook-count" id="feeds-count">{{ rss_feeds | length }}</span>
+                    </h2>
+                    <p class="section-subtitle">Add or manage RSS/Atom syndication feeds for security advisories and zero-day news.</p>
+                </div>
+            </div>
+
+            <!-- Add Feed Form -->
+            <div class="rss-add-form-card" style="margin-bottom: 1.5rem;">
+                <form id="add-feed-form" class="feed-form-inline">
+                    <input type="text" id="feed-name-input" class="form-input"
+                           placeholder="Feed Name (e.g. The Hacker News)"
+                           {% if not is_admin %}disabled{% endif %} required>
+                    <input type="url" id="feed-url-input" class="form-input"
+                           placeholder="Feed URL (https://feeds.feedburner.com/...)"
+                           {% if not is_admin %}disabled{% endif %} required>
+                    <button type="submit" class="btn btn-primary" id="add-feed-btn"
+                            {% if not is_admin %}disabled title="Admin privileges required to add RSS sources"{% endif %}>
+                        ➕ Add Feed
+                    </button>
+                </form>
+            </div>
+
+            <!-- Feed Sources List -->
+            <div class="feeds-list" id="feeds-list">
+                {% for feed in rss_feeds %}
+                <div class="feed-item" data-feed-id="{{ feed.id }}">
+                    <div class="feed-info">
+                        <span class="feed-icon">📡</span>
+                        <div class="feed-name">
+                            <strong>{{ feed.name }}</strong>
+                            <a href="{{ feed.url }}" target="_blank" rel="noopener" class="feed-url" title="{{ feed.url }}">
+                                {{ feed.url[:60] }}{% if feed.url | length > 60 %}…{% endif %}
+                            </a>
+                        </div>
+                    </div>
+                    <div class="feed-actions">
+                        <label class="toggle-switch toggle-sm" title="{% if not is_admin %}Admin privileges required to toggle feeds{% else %}Enable or disable this feed{% endif %}">
+                            <input type="checkbox" class="toggle-input feed-toggle"
+                                   data-feed-id="{{ feed.id }}"
+                                   {% if feed.is_active %}checked{% endif %}
+                                   {% if not is_admin %}disabled{% endif %}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <button class="btn btn-sm btn-delete feed-delete-btn"
+                                data-feed-id="{{ feed.id }}"
+                                data-feed-name="{{ feed.name }}"
+                                title="{% if not is_admin %}Admin privileges required to remove feeds{% else %}Remove this feed{% endif %}"
+                                {% if not is_admin %}disabled{% endif %}>
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if rss_feeds | length == 0 %}
+            <div class="empty-state" id="feeds-empty-state">
+                <div class="empty-icon">📡</div>
+                <h3>No RSS Feeds Configured</h3>
+                <p>Add an RSS feed URL above to start monitoring security news sources.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         TAB PANEL 3: USER GOVERNANCE & RBAC (Admin Only)
+         ========================================================= -->
+    {% if is_admin %}
+    <div class="settings-tab-panel" id="panel-users">
+        <div class="webhooks-section" id="user-management-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        👥 Enterprise User Governance &amp; RBAC
+                        <span class="webhook-count">{{ users | length }}</span>
+                    </h2>
+                    <p class="section-subtitle">
+                        Manage user accounts, assign Role-Based Access Control privileges, and view authentication timestamps.
+                    </p>
+                </div>
+                <button type="button" class="btn btn-primary" id="add-user-btn" onclick="openAddUserModal()">
+                    ➕ Add New User
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Current Role</th>
+                            <th>Assigned Permissions</th>
+                            <th>Last Login</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        {% for u in users %}
+                        <tr data-username="{{ u.username }}">
+                            <td>
+                                <strong style="color: #f3f4f6;">👤 {{ u.username }}</strong>
+                            </td>
+                            <td>
+                                <select class="form-input form-input-sm role-select"
+                                        data-username="{{ u.username }}"
+                                        onchange="handleUpdateUserRole('{{ u.username }}', this.value)"
+                                        style="padding: 3px 8px; font-size: 0.8rem; width: 130px; font-weight: 600;">
+                                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>👑 Admin</option>
+                                    <option value="analyst" {% if u.role == 'analyst' %}selected{% endif %}>🕵️ Analyst</option>
+                                    <option value="viewer" {% if u.role == 'viewer' %}selected{% endif %}>👁️ Viewer</option>
+                                </select>
+                            </td>
+                            <td style="font-size: 0.8rem; color: #9ca3af;">
+                                {% if u.role == 'admin' %}
+                                    <span class="role-pill role-pill-admin">Full System Governance</span>
+                                {% elif u.role == 'analyst' %}
+                                    <span class="role-pill role-pill-analyst">Triage &amp; Detection Authoring</span>
+                                {% else %}
+                                    <span class="role-pill role-pill-viewer">Read-Only Analytics</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 0.8rem; color: #9ca3af;">
+                                {{ u.last_login or 'Never' }}
+                            </td>
+                            <td style="font-size: 0.8rem; color: #9ca3af;">
+                                {{ u.created_at }}
+                            </td>
+                            <td>
+                                {% if u.username == 'admin' or u.username == current_user %}
+                                    <span style="font-size: 0.75rem; color: #64748b;">(Protected)</span>
+                                {% else %}
+                                    <button type="button" class="btn btn-sm btn-delete" onclick="openDeleteUserModal('{{ u.username }}')">
+                                        🗑️ Delete
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- =========================================================
+         TAB PANEL 4: SECURITY & COMPLIANCE (Analyst & Admin)
+         ========================================================= -->
+    {% if is_analyst %}
+    <div class="settings-tab-panel" id="panel-security">
+
+        <!-- =====================================================
+             SECTION A: PASSWORD SECURITY POLICY & GENERATOR (Admin)
+             ===================================================== -->
+        {% if is_admin %}
+        <div class="webhooks-section" style="margin-bottom: 2.5rem;">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        🔐 Password Security Requirements Policy
+                    </h2>
+                    <p class="section-subtitle">
+                        Configure organizational password complexity requirements enforced across all user creation and password update workflows.
+                    </p>
+                </div>
+            </div>
+
+            <div class="policy-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem;">
+                <!-- Policy Configuration Form -->
+                <div class="policy-card" style="background: rgba(17, 24, 39, 0.7); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.5rem;">
+                    <h3 style="font-size: 1.05rem; font-weight: 700; color: #f3f4f6; margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>⚙️ Policy Parameters</span>
+                    </h3>
+
+                    <form id="password-policy-form" onsubmit="handleSavePasswordPolicy(event)">
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label for="policy-min-length" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem;">
+                                Minimum Password Length: <span id="min-length-val" style="color: #60a5fa; font-weight: 700;">{{ password_policy.min_length }}</span> characters
+                            </label>
+                            <input type="number" id="policy-min-length" class="form-input" min="6" max="64" value="{{ password_policy.min_length }}" required style="width: 100%;" oninput="document.getElementById('min-length-val').textContent = this.value; checkPasswordAgainstLivePolicy();">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 1.25rem;">
+                            <label style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">Character Class Requirements:</label>
+                            <div class="checkbox-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
+                                    <input type="checkbox" id="policy-require-upper" {% if password_policy.require_uppercase %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
+                                    <span>Require Uppercase Letters (A-Z)</span>
+                                </label>
+                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
+                                    <input type="checkbox" id="policy-require-lower" {% if password_policy.require_lowercase %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
+                                    <span>Require Lowercase Letters (a-z)</span>
+                                </label>
+                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
+                                    <input type="checkbox" id="policy-require-numbers" {% if password_policy.require_numbers %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
+                                    <span>Require Numeric Digits (0-9)</span>
+                                </label>
+                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
+                                    <input type="checkbox" id="policy-require-special" {% if password_policy.require_special %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
+                                    <span>Require Special Characters (<code>!@#$%^&amp;*()_+-=</code>)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="save-policy-btn" class="btn btn-primary" style="width: 100%;">
+                            💾 Save Security Policy
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Live Strength Tester & 1-Click Generator -->
+                <div class="policy-card" style="background: rgba(17, 24, 39, 0.7); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.5rem;">
+                    <h3 style="font-size: 1.05rem; font-weight: 700; color: #f3f4f6; margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <span>🧪 Live Policy Tester &amp; Generator</span>
+                    </h3>
+
+                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                        <label for="tester-input" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem;">Test Candidate Password:</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="tester-input" class="form-input" placeholder="Type a password to test..." style="flex: 1; font-family: var(--font-mono); font-size: 0.9rem;" oninput="checkPasswordAgainstLivePolicy()">
+                            <button type="button" class="btn btn-secondary" onclick="handleGenerateCompliantPassword()" title="Generate 10-char random compliant password">
+                                🎲 Generate
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Live Compliance Checklist -->
+                    <div id="policy-checklist" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem; font-size: 0.8rem;">
+                        <div id="check-length" class="policy-check-item" style="color: #94a3b8;">⚪ Minimum <span id="check-length-num">{{ password_policy.min_length }}</span> Characters</div>
+                        <div id="check-upper" class="policy-check-item" style="color: #94a3b8;">⚪ Uppercase Letter (A-Z)</div>
+                        <div id="check-lower" class="policy-check-item" style="color: #94a3b8;">⚪ Lowercase Letter (a-z)</div>
+                        <div id="check-number" class="policy-check-item" style="color: #94a3b8;">⚪ Numeric Digit (0-9)</div>
+                        <div id="check-special" class="policy-check-item" style="color: #94a3b8;">⚪ Special Character (!@#$%...)</div>
+                    </div>
+
+                    <div id="tester-verdict" style="font-size: 0.85rem; font-weight: 600; text-align: center; color: #94a3b8; padding: 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.04);">
+                        Enter a password above to evaluate compliance
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- =====================================================
+             SECTION B: TAMPER-EVIDENT CRYPTOGRAPHIC AUDIT LEDGER
+             ===================================================== -->
+        <div class="webhooks-section" id="audit-log-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        🛡️ Tamper-Evident Cryptographic Audit Ledger
+                        <span class="webhook-count" id="audit-count">{{ audit_logs | length }}</span>
+                    </h2>
+                    <p class="section-subtitle">
+                        Blockchain-style SHA-256 hash-chained immutable audit log recording administrative, authentication, and operational events.
+                    </p>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary" onclick="handleVerifyAuditChain()" id="verify-audit-btn">
+                        🔍 Verify Cryptographic Chain
+                    </button>
+                    {% if is_admin %}
+                    <a href="/api/audit-logs/export?format=csv" class="btn btn-secondary" style="text-decoration: none;">
+                        📥 Export CSV
+                    </a>
+                    <a href="/api/audit-logs/export?format=json" class="btn btn-secondary" style="text-decoration: none;" download="audit_ledger.json">
+                        📥 Export JSON
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Integrity Verification Banner -->
+            <div id="audit-integrity-banner" class="alert {% if audit_integrity.is_valid %}alert-success-glass{% else %}alert-danger-glass{% endif %}" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.5rem;">{% if audit_integrity.is_valid %}🛡️{% else %}⚠️{% endif %}</span>
+                    <div>
+                        {% if audit_integrity.is_valid %}
+                        <strong style="color: #34d399; font-size: 0.95rem;">SHA-256 Hash Chain: Cryptographically Verified Intact</strong>
+                        {% else %}
+                        <strong style="color: #f87171; font-size: 0.95rem;">Integrity Warning: Chain Inconsistency Detected</strong>
+                        {% endif %}
+                        <p style="margin: 0; font-size: 0.8rem; color: #9ca3af;" id="audit-integrity-msg">
+                            {{ audit_integrity.message }}
+                        </p>
+                    </div>
+                </div>
+                <span class="status-dot {% if audit_integrity.is_valid %}online{% else %}offline{% endif %}"></span>
+            </div>
+
+            <!-- Filter Controls -->
+            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                <input type="text" id="audit-search-input" class="form-input" placeholder="Search audit logs by user, action, resource..." style="flex: 1; min-width: 250px; font-size: 0.85rem;" oninput="debounceAuditSearch()">
+                
+                <select id="audit-action-filter" class="form-input" style="width: auto; font-size: 0.85rem;" onchange="loadAuditLogs()">
+                    <option value="ALL">All Actions</option>
+                    <option value="AUTH_LOGIN_SUCCESS">AUTH_LOGIN_SUCCESS</option>
+                    <option value="AUTH_LOGIN_FAILED">AUTH_LOGIN_FAILED</option>
+                    <option value="AUTH_LOGOUT">AUTH_LOGOUT</option>
+                    <option value="PASSWORD_CHANGED">PASSWORD_CHANGED</option>
+                    <option value="PASSWORD_POLICY_UPDATED">PASSWORD_POLICY_UPDATED</option>
+                    <option value="USER_CREATED">USER_CREATED</option>
+                    <option value="USER_ROLE_UPDATED">USER_ROLE_UPDATED</option>
+                    <option value="USER_DELETED">USER_DELETED</option>
+                    <option value="RULE_CREATED">RULE_CREATED</option>
+                    <option value="RULE_UPDATED">RULE_UPDATED</option>
+                    <option value="RULE_DELETED">RULE_DELETED</option>
+                    <option value="WEBHOOK_CREATED">WEBHOOK_CREATED</option>
+                    <option value="WEBHOOK_UPDATED">WEBHOOK_UPDATED</option>
+                    <option value="WEBHOOK_DELETED">WEBHOOK_DELETED</option>
+                    <option value="WEBHOOK_TESTED">WEBHOOK_TESTED</option>
+                    <option value="FEED_REFRESH_TRIGGERED">FEED_REFRESH_TRIGGERED</option>
+                    <option value="SCHEDULE_UPDATED">SCHEDULE_UPDATED</option>
+                    <option value="RSS_FEED_CREATED">RSS_FEED_CREATED</option>
+                    <option value="RSS_FEED_DELETED">RSS_FEED_DELETED</option>
+                    <option value="HISTORY_CLEARED">HISTORY_CLEARED</option>
+                </select>
+            </div>
+
+            <!-- Audit Table -->
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp (UTC)</th>
+                            <th>Actor</th>
+                            <th>Action</th>
+                            <th>Resource</th>
+                            <th>Status</th>
+                            <th>Client IP</th>
+                            <th>Details</th>
+                            <th>Integrity Hash</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-table-body">
+                        {% for log in audit_logs %}
+                        <tr>
+                            <td style="font-size: 0.8rem; color: #9ca3af; white-space: nowrap;">{{ log.timestamp }}</td>
+                            <td>
+                                <strong style="color: #f3f4f6;">{{ log.username }}</strong>
+                                <span style="display: block; font-size: 0.7rem; color: #60a5fa; text-transform: uppercase;">{{ log.role }}</span>
+                            </td>
+                            <td>
+                                <span class="audit-action-tag action-{{ log.action | lower }}">
+                                    {{ log.action }}
+                                </span>
+                            </td>
+                            <td style="font-size: 0.8rem; color: #cbd5e1;">
+                                {{ log.resource_type or '-' }} {% if log.resource_id %}<span style="color: #93c5fd;">({{ log.resource_id }})</span>{% endif %}
+                            </td>
+                            <td>
+                                <span class="actor-status-badge {% if log.status == 'SUCCESS' %}status-low{% elif log.status == 'FAILED' %}status-critical{% else %}status-med{% endif %}">
+                                    {{ log.status }}
+                                </span>
+                            </td>
+                            <td style="font-family: var(--font-mono); font-size: 0.75rem; color: #94a3b8;">{{ log.ip_address or '127.0.0.1' }}</td>
+                            <td style="font-size: 0.8rem; color: #cbd5e1; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ log.details }}">
+                                {{ log.details or '-' }}
+                            </td>
+                            <td style="font-family: var(--font-mono); font-size: 0.7rem; color: #a7f3d0;" title="{{ log.integrity_hash }}">
+                                {{ log.integrity_hash[:12] }}…
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 </main>
 
-<!-- Delete Confirmation Modal -->
+<!-- =========================================================
+     MODALS
+     ========================================================= -->
+
+<!-- Add User Modal (Admin Only) -->
+<div id="user-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="modal-title">➕ Create User Account</h3>
+            <button type="button" class="modal-close" onclick="closeAddUserModal()">&times;</button>
+        </div>
+        <form id="add-user-form" onsubmit="handleCreateUserSubmit(event)">
+            <div class="modal-body">
+                <div id="user-form-error" class="alert alert-danger" style="display: none;"></div>
+
+                <div class="form-group">
+                    <label for="new-username-input">Username</label>
+                    <input type="text" id="new-username-input" class="form-input" placeholder="e.g. jdoe" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label for="new-user-password-input" style="margin-bottom: 0;">Password</label>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="generateUserModalPassword()" style="font-size: 0.75rem; padding: 2px 8px;">🎲 Generate Strong Password</button>
+                    </div>
+                    <input type="password" id="new-user-password-input" class="form-input" placeholder="Enter compliant password..." required autocomplete="new-password">
+                    <span class="form-hint" id="new-user-policy-hint">Subject to minimum security requirements policy.</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="new-user-role-select">RBAC Role</label>
+                    <select id="new-user-role-select" class="form-input" required>
+                        <option value="viewer">👁️ Viewer (Read-only)</option>
+                        <option value="analyst" selected>🕵️ Analyst (Operational / Rule Author)</option>
+                        <option value="admin">👑 Admin (Full Governance)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAddUserModal()">Cancel</button>
+                <button type="submit" id="create-user-submit-btn" class="btn btn-primary">Create User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete User Confirmation Modal -->
+<div id="delete-user-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="modal-title">🗑️ Delete User</h3>
+            <button type="button" class="modal-close" onclick="closeDeleteUserModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to permanently delete user account <strong id="delete-user-name" style="color: #f87171;"></strong>?</p>
+            <p class="modal-warning">This user will immediately lose all access to CyberDash.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeDeleteUserModal()">Cancel</button>
+            <button type="button" id="confirm-delete-user-btn" class="btn btn-danger" onclick="handleConfirmDeleteUser()">Delete User</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Webhook Modal -->
 <div id="delete-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
-        <h3>🗑️ Delete Webhook</h3>
-        <p>Are you sure you want to delete <strong id="delete-webhook-name"></strong>?</p>
-        <p class="modal-warning">This action cannot be undone.</p>
-        <div class="modal-actions">
-            <button id="confirm-delete-btn" class="btn btn-danger">Delete</button>
-            <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+        <div class="modal-header">
+            <h3 class="modal-title">🗑️ Delete Webhook</h3>
+            <button type="button" class="modal-close" onclick="hideDeleteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete <strong id="delete-webhook-name"></strong>?</p>
+            <p class="modal-warning">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button id="cancel-delete-btn" class="btn btn-secondary" onclick="hideDeleteModal()">Cancel</button>
+            <button id="confirm-delete-btn" class="btn btn-danger">Delete Webhook</button>
         </div>
     </div>
 </div>

@@ -644,53 +644,443 @@ function updateFeedCount() {
 
 
 // =============================================================
-// HELPERS
+// USER MANAGEMENT HANDLERS (Admin Only)
 // =============================================================
 
-function updateWebhookCount() {
-    /** Update the webhook count badge after adding/removing. */
-    var cards = document.querySelectorAll('.webhook-card');
-    var countEl = document.getElementById('webhook-count');
-    if (countEl) {
-        countEl.textContent = cards.length;
+let deletingUsername = null;
+
+function openAddUserModal() {
+    var modal = document.getElementById('user-modal');
+    var form = document.getElementById('add-user-form');
+    var err = document.getElementById('user-form-error');
+    if (err) err.style.display = 'none';
+    if (form) form.reset();
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeAddUserModal() {
+    var modal = document.getElementById('user-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleCreateUserSubmit(event) {
+    event.preventDefault();
+    var username = document.getElementById('new-username-input').value.trim();
+    var password = document.getElementById('new-user-password-input').value;
+    var role = document.getElementById('new-user-role-select').value;
+    var err = document.getElementById('user-form-error');
+    var btn = document.getElementById('create-user-submit-btn');
+
+    if (!username || !password) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
     }
 
-    // Show/hide the empty state
-    var emptyState = document.getElementById('empty-state');
-    if (emptyState) {
-        emptyState.style.display = cards.length === 0 ? 'block' : 'none';
+    try {
+        var res = await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, password: password, role: role })
+        });
+        var data = await res.json();
+        if (res.ok) {
+            showToast('User ' + username + ' created successfully!', 'success');
+            closeAddUserModal();
+            setTimeout(function() { window.location.reload(); }, 600);
+        } else {
+            if (err) {
+                err.textContent = data.error || 'Failed to create user.';
+                err.style.display = 'block';
+            }
+        }
+    } catch (e) {
+        if (err) {
+            err.textContent = 'Network error while creating user.';
+            err.style.display = 'block';
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Create User';
+        }
+    }
+}
+
+async function handleUpdateUserRole(username, newRole) {
+    try {
+        var res = await fetch('/api/users/' + encodeURIComponent(username) + '/role', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole })
+        });
+        if (res.ok) {
+            showToast('Updated ' + username + ' role to ' + newRole.toUpperCase(), 'success');
+            setTimeout(function() { window.location.reload(); }, 600);
+        } else {
+            var data = await res.json();
+            showToast(data.error || 'Failed to update role', 'error');
+        }
+    } catch (e) {
+        showToast('Error updating role.', 'error');
+    }
+}
+
+function openDeleteUserModal(username) {
+    deletingUsername = username;
+    var modal = document.getElementById('delete-user-modal');
+    var nameEl = document.getElementById('delete-user-name');
+    if (nameEl) nameEl.textContent = username;
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeDeleteUserModal() {
+    deletingUsername = null;
+    var modal = document.getElementById('delete-user-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleConfirmDeleteUser() {
+    if (!deletingUsername) return;
+    try {
+        var res = await fetch('/api/users/' + encodeURIComponent(deletingUsername), {
+            method: 'DELETE'
+        });
+        if (res.ok) {
+            showToast('Deleted user ' + deletingUsername, 'success');
+            closeDeleteUserModal();
+            setTimeout(function() { window.location.reload(); }, 600);
+        } else {
+            var data = await res.json();
+            showToast(data.error || 'Failed to delete user.', 'error');
+        }
+    } catch (e) {
+        showToast('Error deleting user.', 'error');
     }
 }
 
 
-function showToast(message, type) {
-    /**
-     * Show a toast notification.
-     *
-     * This reuses the toast container from base.html.
-     * "type" is either "success" or "error" for styling.
-     */
-    var container = document.getElementById('toast-container');
-    if (!container) return;
+// =============================================================
+// AUDIT LEDGER HANDLERS (Analyst & Admin)
+// =============================================================
 
-    var toast = document.createElement('div');
-    toast.className = 'toast toast-' + type;
-    toast.textContent = message;
+async function handleVerifyAuditChain() {
+    var btn = document.getElementById('verify-audit-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Verifying Hash Chain...';
+    }
 
-    container.appendChild(toast);
+    try {
+        var res = await fetch('/api/audit-logs/verify');
+        var data = await res.json();
+        var banner = document.getElementById('audit-integrity-banner');
+        var msgEl = document.getElementById('audit-integrity-msg');
 
-    // Trigger CSS animation by adding the "show" class
-    // after a tiny delay (allows the browser to register
-    // the initial state for the transition).
-    setTimeout(function() {
-        toast.classList.add('show');
-    }, 10);
-
-    // Auto-remove after 4 seconds
-    setTimeout(function() {
-        toast.classList.remove('show');
-        setTimeout(function() {
-            toast.remove();
-        }, 300);
-    }, 4000);
+        if (data.is_valid) {
+            showToast('Audit Ledger: Cryptographic chain verified valid!', 'success');
+            if (banner) {
+                banner.className = 'alert alert-success-glass';
+            }
+        } else {
+            showToast('Audit Ledger: Cryptographic chain broken at record #' + data.tampered_record_id, 'error');
+            if (banner) {
+                banner.className = 'alert alert-danger-glass';
+            }
+        }
+        if (msgEl) msgEl.textContent = data.message;
+    } catch (e) {
+        showToast('Failed to verify audit ledger integrity.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🔍 Verify Cryptographic Chain';
+        }
+    }
 }
+
+let auditSearchTimer = null;
+function debounceAuditSearch() {
+    clearTimeout(auditSearchTimer);
+    auditSearchTimer = setTimeout(loadAuditLogs, 300);
+}
+
+async function loadAuditLogs() {
+    var searchInput = document.getElementById('audit-search-input');
+    var actionSelect = document.getElementById('audit-action-filter');
+    var tableBody = document.getElementById('audit-table-body');
+    var countBadge = document.getElementById('audit-count');
+
+    var search = searchInput ? searchInput.value.trim() : '';
+    var action = actionSelect ? actionSelect.value : 'ALL';
+
+    var params = new URLSearchParams();
+    if (action && action !== 'ALL') params.append('action', action);
+    if (search) params.append('search', search);
+
+    try {
+        var res = await fetch('/api/audit-logs?' + params.toString());
+        if (!res.ok) return;
+        var logs = await res.json();
+
+        if (countBadge) countBadge.textContent = logs.length;
+        if (!tableBody) return;
+
+        if (logs.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 2rem; color:#9ca3af;">No audit records found matching criteria.</td></tr>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < logs.length; i++) {
+            var log = logs[i];
+            var statusClass = log.status === 'SUCCESS' ? 'status-low' : (log.status === 'FAILED' ? 'status-critical' : 'status-med');
+            var hashShort = (log.integrity_hash || '').substring(0, 12) + '…';
+
+            html += '<tr>'
+                 + '<td style="font-size: 0.8rem; color: #9ca3af; white-space: nowrap;">' + escapeHtml(log.timestamp) + '</td>'
+                 + '<td><strong style="color: #f3f4f6;">' + escapeHtml(log.username) + '</strong><span style="display: block; font-size: 0.7rem; color: #60a5fa; text-transform: uppercase;">' + escapeHtml(log.role) + '</span></td>'
+                 + '<td><span class="audit-action-tag action-' + escapeHtml((log.action || '').toLowerCase()) + '">' + escapeHtml(log.action) + '</span></td>'
+                 + '<td style="font-size: 0.8rem; color: #cbd5e1;">' + escapeHtml(log.resource_type || '-') + (log.resource_id ? ' <span style="color: #93c5fd;">(' + escapeHtml(log.resource_id) + ')</span>' : '') + '</td>'
+                 + '<td><span class="actor-status-badge ' + statusClass + '">' + escapeHtml(log.status) + '</span></td>'
+                 + '<td style="font-family: var(--font-mono); font-size: 0.75rem; color: #94a3b8;">' + escapeHtml(log.ip_address || '127.0.0.1') + '</td>'
+                 + '<td style="font-size: 0.8rem; color: #cbd5e1; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(log.details || '') + '">' + escapeHtml(log.details || '-') + '</td>'
+                 + '<td style="font-family: var(--font-mono); font-size: 0.7rem; color: #a7f3d0;" title="' + escapeHtml(log.integrity_hash || '') + '">' + hashShort + '</td>'
+                 + '</tr>';
+        }
+        tableBody.innerHTML = html;
+    } catch (e) {
+        console.error('Failed to load audit logs:', e);
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// =============================================================
+// TAB SWITCHING
+// =============================================================
+
+function switchSettingsTab(tabName) {
+    var buttons = document.querySelectorAll('.settings-tab-btn');
+    var panels = document.querySelectorAll('.settings-tab-panel');
+
+    buttons.forEach(function(btn) {
+        if (btn.dataset.tab === tabName) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    panels.forEach(function(panel) {
+        if (panel.id === 'panel-' + tabName) {
+            panel.classList.add('active');
+        } else {
+            panel.classList.remove('active');
+        }
+    });
+
+    try {
+        history.replaceState(null, null, '#' + tabName);
+        localStorage.setItem('cyberdash_settings_tab', tabName);
+    } catch (e) {}
+}
+
+function initSettingsTabs() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var tabParam = urlParams.get('tab');
+    var hashTab = window.location.hash.replace('#', '');
+    var savedTab = null;
+    try { savedTab = localStorage.getItem('cyberdash_settings_tab'); } catch (e) {}
+
+    var targetTab = tabParam || hashTab || savedTab || 'webhooks';
+    var targetPanel = document.getElementById('panel-' + targetTab);
+    if (targetPanel) {
+        switchSettingsTab(targetTab);
+    } else {
+        switchSettingsTab('webhooks');
+    }
+}
+
+
+// =============================================================
+// PASSWORD POLICY & SECURITY HANDLERS
+// =============================================================
+
+async function handleSavePasswordPolicy(event) {
+    event.preventDefault();
+    var minLen = parseInt(document.getElementById('policy-min-length').value, 10) || 10;
+    var reqUpper = document.getElementById('policy-require-upper').checked;
+    var reqLower = document.getElementById('policy-require-lower').checked;
+    var reqNum = document.getElementById('policy-require-numbers').checked;
+    var reqSpecial = document.getElementById('policy-require-special').checked;
+    var saveBtn = document.getElementById('save-policy-btn');
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving Policy...';
+    }
+
+    try {
+        var res = await fetch('/api/security/password-policy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                min_length: minLen,
+                require_uppercase: reqUpper,
+                require_lowercase: reqLower,
+                require_numbers: reqNum,
+                require_special: reqSpecial
+            })
+        });
+        var data = await res.json();
+        if (res.ok) {
+            showToast('Security password policy updated successfully!', 'success');
+            var checkLenNum = document.getElementById('check-length-num');
+            if (checkLenNum) checkLenNum.textContent = minLen;
+            checkPasswordAgainstLivePolicy();
+        } else {
+            showToast(data.error || 'Failed to update password policy.', 'error');
+        }
+    } catch (e) {
+        showToast('Error updating policy.', 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Save Security Policy';
+        }
+    }
+}
+
+function checkPasswordAgainstLivePolicy() {
+    var pwdInput = document.getElementById('tester-input');
+    var val = pwdInput ? pwdInput.value : '';
+
+    var minLenEl = document.getElementById('policy-min-length');
+    var minLen = minLenEl ? parseInt(minLenEl.value, 10) || 10 : 10;
+    var reqUpper = document.getElementById('policy-require-upper') ? document.getElementById('policy-require-upper').checked : true;
+    var reqLower = document.getElementById('policy-require-lower') ? document.getElementById('policy-require-lower').checked : true;
+    var reqNum = document.getElementById('policy-require-numbers') ? document.getElementById('policy-require-numbers').checked : true;
+    var reqSpecial = document.getElementById('policy-require-special') ? document.getElementById('policy-require-special').checked : true;
+
+    var checkLen = document.getElementById('check-length');
+    var checkUpper = document.getElementById('check-upper');
+    var checkLower = document.getElementById('check-lower');
+    var checkNumber = document.getElementById('check-number');
+    var checkSpecial = document.getElementById('check-special');
+    var verdictEl = document.getElementById('tester-verdict');
+
+    if (!val) {
+        if (verdictEl) {
+            verdictEl.textContent = 'Enter a password above to evaluate compliance';
+            verdictEl.style.color = '#94a3b8';
+            verdictEl.style.background = 'rgba(255,255,255,0.04)';
+        }
+        if (checkLen) { checkLen.textContent = '⚪ Minimum ' + minLen + ' Characters'; checkLen.style.color = '#94a3b8'; }
+        if (checkUpper) { checkUpper.textContent = (reqUpper ? '⚪' : '➖') + ' Uppercase Letter (A-Z)'; checkUpper.style.color = '#94a3b8'; }
+        if (checkLower) { checkLower.textContent = (reqLower ? '⚪' : '➖') + ' Lowercase Letter (a-z)'; checkLower.style.color = '#94a3b8'; }
+        if (checkNumber) { checkNumber.textContent = (reqNum ? '⚪' : '➖') + ' Numeric Digit (0-9)'; checkNumber.style.color = '#94a3b8'; }
+        if (checkSpecial) { checkSpecial.textContent = (reqSpecial ? '⚪' : '➖') + ' Special Character (!@#$%...)'; checkSpecial.style.color = '#94a3b8'; }
+        return;
+    }
+
+    var passLen = val.length >= minLen;
+    var passUpper = !reqUpper || /[A-Z]/.test(val);
+    var passLower = !reqLower || /[a-z]/.test(val);
+    var passNum = !reqNum || /[0-9]/.test(val);
+    var passSpecial = !reqSpecial || /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`]/.test(val);
+
+    updateCheckItem(checkLen, passLen, 'Minimum ' + minLen + ' Characters');
+    updateCheckItem(checkUpper, passUpper, 'Uppercase Letter (A-Z)', !reqUpper);
+    updateCheckItem(checkLower, passLower, 'Lowercase Letter (a-z)', !reqLower);
+    updateCheckItem(checkNumber, passNum, 'Numeric Digit (0-9)', !reqNum);
+    updateCheckItem(checkSpecial, passSpecial, 'Special Character (!@#$%...)', !reqSpecial);
+
+    var allPassed = passLen && passUpper && passLower && passNum && passSpecial;
+    if (verdictEl) {
+        if (allPassed) {
+            verdictEl.textContent = '✅ Policy Compliant: Strong Password';
+            verdictEl.style.color = '#34d399';
+            verdictEl.style.background = 'rgba(16, 185, 129, 0.15)';
+        } else {
+            verdictEl.textContent = '❌ Non-Compliant: Fails one or more requirements';
+            verdictEl.style.color = '#f87171';
+            verdictEl.style.background = 'rgba(239, 68, 68, 0.15)';
+        }
+    }
+}
+
+function updateCheckItem(el, passed, label, notRequired) {
+    if (!el) return;
+    if (notRequired) {
+        el.textContent = '➖ ' + label + ' (Optional)';
+        el.style.color = '#64748b';
+    } else if (passed) {
+        el.textContent = '✅ ' + label;
+        el.style.color = '#34d399';
+    } else {
+        el.textContent = '❌ ' + label;
+        el.style.color = '#f87171';
+    }
+}
+
+async function handleGenerateCompliantPassword() {
+    try {
+        var res = await fetch('/api/security/generate-password');
+        var data = await res.json();
+        if (data.password) {
+            var input = document.getElementById('tester-input');
+            if (input) {
+                input.value = data.password;
+                checkPasswordAgainstLivePolicy();
+            }
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(data.password);
+                showToast('Generated & copied compliant password!', 'success');
+            } else {
+                showToast('Generated compliant password: ' + data.password, 'success');
+            }
+        }
+    } catch (e) {
+        showToast('Failed to generate password.', 'error');
+    }
+}
+
+async function generateUserModalPassword() {
+    try {
+        var res = await fetch('/api/security/generate-password');
+        var data = await res.json();
+        if (data.password) {
+            var input = document.getElementById('new-user-password-input');
+            if (input) {
+                input.value = data.password;
+                input.type = 'text'; // Show temporarily so admin can see/copy
+            }
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(data.password);
+                showToast('Generated & copied strong password!', 'success');
+            } else {
+                showToast('Generated password: ' + data.password, 'success');
+            }
+        }
+    } catch (e) {
+        showToast('Failed to generate password.', 'error');
+    }
+}
+
+// Wire tab initialization to DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+    initSettingsTabs();
+    checkPasswordAgainstLivePolicy();
+});
+
+
