@@ -160,12 +160,27 @@ stages:
         mkdir -p $(Build.ArtifactStagingDirectory)/zap
         sudo chmod -R 777 $(Build.ArtifactStagingDirectory)/zap
 
+        # Warm up Azure Web App and wait until it is ready
+        echo "Warming up Web App at $WEB_APP_URL..."
+        for i in {1..12}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$WEB_APP_URL" || echo "000")
+            echo "Attempt $i: Received HTTP $HTTP_STATUS from $WEB_APP_URL"
+            if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 302 ]; then
+                echo "Web App is active and responding!"
+                break
+            fi
+            echo "Waiting 10 seconds for Web App startup..."
+            sleep 10
+        done
+
         # Pull and run OWASP ZAP Baseline Scan as root container user
         docker run --rm -v $(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw -u root -t ghcr.io/zaproxy/zaproxy:stable \
           zap-baseline.py \
           -t "$WEB_APP_URL" \
           -r zap_dast_report.html \
-          -I
+          -J zap_out.json \
+          -I \
+          -z "-config connection.timeoutInSecs=60"
       env:
         WEB_APP_URL: $(webAppUrlSec)
       displayName: 'Run OWASP ZAP DAST Scan'
