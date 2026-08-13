@@ -344,6 +344,23 @@ def initialize_database():
             )
         """)
 
+        # --------------------------------------------------
+        # TABLE 11: investigation_history
+        # Tracks IOC lookups performed by analysts.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS investigation_history (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                indicator       TEXT NOT NULL,
+                indicator_type  TEXT NOT NULL,
+                verdict         TEXT NOT NULL,
+                threat_score    INTEGER NOT NULL,
+                threat_tags     TEXT,
+                geo_country     TEXT,
+                created_at      TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
         # Migration: Ensure deployment_guide column exists on existing DBs
         try:
             cursor.execute("ALTER TABLE detection_rules ADD COLUMN deployment_guide TEXT")
@@ -363,6 +380,11 @@ def initialize_database():
         # Migration: Add Unique Index on title to guarantee no duplicates
         try:
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_detection_rules_title ON detection_rules(title)")
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_threat_indicators_val ON threat_indicators(indicator_value)")
         except Exception:
             pass
 

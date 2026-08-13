@@ -3,7 +3,7 @@
      =============================================================
      Renders a single threat indicator (malicious URL or IP)
      from Abuse.ch feeds. Shows the indicator value, type,
-     threat category, and status.
+     threat category, and status with direct link to IOC triage.
      ============================================================= -->
 
 <div class="data-card">
@@ -27,27 +27,36 @@
         {% endif %}
     </div>
 
-    <!-- Indicator Value (URL or IP) -->
+    <!-- Indicator Value (URL or IP) with direct click to Investigate -->
     <p class="indicator-value">
-        {{ threat.indicator_value }}
+        <a href="/investigate?ioc={{ threat.indicator_value | urlencode }}" class="indicator-link" title="Click to investigate this IOC in CyberDash">
+            {{ threat.indicator_value }}
+        </a>
     </p>
 
-    <!-- Metadata -->
-    <div class="card-meta">
-        {% if threat.threat_type %}
-        <span class="card-meta-item">
-            🏷️ {{ threat.threat_type }}
-        </span>
-        {% endif %}
+    <!-- Metadata & Direct Investigation Pivot -->
+    <div class="card-meta" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            {% if threat.threat_type %}
+            <span class="card-meta-item">
+                🏷️ {{ threat.threat_type }}
+            </span>
+            {% endif %}
 
-        {% if threat.source %}
-        <span class="source-tag">{{ threat.source }}</span>
-        {% endif %}
+            {% if threat.source %}
+            <span class="source-tag">{{ threat.source }}</span>
+            {% endif %}
 
-        {% if threat.date_added %}
-        <span class="card-meta-item">
-            📅 {{ threat.date_added }}
-        </span>
-        {% endif %}
+            {% if threat.date_added %}
+            <span class="card-meta-item">
+                📅 {{ threat.date_added }}
+            </span>
+            {% endif %}
+        </div>
+
+        <a href="/investigate?ioc={{ threat.indicator_value | urlencode }}" class="btn btn-sm btn-primary" style="font-size: 0.75rem; padding: 3px 8px; text-decoration: none;" title="Open in IOC Investigator">
+            🔍 Investigate ↗
+        </a>
     </div>
 </div>
+

@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block title %}CyberDash — Threat Intelligence & IOC Investigator{% endblock %}
+
+{% block content %}
+<main class="container">
+    <!-- =========================================================
+         PAGE HERO HEADER
+         ========================================================= -->
+    <div class="threat-actors-hero">
+        <div class="hero-content">
+            <h1 class="page-title">
+                🔍 Threat Intelligence &amp; IOC Investigator
+            </h1>
+            <p class="page-subtitle">
+                Automated multi-source triage for IP addresses, domains, URLs, and file hashes (MD5 / SHA256).
+                Enrich indicators with GeoIP, ASN telemetry, Feodo &amp; URLhaus CTI, and threat actor correlations.
+            </p>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         IOC SEARCH & QUICK SAMPLES
+         ========================================================= -->
+    <div class="feed-add-form" style="margin-bottom: 2rem;">
+        <form method="GET" action="/investigate" id="ioc-search-form">
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 300px; position: relative;">
+                    <input type="text"
+                           id="ioc-input"
+                           name="ioc"
+                           value="{{ ioc }}"
+                           placeholder="Enter IP (e.g. 185.220.101.5), Domain, URL, or Hash (MD5 / SHA256)..."
+                           class="form-input"
+                           style="width: 100%; font-size: 1rem; padding: 0.85rem 1rem;"
+                           required
+                           autofocus>
+                </div>
+                <button type="submit" class="btn btn-primary" style="padding: 0.85rem 1.5rem; font-size: 1rem;">
+                    ⚡ Investigate
+                </button>
+                {% if ioc %}
+                <a href="/investigate" class="btn btn-secondary" style="padding: 0.85rem 1rem;">
+                    Clear
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Quick Preset Sample Pills -->
+            <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span style="font-size: 0.8rem; color: #9ca3af; font-weight: 600;">⚡ Sample Indicators:</span>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="loadSampleIOC('185.220.101.5')">
+                    🧅 Tor Exit IP
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="loadSampleIOC('275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f')">
+                    ☣️ WannaCry Hash
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="loadSampleIOC('d2b27376c33c3a078d10398f6ddbf49c')">
+                    🏴‍☠️ LockBit 3.0 Hash
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="loadSampleIOC('027cc450ef5f8c5f653329641ec1fed91f694e0d229928963b30f6b0d7d3a745')">
+                    💣 NotPetya Wiper
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="loadSampleIOC('8.8.8.8')">
+                    🟢 Google DNS (Clean)
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if dossier %}
+    <!-- =========================================================
+         INVESTIGATION DOSSIER VIEW
+         ========================================================= -->
+    <div class="investigation-dossier-wrapper" id="investigation-report">
+        
+        <!-- Verdict Banner Card -->
+        <div class="dossier-verdict-card {% if dossier.verdict == 'CRITICAL' %}verdict-critical{% elif dossier.verdict == 'HIGH' %}verdict-high{% elif dossier.verdict == 'MEDIUM' %}verdict-medium{% elif dossier.verdict == 'CLEAN' %}verdict-clean{% else %}verdict-unknown{% endif %}">
+            <div class="verdict-main">
+                <div class="verdict-badge-lg">
+                    {% if dossier.verdict == 'CRITICAL' %}🚨 CRITICAL THREAT
+                    {% elif dossier.verdict == 'HIGH' %}⚠️ HIGH RISK
+                    {% elif dossier.verdict == 'MEDIUM' %}🟡 SUSPICIOUS
+                    {% elif dossier.verdict == 'CLEAN' %}🟢 BENIGN / CLEAN
+                    {% else %}ℹ️ UNCLASSIFIED
+                    {% endif %}
+                </div>
+                <h2 class="verdict-indicator-title">{{ dossier.indicator }}</h2>
+                <div class="verdict-meta-row">
+                    <span>Type: <strong style="color: #60a5fa; text-transform: uppercase;">{{ dossier.ioc_type }}</strong></span>
+                    <span>&bull;</span>
+                    <span>Confidence: <strong>{{ dossier.confidence }}</strong></span>
+                </div>
+            </div>
+
+            <div class="verdict-score-box">
+                <div class="score-circle">
+                    <span class="score-number">{{ dossier.threat_score }}</span>
+                    <span class="score-label">THREAT SCORE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Bar: Copy Markdown & External Pivots -->
+        <div class="dossier-actions-bar">
+            <button type="button" class="btn btn-primary" onclick="copyInvestigationMarkdown()" id="copy-report-btn">
+                📋 Copy Markdown Report
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="exportDossierJson()">
+                📥 Export JSON
+            </button>
+            {% if dossier.pivots %}
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto;">
+                {% for name, url in dossier.pivots.items() %}
+                <a href="{{ url }}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary" style="font-size: 0.8rem;">
+                    🔗 {{ name }} ↗
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Dossier Intelligence Grid -->
+        <div class="dossier-grid">
+            
+            <!-- Card 1: Overview & Threat Tags -->
+            <div class="dossier-card">
+                <h3 class="dossier-card-title">🛡️ Threat Assessment &amp; Summary</h3>
+                <p class="dossier-summary-text">
+                    {{ dossier.summary or 'Automated cross-feed analysis completed.' }}
+                </p>
+
+                {% if dossier.threat_tags %}
+                <div style="margin-top: 1rem;">
+                    <span style="font-size: 0.8rem; font-weight: 600; color: #9ca3af; display: block; margin-bottom: 6px;">Associated Threat Tags:</span>
+                    <div class="actor-tags-group">
+                        {% for tag in dossier.threat_tags %}
+                        <span class="actor-alias-tag" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);">
+                            🏷️ {{ tag }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if dossier.raw_details and dossier.raw_details.malware_family %}
+                <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                    <div class="meta-item">
+                        <span class="meta-label">Malware Family:</span>
+                        <span class="meta-value" style="color: #f87171; font-weight: 700;">{{ dossier.raw_details.malware_family }}</span>
+                    </div>
+                    {% if dossier.raw_details.vt_detection %}
+                    <div class="meta-item" style="margin-top: 6px;">
+                        <span class="meta-label">Detection Ratio:</span>
+                        <span class="meta-value" style="color: #fbbf24;">{{ dossier.raw_details.vt_detection }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Card 2: Network & Geolocation Telemetry (For IPs & Domains) -->
+            {% if dossier.network and dossier.network.country %}
+            <div class="dossier-card">
+                <h3 class="dossier-card-title">🌐 Network Telemetry &amp; Geolocation</h3>
+                
+                <div class="dossier-meta-list">
+                    <div class="meta-item">
+                        <span class="meta-label">Country / Region:</span>
+                        <span class="meta-value">
+                            {{ dossier.network.geo_flag }} {{ dossier.network.country }} {% if dossier.network.city and dossier.network.city != 'Unknown' %}({{ dossier.network.city }}){% endif %}
+                        </span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Autonomous System (ASN):</span>
+                        <span class="meta-value" style="font-family: var(--font-mono); color: #93c5fd;">{{ dossier.network.asn or 'N/A' }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">ISP / Organization:</span>
+                        <span class="meta-value">{{ dossier.network.isp or dossier.network.org or 'Unknown' }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Reverse DNS (PTR):</span>
+                        <span class="meta-value" style="font-family: var(--font-mono); color: #a7f3d0; word-break: break-all;">
+                            {{ dossier.network.reverse_dns or 'None' }}
+                        </span>
+                    </div>
+                    {% if dossier.network.is_private %}
+                    <div class="meta-item">
+                        <span class="meta-label">Network Class:</span>
+                        <span class="meta-value" style="color: #fbbf24;">🔒 Private RFC1918 Subnet</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Card 3: Local CTI Database Matches -->
+            <div class="dossier-card" style="grid-column: 1 / -1;">
+                <h3 class="dossier-card-title">📡 Feed &amp; Threat Intelligence Detections</h3>
+                
+                {% if dossier.feed_matches | length == 0 and dossier.threat_actors | length == 0 %}
+                <p style="color: #9ca3af; font-size: 0.9rem; margin: 0;">
+                    No active indicator matches found in local feeds (Feodo Tracker, URLhaus).
+                </p>
+                {% endif %}
+
+                {% if dossier.feed_matches %}
+                <div style="margin-bottom: 1.25rem;">
+                    <h4 style="font-size: 0.9rem; color: #f87171; margin-bottom: 0.5rem;">🚨 Malicious Indicator Feed Hits:</h4>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Source Feed</th>
+                                    <th>Threat Classification</th>
+                                    <th>Reported Status</th>
+                                    <th>Date Added</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for hit in dossier.feed_matches %}
+                                <tr>
+                                    <td><strong style="color: #60a5fa;">{{ hit.source }}</strong></td>
+                                    <td><span class="actor-status-badge status-critical">{{ hit.threat_type }}</span></td>
+                                    <td>{{ hit.status }}</td>
+                                    <td>{{ hit.date_added or hit.fetched_at }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if dossier.threat_actors %}
+                <div>
+                    <h4 style="font-size: 0.9rem; color: #c084fc; margin-bottom: 0.5rem;">🕵️ Correlated Threat Actors &amp; Syndicates:</h4>
+                    <div class="threat-actors-grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+                        {% for actor in dossier.threat_actors %}
+                        <div class="actor-card" style="margin-bottom: 0;">
+                            <div class="actor-card-header">
+                                <div class="actor-badges">
+                                    <span class="actor-origin-badge">🚩 {{ actor.origin }}</span>
+                                </div>
+                                <h3 class="actor-name" style="font-size: 1.05rem;">
+                                    <a href="/actors?search={{ actor.name }}" style="color: inherit; text-decoration: none;">
+                                        {{ actor.name }} ↗
+                                    </a>
+                                </h3>
+                            </div>
+                            <div class="actor-card-body" style="padding-top: 0.5rem;">
+                                <p class="actor-description" style="font-size: 0.8rem; line-clamp: 2; -webkit-line-clamp: 2;">
+                                    {{ actor.description }}
+                                </p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <!-- Hidden JSON Data Payload for Safe JS Export and Copying -->
+        <script id="dossier-raw-data" type="application/json">
+            {{ dossier | tojson | safe }}
+        </script>
+    </div>
+    {% endif %}
+
+    <!-- =========================================================
+         RECENT INVESTIGATION HISTORY
+         ========================================================= -->
+    <div class="webhooks-section" style="margin-top: 3rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+            <h2 class="section-title" style="margin-bottom: 0;">
+                🕒 Recent Investigations
+                <span class="webhook-count">{{ history | length }}</span>
+            </h2>
+            {% if is_authenticated and history | length > 0 %}
+            <button type="button" class="btn btn-sm btn-delete" onclick="handleClearHistory()">
+                🗑️ Clear History
+            </button>
+            {% endif %}
+        </div>
+
+        {% if history | length == 0 %}
+        <div class="empty-state">
+            <div class="empty-icon">🔎</div>
+            <h3>No Investigation History</h3>
+            <p>Enter an IP address, domain, URL, or hash above to generate your first SOC triage report.</p>
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Indicator</th>
+                        <th>Type</th>
+                        <th>Verdict</th>
+                        <th>Score</th>
+                        <th>Country / Region</th>
+                        <th>Date &amp; Time</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in history %}
+                    <tr>
+                        <td style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; color: #f3f4f6; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            {{ item.indicator }}
+                        </td>
+                        <td>
+                            <span style="font-size: 0.75rem; text-transform: uppercase; color: #93c5fd; font-weight: 600;">
+                                {{ item.indicator_type }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="actor-status-badge {% if item.verdict == 'CRITICAL' %}status-critical{% elif item.verdict == 'HIGH' %}status-high{% elif item.verdict == 'CLEAN' %}status-low{% else %}status-med{% endif %}">
+                                {{ item.verdict }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if item.threat_score >= 80 %}
+                            <strong style="color: #f87171;">{{ item.threat_score }}/100</strong>
+                            {% elif item.threat_score >= 60 %}
+                            <strong style="color: #fbbf24;">{{ item.threat_score }}/100</strong>
+                            {% else %}
+                            <strong style="color: #34d399;">{{ item.threat_score }}/100</strong>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.geo_country or 'N/A' }}</td>
+                        <td style="font-size: 0.8rem; color: #9ca3af;">{{ item.created_at }}</td>
+                        <td>
+                            <a href="/investigate?ioc={{ item.indicator }}" class="btn btn-sm btn-primary">
+                                Re-Triage ↗
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+</main>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function loadSampleIOC(val) {
+    var input = document.getElementById('ioc-input');
+    if (input) {
+        input.value = val;
+        document.getElementById('ioc-search-form').submit();
+    }
+}
+
+function getDossierData() {
+    var elem = document.getElementById('dossier-raw-data');
+    if (elem) {
+        try {
+            return JSON.parse(elem.textContent);
+        } catch (e) {
+            console.error('Failed to parse dossier JSON:', e);
+        }
+    }
+    return null;
+}
+
+function copyInvestigationMarkdown() {
+    var dossier = getDossierData();
+    if (!dossier) return;
+
+    var md = '# SOC Investigation Dossier: ' + dossier.indicator + '\n\n'
+           + '**Verdict**: ' + dossier.verdict + ' (Threat Score: ' + dossier.threat_score + '/100 | Confidence: ' + dossier.confidence + ')\n'
+           + '**IOC Type**: ' + (dossier.ioc_type || '').toUpperCase() + '\n'
+           + '**Summary**: ' + (dossier.summary || 'N/A') + '\n\n';
+
+    if (dossier.network && dossier.network.country) {
+        md += '## Network & Geolocation Telemetry\n'
+            + '- **Country**: ' + dossier.network.country + ' (' + (dossier.network.city || 'Unknown') + ')\n'
+            + '- **ASN**: ' + (dossier.network.asn || 'N/A') + '\n'
+            + '- **ISP / Org**: ' + (dossier.network.isp || dossier.network.org || 'Unknown') + '\n'
+            + '- **Reverse DNS**: ' + (dossier.network.reverse_dns || 'None') + '\n\n';
+    }
+
+    if (dossier.threat_tags && dossier.threat_tags.length > 0) {
+        md += '## Threat Tags\n' + dossier.threat_tags.join(', ') + '\n\n';
+    }
+
+    md += '*Generated by CyberDash IOC Investigator at ' + new Date().toUTCString() + '*';
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(md).then(function() {
+            showToast('Investigation Markdown report copied!', 'success');
+        });
+    } else {
+        var textArea = document.createElement("textarea");
+        textArea.value = md;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('Investigation Markdown report copied!', 'success');
+    }
+}
+
+function exportDossierJson() {
+    var dossier = getDossierData();
+    if (!dossier) return;
+
+    var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dossier, null, 2));
+    var dl = document.createElement('a');
+    dl.setAttribute("href", dataStr);
+    dl.setAttribute("download", "ioc_investigation_" + (dossier.ioc_type || "ioc") + ".json");
+    dl.click();
+    showToast('Exported investigation JSON.', 'info');
+}
+
+async function handleClearHistory() {
+    if (!confirm('Are you sure you want to clear all investigation history?')) return;
+    try {
+        var res = await fetch('/api/investigate/history', { method: 'DELETE' });
+        if (res.ok) {
+            showToast('Investigation history cleared.', 'success');
+            setTimeout(function() { window.location.reload(); }, 600);
+        } else {
+            showToast('Failed to clear history.', 'error');
+        }
+    } catch (e) {
+        showToast('Error clearing history.', 'error');
+    }
+}
+</script>
+{% endblock %}

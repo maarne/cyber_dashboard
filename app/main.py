@@ -134,6 +134,13 @@ from app.services.mitre_service import get_mitre_ttp_details
 # Import CVE intelligence service
 from app.services.cve_intel_service import get_cve_details
 
+# Import IOC Investigator intelligence service
+from app.services.ioc_service import (
+    investigate_ioc,
+    get_recent_investigations,
+    clear_investigation_history,
+)
+
 
 # ============================================================
 # CREATE THE FastAPI APPLICATION
@@ -608,6 +615,61 @@ def api_get_mitre_ttp_info(ttp_id: str):
 def api_get_cve_intel_info(cve_id: str):
     """Return CVE intelligence details (severity, CVSS, CISA KEV status, description)."""
     return get_cve_details(cve_id)
+
+
+# ============================================================
+# PAGE ROUTE: IOC Investigator (GET /investigate)
+# ============================================================
+
+@app.get("/investigate")
+def ioc_investigator_page(request: Request, ioc: str = ""):
+    """
+    Render the Threat Intelligence & IOC Investigator triage console.
+    """
+    current_user = get_current_user_optional(request)
+    recent_history = get_recent_investigations(limit=10)
+    
+    dossier = None
+    if ioc.strip():
+        dossier = investigate_ioc(ioc.strip())
+
+    return templates.TemplateResponse(
+        request=request,
+        name="investigate.html",
+        context={
+            "request": request,
+            "ioc": ioc.strip(),
+            "dossier": dossier,
+            "history": recent_history,
+            "is_authenticated": current_user is not None,
+            "current_user": current_user or "",
+        },
+    )
+
+
+@app.get("/api/investigate")
+def api_investigate_ioc(ioc: str = ""):
+    """
+    Execute IOC investigation triage and return unified intelligence dossier as JSON.
+    """
+    if not ioc.strip():
+        return JSONResponse(status_code=400, content={"error": "IOC parameter is required."})
+    return investigate_ioc(ioc.strip())
+
+
+@app.get("/api/investigate/history")
+def api_get_investigate_history(limit: int = 15):
+    """Return recent IOC investigations history."""
+    return get_recent_investigations(limit=limit)
+
+
+@app.delete("/api/investigate/history")
+def api_clear_investigate_history(current_user: str = Depends(require_admin)):
+    """Clear all IOC investigation history (Admin only)."""
+    success = clear_investigation_history()
+    if success:
+        return {"message": "Investigation history cleared successfully."}
+    return JSONResponse(status_code=500, content={"error": "Failed to clear history."})
 
 
 # ============================================================
