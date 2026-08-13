@@ -4,8 +4,21 @@
 #
 # WHAT IS THIS FILE?
 # ------------------
-# Provides metadata, tactics, technical descriptions, and last-modified
-# dates for MITRE ATT&CK Enterprise techniques and sub-techniques.
+# Provides metadata, tactics, technical descriptions, and framework
+# revision dates for MITRE ATT&CK Enterprise techniques and sub-techniques.
+#
+# WHAT IS MITRE ATT&CK®?
+# ----------------------
+# MITRE ATT&CK (Adversarial Tactics, Techniques, and Common Knowledge)
+# is a globally accessible knowledge base of adversary tactics and
+# techniques based on real-world observations. It categorizes the entire
+# cyber attack lifecycle across Tactics (e.g. Initial Access, Persistence,
+# Lateral Movement, Exfiltration) and specific Techniques (e.g. T1190, T1078).
+#
+# PYTHON CONCEPTS COVERED:
+# - Deeply nested dictionary data structures (dict of dicts)
+# - Defensive dictionary lookups with default fallback values
+# - String sanitization and sub-technique ID parsing
 # ============================================================
 
 MITRE_TTP_DATABASE = {

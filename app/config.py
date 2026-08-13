@@ -93,8 +93,9 @@ CISA_KEV_URL = (
 
 # --- Abuse.ch URLhaus ---
 # URLhaus tracks malicious URLs used for distributing malware.
-# This CSV feed contains recently reported malicious URLs.
-URLHAUS_RECENT_URL = "https://urlhaus-api.abuse.ch/v1/urls/recent/limit/50/"
+# This public CSV feed contains recently reported active malicious URLs.
+URLHAUS_RECENT_URL = os.getenv("URLHAUS_RECENT_URL", "https://urlhaus.abuse.ch/downloads/csv_recent/")
+URLHAUS_API_KEY = os.getenv("URLHAUS_API_KEY", "")
 
 # --- Abuse.ch Feodo Tracker ---
 # Feodo Tracker tracks botnet Command & Control (C2) servers.

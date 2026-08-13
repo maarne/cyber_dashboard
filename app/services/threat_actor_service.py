@@ -4,9 +4,21 @@
 #
 # WHAT IS THIS FILE?
 # ------------------
-# Provides queries and comprehensive CTI seeding for Threat Actors,
-# APT Groups, and Ransomware-as-a-Service (RaaS) syndicates.
-# Data is modeled after MITRE ATT&CK® Enterprise CTI and CISA Advisories.
+# Provides queries, search filtering, and comprehensive Cyber Threat
+# Intelligence (CTI) profiles for Advanced Persistent Threats (APTs),
+# state-sponsored units, and Ransomware-as-a-Service (RaaS) operations.
+#
+# WHAT IS AN "APT" (Advanced Persistent Threat)?
+# ----------------------------------------------
+# An APT is a sophisticated, sustained cyber attack campaign in which an
+# intruder establishes an undetected presence in a network to harvest
+# intelligence or conduct sabotage. APT groups are typically sponsored by
+# nation-state intelligence agencies or well-funded cybercrime syndicates.
+#
+# PYTHON CONCEPTS COVERED:
+# - Parameterized multi-field SQL search with SQL LIKE operator
+# - Safe database cursor iteration and row-to-dictionary mapping
+# - Data seeding with SQL INSERT OR IGNORE and unique constraints
 # ============================================================
 
 from app.database import get_connection

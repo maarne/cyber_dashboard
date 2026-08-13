@@ -35,6 +35,8 @@
 # -------------------------------------------------------
 # FastAPI is the web framework class. We create one instance
 # of it, and that instance IS our web application.
+from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI, Request, Response, Cookie, Depends, HTTPException, status
 from pydantic import BaseModel
 
@@ -93,6 +95,7 @@ from app.services.webhook_service import (
     toggle_webhook,
     notify_all_webhooks,
     send_test_notification,
+    is_safe_external_url,
 )
 
 # Import the WebhookSchema Pydantic model for validating
@@ -144,10 +147,42 @@ from app.services.cve_intel_service import get_cve_details
 #   parameter we're setting by NAME instead of by position.
 #   This makes the code more readable.
 # ============================================================
+# ============================================================
+# LIFESPAN CONTEXT MANAGER — Server Startup and Shutdown
+# ============================================================
+# Modern FastAPI replaces @app.on_event("startup") with an
+# async context manager. This runs setup code before accepting
+# requests and teardown code on server termination.
+# ============================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handles application startup and shutdown events cleanly.
+    1. Initialize the SQLite database and seed required tables/rules.
+    2. Start the automated background refresh scheduler.
+    """
+    print("🚀 Starting CyberDash — Cyber Security Dashboard")
+    print("=" * 50)
+    initialize_database()
+    print("=" * 50)
+    print("🌐 Dashboard available at: http://127.0.0.1:8000")
+    print("📚 API documentation at:   http://127.0.0.1:8000/docs")
+    print("=" * 50)
+
+    # Start the background scheduler if it was previously enabled.
+    start_scheduler()
+
+    yield
+
+    print("🛑 CyberDash shutting down gracefully...")
+
+
 app = FastAPI(
     title="CyberDash — Cyber Security Dashboard",
     description="A Python-based dashboard aggregating CVEs, exploits, news, and threat intel.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -213,49 +248,6 @@ templates.env.globals["get_cve_details"] = get_cve_details
 
 
 # ============================================================
-# STARTUP EVENT — Runs when the server first starts
-# ============================================================
-# The @app.on_event("startup") decorator marks this function
-# to run ONCE when the server boots up. We use it to:
-# 1. Create the database tables (if they don't exist)
-# 2. Print a welcome message
-#
-# PYTHON CONCEPT — Decorators:
-#   A decorator is a special function that wraps another
-#   function to add extra behavior. The "@" syntax is
-#   shorthand for applying the decorator.
-#
-#   @app.on_event("startup")
-#   def my_function():
-#       ...
-#
-#   is equivalent to:
-#   def my_function():
-#       ...
-#   my_function = app.on_event("startup")(my_function)
-# ============================================================
-
-@app.on_event("startup")
-def on_startup():
-    """
-    Initialize the database when the server starts.
-    This creates all tables if they don't exist yet.
-    """
-    print("🚀 Starting CyberDash — Cyber Security Dashboard")
-    print("=" * 50)
-    initialize_database()
-    print("=" * 50)
-    print("🌐 Dashboard available at: http://127.0.0.1:8000")
-    print("📚 API documentation at:   http://127.0.0.1:8000/docs")
-    print("=" * 50)
-
-    # Start the background scheduler if it was previously enabled.
-    # This means the schedule survives server restarts — if a user
-    # set a 24-hour refresh schedule, it will resume automatically.
-    start_scheduler()
-
-
-# ============================================================
 # ROUTE: Home Page (GET /)
 # ============================================================
 # This is the main dashboard page. When a user visits
@@ -312,7 +304,7 @@ def dashboard_home(request: Request, start_date: str = None, end_date: str = Non
 # ============================================================
 
 @app.post("/api/auth/login")
-def api_login(credentials: LoginRequest):
+def api_login(credentials: LoginRequest, request: Request):
     user = get_user_by_username(credentials.username.strip())
     if not user or not verify_password(credentials.password, user["password_hash"]):
         return JSONResponse(
@@ -321,10 +313,18 @@ def api_login(credentials: LoginRequest):
         )
     token = create_access_token(user["username"])
     res = JSONResponse(content={"status": "success", "username": user["username"]})
+    
+    # Enable secure cookie flag if running under HTTPS or production environment
+    is_https = (
+        request.url.scheme == "https"
+        or request.headers.get("x-forwarded-proto") == "https"
+        or os.getenv("ENV") == "production"
+    )
     res.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
+        secure=is_https,
         samesite="lax",
         max_age=86400,
     )
@@ -703,24 +703,15 @@ def api_list_webhooks():
 
 @app.post("/api/webhooks")
 def api_create_webhook(webhook: WebhookSchema, current_user: str = Depends(require_admin)):
-    """
-    Create a new webhook configuration.
+    """Create a new webhook configuration with SSRF validation."""
+    # SSRF Protection: Validate that webhook URL does not point to internal/private resources
+    is_safe, err_msg = is_safe_external_url(webhook.webhook_url)
+    if not is_safe:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Invalid webhook URL: {err_msg}"},
+        )
 
-    PYTHON CONCEPT — Pydantic Validation:
-        FastAPI automatically validates the incoming JSON body
-        against the WebhookSchema. If any field is missing or
-        has the wrong type, FastAPI returns a 422 error with
-        a detailed explanation — we don't have to write that
-        validation code ourselves!
-
-    Args:
-        webhook: A WebhookSchema object (parsed from JSON body).
-
-    Returns:
-        JSONResponse: The new webhook's ID and a success message.
-    """
-    # webhook.model_dump() converts the Pydantic model to a
-    # plain Python dictionary, which our save_webhook() expects.
     new_id = save_webhook(webhook.model_dump())
     return JSONResponse(
         content={"id": new_id, "message": "Webhook created successfully"},
@@ -730,18 +721,15 @@ def api_create_webhook(webhook: WebhookSchema, current_user: str = Depends(requi
 
 @app.put("/api/webhooks/{webhook_id}")
 def api_update_webhook(webhook_id: int, webhook: WebhookSchema, current_user: str = Depends(require_admin)):
-    """
-    Update an existing webhook configuration.
+    """Update an existing webhook configuration with SSRF validation."""
+    # SSRF Protection: Validate updated webhook URL
+    is_safe, err_msg = is_safe_external_url(webhook.webhook_url)
+    if not is_safe:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Invalid webhook URL: {err_msg}"},
+        )
 
-    PYTHON CONCEPT — Path Parameters:
-        {webhook_id} in the URL becomes a function parameter.
-        FastAPI automatically converts it to an int because
-        of the type hint "webhook_id: int".
-
-    Args:
-        webhook_id: The ID from the URL path (e.g. /api/webhooks/3).
-        webhook: Updated webhook data from the JSON body.
-    """
     success = update_webhook(webhook_id, webhook.model_dump())
     if success:
         return JSONResponse(content={"message": "Webhook updated successfully"})
@@ -885,7 +873,7 @@ def api_list_rss_feeds():
 @app.post("/api/rss-feeds")
 def api_add_rss_feed(feed_data: dict, current_user: str = Depends(require_admin)):
     """
-    Add a new RSS feed source.
+    Add a new RSS feed source with SSRF validation.
 
     Args:
         feed_data: JSON body with "name" and "url" fields.
@@ -896,6 +884,14 @@ def api_add_rss_feed(feed_data: dict, current_user: str = Depends(require_admin)
     if not name or not url:
         return JSONResponse(
             content={"error": "Both 'name' and 'url' are required."},
+            status_code=400,
+        )
+
+    # SSRF Protection: Validate that RSS feed URL does not point to internal/private resources
+    is_safe, err_msg = is_safe_external_url(url)
+    if not is_safe:
+        return JSONResponse(
+            content={"error": f"Invalid RSS feed URL: {err_msg}"},
             status_code=400,
         )
 

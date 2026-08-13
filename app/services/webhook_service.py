@@ -29,11 +29,65 @@
 # - The datetime module for timestamps
 # ============================================================
 
+import ipaddress
+import socket
+from urllib.parse import urlparse
 import httpx
 from datetime import datetime, timezone
 
 from app.database import get_connection
 from app.config import HTTP_TIMEOUT_SECONDS
+
+
+def is_safe_external_url(url: str) -> tuple[bool, str]:
+    """
+    Validate that a URL is safe for outbound HTTP requests (SSRF defense).
+    
+    SECURITY RATIONALE:
+    -------------------
+    Server-Side Request Forgery (SSRF) occurs when an attacker tricks the
+    server into making HTTP requests to internal/private resources such as:
+      - 127.0.0.1 / localhost (local services, debug consoles)
+      - 169.254.169.254 (Cloud metadata APIs e.g. AWS/Azure/GCP instance tokens)
+      - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (internal enterprise networks)
+    
+    This function validates that URLs only use HTTP/HTTPS schemes and do not
+    point to private, loopback, link-local, or cloud metadata endpoints.
+    
+    Returns:
+        tuple[bool, str]: (is_safe, error_message)
+    """
+    if not url or not isinstance(url, str):
+        return False, "URL cannot be empty."
+
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return False, "Invalid URL format."
+
+    if parsed.scheme not in ("http", "https"):
+        return False, "URL scheme must be http or https."
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "URL must include a valid hostname."
+
+    lower_host = hostname.lower()
+    if lower_host in ("localhost", "127.0.0.1", "::1", "metadata.google.internal", "instance-data"):
+        return False, "Localhost and cloud instance metadata addresses are prohibited."
+
+    try:
+        ip_str = socket.gethostbyname(hostname)
+        ip = ipaddress.ip_address(ip_str)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False, f"Prohibited private/internal network IP ({ip_str})."
+    except socket.gaierror:
+        # If host cannot be resolved at validation time, allow public-looking domain names
+        pass
+    except Exception as e:
+        return False, f"URL validation error: {str(e)}"
+
+    return True, ""
 
 
 # ============================================================

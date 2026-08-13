@@ -30,89 +30,113 @@
 # - Conditional logic with if/elif/else
 # ============================================================
 
+import csv
+import io
 import httpx
-from app.config import URLHAUS_RECENT_URL, FEODO_TRACKER_URL, HTTP_TIMEOUT_SECONDS
+from app.config import URLHAUS_RECENT_URL, URLHAUS_API_KEY, FEODO_TRACKER_URL, HTTP_TIMEOUT_SECONDS
 from app.database import get_connection
 
 
 def fetch_and_store_urlhaus():
     """
-    Fetch recent malicious URLs from URLhaus and save them
-    to the database.
+    Fetch recent malicious URLs from URLhaus and save them to the database.
 
-    URLhaus API returns JSON data about recently submitted
-    malicious URLs, including the URL itself, what type of
-    threat it represents, and its current status.
+    Supports both:
+    1. The public recent CSV download feed (no authentication required)
+    2. Authenticated API key requests if configured in URLHAUS_API_KEY
 
     Returns:
         int: Number of new threat indicators saved.
     """
+    headers = {}
+    if URLHAUS_API_KEY:
+        headers["Auth-Key"] = URLHAUS_API_KEY
 
     try:
-        # ----------------------------------------------------------
-        # PYTHON CONCEPT — POST vs GET requests:
-        #   - GET requests ask for data (like viewing a web page)
-        #   - POST requests send data to the server
-        #
-        #   The URLhaus API uses POST requests. Some APIs require
-        #   POST for security or to accept complex query parameters.
-        #
-        #   httpx.post() sends an HTTP POST request.
-        #   httpx.get() sends an HTTP GET request.
-        # ----------------------------------------------------------
         response = httpx.get(
             URLHAUS_RECENT_URL,
+            headers=headers,
             timeout=HTTP_TIMEOUT_SECONDS,
+            follow_redirects=True,
         )
         response.raise_for_status()
-        data = response.json()
+        raw_content = response.text
 
     except Exception as error:
         print(f"❌ Error fetching URLhaus data: {error}")
         return 0
 
-    # The URLhaus API returns a dictionary with a "urls" key
-    # containing a list of malicious URL records.
-    urls_list = data.get("urls", [])
-
-    if not urls_list:
-        print("ℹ️  No recent malicious URLs from URLhaus.")
-        return 0
-
-    # Limit to the most recent 30 entries
-    urls_list = urls_list[:30]
-
     saved_count = 0
+
+    # ----------------------------------------------------------
+    # Check if response is JSON (API format) or CSV (download format)
+    # ----------------------------------------------------------
+    if raw_content.strip().startswith("{") and "urls" in raw_content:
+        try:
+            data = response.json()
+            urls_list = data.get("urls", [])[:30]
+            with get_connection() as conn:
+                cursor = conn.cursor()
+                for url_entry in urls_list:
+                    indicator_value = url_entry.get("url", "")
+                    threat_type = url_entry.get("threat", "malware_download")
+                    date_added = url_entry.get("date_added", "")
+                    status = url_entry.get("url_status", "active")
+
+                    if not indicator_value:
+                        continue
+                    if len(indicator_value) > 500:
+                        indicator_value = indicator_value[:500]
+
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO threat_indicators
+                        (indicator_type, indicator_value, threat_type, source, date_added, status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, ("url", indicator_value, threat_type, "URLhaus", date_added, status))
+                    if cursor.rowcount > 0:
+                        saved_count += 1
+                conn.commit()
+            print(f"✅ Saved {saved_count} new URLhaus indicators to the database.")
+            return saved_count
+        except Exception as e:
+            print(f"⚠️ Error parsing URLhaus JSON: {e}")
+
+    # Parse CSV format
+    csv_file = io.StringIO(raw_content)
+    reader = csv.reader(csv_file)
 
     with get_connection() as conn:
         cursor = conn.cursor()
-
-        for url_entry in urls_list:
-            # Extract fields from each URL record
-            indicator_value = url_entry.get("url", "")
-            threat_type = url_entry.get("threat", "unknown")
-            date_added = url_entry.get("date_added", "")
-            status = url_entry.get("url_status", "unknown")
-
-            if not indicator_value:
+        for row in reader:
+            # Skip empty lines and comment lines starting with '#'
+            if not row or row[0].startswith("#"):
                 continue
 
-            # Truncate very long URLs to prevent display issues
-            if len(indicator_value) > 500:
-                indicator_value = indicator_value[:500]
+            # CSV columns: id, dateadded, url, url_status, last_online, threat, tags, urlhaus_link, reporter
+            if len(row) >= 6:
+                date_added = row[1].strip()
+                indicator_value = row[2].strip()
+                status = row[3].strip()
+                threat_type = row[5].strip() if row[5].strip() else "malware_download"
 
-            try:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO threat_indicators
-                    (indicator_type, indicator_value, threat_type, source, date_added, status)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, ("url", indicator_value, threat_type, "URLhaus", date_added, status))
+                if not indicator_value:
+                    continue
+                if len(indicator_value) > 500:
+                    indicator_value = indicator_value[:500]
 
-                if cursor.rowcount > 0:
-                    saved_count += 1
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO threat_indicators
+                        (indicator_type, indicator_value, threat_type, source, date_added, status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, ("url", indicator_value, threat_type, "URLhaus", date_added, status))
+                    if cursor.rowcount > 0:
+                        saved_count += 1
+                except Exception as db_error:
+                    print(f"⚠️ Error saving URLhaus indicator: {db_error}")
 
-            except Exception as db_error:
-                print(f"⚠️  Error saving URLhaus indicator: {db_error}")
+            if saved_count >= 30:
+                break
 
         conn.commit()
 

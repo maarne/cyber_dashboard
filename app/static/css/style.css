@@ -1927,7 +1927,8 @@ select.form-input {
     align-items: center;
     justify-content: center;
     z-index: 9999;
-    padding: 1rem;
+    padding: 1.5rem 1rem;
+    overflow-y: auto;
     animation: fadeIn 0.2s ease-out;
 }
 
@@ -1936,10 +1937,32 @@ select.form-input {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     width: 100%;
-    max-width: 440px;
+    max-width: 480px;
+    max-height: min(90vh, 850px);
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     overflow: hidden;
+    position: relative;
+    margin: auto;
     animation: slideUp 0.25s ease-out;
+}
+
+.modal-card.modal-card-lg {
+    max-width: 720px;
+}
+
+.modal-card.modal-card-xl {
+    max-width: 900px;
+}
+
+.modal-card > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    margin: 0;
 }
 
 .modal-header {
@@ -1948,6 +1971,8 @@ select.form-input {
     justify-content: space-between;
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+    background: #111827;
 }
 
 .modal-title {
@@ -1973,6 +1998,10 @@ select.form-input {
 
 .modal-body {
     padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .modal-subtitle {
@@ -1986,8 +2015,9 @@ select.form-input {
     justify-content: flex-end;
     gap: 0.75rem;
     padding: 1rem 1.5rem;
-    background: rgba(0, 0, 0, 0.2);
+    background: #0b0f19;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
 }
 
 .alert-danger {

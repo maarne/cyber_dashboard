@@ -7,6 +7,21 @@
 # Provides CRUD functions and seed intelligence for Sigma (SIEM)
 # and YARA (Malware) Detection Rules mapped to MITRE ATT&CK® TTPs,
 # complete with step-by-step SIEM and EDR product deployment guides.
+#
+# WHAT ARE SIGMA AND YARA RULES?
+# ------------------------------
+# 1. Sigma: A generic, open signature format for SIEM systems (like
+#    Splunk, Microsoft Sentinel, Elastic EQL, QRadar). It describes log
+#    events in YAML format, allowing analysts to write detection rules
+#    once and convert them to any target SIEM query language.
+# 2. YARA: The pattern matching swiss-knife for malware researchers.
+#    YARA rules identify malware samples based on textual or binary
+#    patterns (strings, regex, byte sequences) in files or memory.
+#
+# PYTHON CONCEPTS COVERED:
+# - Dynamic SQL query building with WHERE 1=1 and parameter lists
+# - Safe database transactions (INSERT, UPDATE, DELETE) with SQLite
+# - Deduplication queries with SQL MIN(id) and subqueries
 # ============================================================
 
 from app.database import get_connection

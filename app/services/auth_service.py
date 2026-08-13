@@ -4,8 +4,24 @@
 #
 # WHAT IS THIS FILE?
 # ------------------
-# Handles password hashing (bcrypt), JWT token generation/validation,
-# and database user lookups for CyberDash authentication.
+# Handles password hashing (bcrypt), JSON Web Token (JWT) generation
+# and validation, and database user management for CyberDash.
+#
+# WHY DO WE USE BCRYPT & JWT?
+# ---------------------------
+# 1. bcrypt: Passwords should NEVER be stored in plaintext. bcrypt
+#    uses an adaptive cryptographic hash algorithm with a unique
+#    random salt per password and multiple rounds of computation.
+#    This makes brute-force dictionary and rainbow table attacks infeasible.
+# 2. JWT (JSON Web Token): Stateless authentication tokens signed
+#    with HMAC-SHA256 (HS256) that allow the server to verify user
+#    identity without querying the database on every single request.
+#
+# PYTHON CONCEPTS COVERED:
+# - Cryptographic salting and hashing with the bcrypt library
+# - JWT token encoding and decoding with pyjwt
+# - Parameterized SQL statements with SQLite
+# - Exception handling for malformed or expired tokens
 # ============================================================
 
 from datetime import datetime, timedelta, timezone
@@ -24,6 +40,14 @@ from app.database import get_connection
 def hash_password(password: str) -> str:
     """
     Hash a password securely using bcrypt with a unique salt.
+
+    HOW BCRYPT WORKS:
+    -----------------
+    1. gensalt(rounds=12) generates a cryptographically random salt.
+       The 'rounds=12' parameter means 2^12 (4,096) hashing iterations.
+    2. hashpw() hashes the password combined with the salt.
+    3. The salt and cost parameters are embedded into the resulting
+       string, allowing checkpw() to verify it later.
     """
     salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
@@ -33,6 +57,9 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     """
     Verify a plaintext password against a stored bcrypt hash.
+
+    Returns:
+        bool: True if password matches hash, False otherwise.
     """
     try:
         return bcrypt.checkpw(

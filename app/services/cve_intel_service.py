@@ -4,8 +4,21 @@
 #
 # WHAT IS THIS FILE?
 # ------------------
-# Provides comprehensive lookup for CVE metadata, CVSS scores,
-# CISA KEV exploitation status, and summaries for interactive hover tooltips.
+# Provides fast, comprehensive metadata lookups for Common Vulnerabilities
+# and Exposures (CVEs), CVSS severity scores, EPSS probabilities, and CISA
+# Known Exploited Vulnerabilities (KEV) status for interactive UI popovers.
+#
+# MULTI-LAYER LOOKUP ARCHITECTURE:
+# --------------------------------
+# 1. Curated In-Memory Knowledgebase: Instant response for high-profile
+#    exploited CVEs (Log4j, CitrixBleed, WinRAR, MOVEit, Zerologon, etc.).
+# 2. Local SQLite Tables: Queries cves and cisa_exploits database records.
+# 3. Standardized Fallback: Returns clean heuristic metadata for uncataloged CVEs.
+#
+# PYTHON CONCEPTS COVERED:
+# - Multi-tier caching and fallback strategies (Dictionary -> DB -> Fallback)
+# - SQLite contextual connection handling with get_connection()
+# - String manipulation and normalization (CVE prefix enforcement)
 # ============================================================
 
 from app.database import get_connection
