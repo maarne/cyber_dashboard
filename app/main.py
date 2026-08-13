@@ -829,9 +829,9 @@ def api_update_user_role(
     if not target_user:
         return JSONResponse(status_code=404, content={"error": "User not found."})
 
-    success = update_user_role(username, role_data.role)
+    success, message = update_user_role(username, role_data.role)
     if not success:
-        return JSONResponse(status_code=400, content={"error": "Invalid role specified."})
+        return JSONResponse(status_code=400, content={"error": message})
 
     log_audit_event(
         username=admin["username"],
@@ -844,7 +844,8 @@ def api_update_user_role(
         ip_address=client_ip,
     )
 
-    return {"message": f"Role for '{username}' updated to '{role_data.role}'."}
+    return {"message": message}
+
 
 
 @app.delete("/api/users/{username}")

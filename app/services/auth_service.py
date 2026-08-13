@@ -300,11 +300,39 @@ def create_user(username: str, password: str, role: str = "viewer") -> dict:
     return {"id": user_id, "username": username, "role": clean_role}
 
 
-def update_user_role(username: str, new_role: str) -> bool:
-    """Update the RBAC role for a user."""
+def count_active_admins() -> int:
+    """Return the total number of users with admin role."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'admin'")
+        row = cursor.fetchone()
+        return row["count"] if row else 0
+
+
+def update_user_role(username: str, new_role: str) -> tuple[bool, str]:
+    """
+    Update the RBAC role for a user.
+    Enforces governance safeguards:
+    - Protects the primary 'admin' account from being demoted.
+    - Prevents demoting the last remaining active administrator in the system.
+    """
     clean_role = new_role.lower()
     if clean_role not in VALID_ROLES:
-        return False
+        return False, "Invalid role specified."
+
+    target_user = get_user_by_username(username)
+    if not target_user:
+        return False, "User not found."
+
+    # Safeguard 1: Primary admin account must always remain admin
+    if username.lower() == DEFAULT_ADMIN_USERNAME.lower() and clean_role != "admin":
+        return False, f"The primary '{DEFAULT_ADMIN_USERNAME}' account cannot be demoted from Administrator."
+
+    # Safeguard 2: Ensure at least one administrator always remains
+    if target_user["role"] == "admin" and clean_role != "admin":
+        if count_active_admins() <= 1:
+            return False, "Cannot demote the only remaining Administrator. The system must have at least one active Admin."
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -312,7 +340,10 @@ def update_user_role(username: str, new_role: str) -> bool:
             (clean_role, username),
         )
         conn.commit()
-        return cursor.rowcount > 0
+        if cursor.rowcount > 0:
+            return True, f"Role for '{username}' updated to '{clean_role}'."
+        return False, "Failed to update user role."
+
 
 
 def delete_user_by_username(username: str) -> bool:

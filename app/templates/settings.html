@@ -435,14 +435,20 @@
                                 <strong style="color: #f3f4f6;">👤 {{ u.username }}</strong>
                             </td>
                             <td>
-                                <select class="form-input form-input-sm role-select"
-                                        data-username="{{ u.username }}"
-                                        onchange="handleUpdateUserRole('{{ u.username }}', this.value)"
-                                        style="padding: 3px 8px; font-size: 0.8rem; width: 130px; font-weight: 600;">
-                                    <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>👑 Admin</option>
-                                    <option value="analyst" {% if u.role == 'analyst' %}selected{% endif %}>🕵️ Analyst</option>
-                                    <option value="viewer" {% if u.role == 'viewer' %}selected{% endif %}>👁️ Viewer</option>
-                                </select>
+                                {% if u.username == 'admin' %}
+                                    <span class="role-pill role-pill-admin" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Primary Administrator role is locked">
+                                        👑 Admin <span style="font-size: 0.7rem; color: #94a3b8; font-weight: normal;">(Locked)</span>
+                                    </span>
+                                {% else %}
+                                    <select class="form-input form-input-sm role-select"
+                                            data-username="{{ u.username }}"
+                                            onchange="handleUpdateUserRole('{{ u.username }}', this.value)"
+                                            style="padding: 3px 8px; font-size: 0.8rem; width: 130px; font-weight: 600;">
+                                        <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>👑 Admin</option>
+                                        <option value="analyst" {% if u.role == 'analyst' %}selected{% endif %}>🕵️ Analyst</option>
+                                        <option value="viewer" {% if u.role == 'viewer' %}selected{% endif %}>👁️ Viewer</option>
+                                    </select>
+                                {% endif %}
                             </td>
                             <td style="font-size: 0.8rem; color: #9ca3af;">
                                 {% if u.role == 'admin' %}
