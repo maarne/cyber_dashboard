@@ -156,11 +156,12 @@ stages:
       vmImage: $(vmImageName)
     steps:
     - script: |
-        # Ensure report staging directory exists
+        # Ensure report staging directory exists with write permissions
         mkdir -p $(Build.ArtifactStagingDirectory)/zap
+        sudo chmod -R 777 $(Build.ArtifactStagingDirectory)/zap
 
-        # Pull and run OWASP ZAP Baseline Scan against the deployed Web App
-        docker run --rm -v $(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable \
+        # Pull and run OWASP ZAP Baseline Scan as root container user
+        docker run --rm -v $(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw -u root -t ghcr.io/zaproxy/zaproxy:stable \
           zap-baseline.py \
           -t "$WEB_APP_URL" \
           -r zap_dast_report.html \
