@@ -1,6 +1,5 @@
 # Python to Linux Web App on Azure
 # Build your Python project and deploy it to Azure as a Linux Web App.
-# Change python version to one thats appropriate for your application.
 # https://docs.microsoft.com/azure/devops/pipelines/languages/python
 
 trigger:
@@ -25,6 +24,9 @@ variables:
   pythonVersion: '3.11'
 
 stages:
+# ============================================================
+# STAGE 1: BUILD
+# ============================================================
 - stage: Build
   displayName: Build stage
   jobs:
@@ -43,7 +45,54 @@ stages:
       workingDirectory: $(projectRoot)
       displayName: "Install requirements & validate build"
 
-# Security Scans (Trivy)
+    - task: ArchiveFiles@2
+      displayName: 'Archive files'
+      inputs:
+        rootFolderOrFile: '$(projectRoot)'
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+        replaceExistingArchive: true
+
+    - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+      displayName: 'Upload package'
+      artifact: drop
+
+# ============================================================
+# STAGE 2: SECURITY SCANS (SAST & SCA)
+# ============================================================
+- stage: SecurityScans
+  displayName: 'Security Scans (SAST & SCA)'
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - job: SAST_SCA_Job
+    displayName: 'SAST & SCA Vulnerability Scans'
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    # 1. Semgrep SAST Scan (Code Security Analysis)
+    - script: |
+        mkdir -p $(Build.ArtifactStagingDirectory)/semgrep
+        docker run --rm \
+          -v $(projectRoot):/src \
+          -v $(Build.ArtifactStagingDirectory)/semgrep:/output \
+          semgrep/semgrep semgrep scan \
+          --config=auto \
+          --json \
+          -o /output/semgrep-report.json \
+          /src
+      displayName: 'Run Semgrep SAST Scan'
+      continueOnError: true
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Semgrep SAST Report'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/semgrep/semgrep-report.json'
+        ArtifactName: 'Semgrep_SAST_Report'
+        publishLocation: 'Container'
+
+    # 2. Trivy Security Scan (SCA, Secrets & Configs)
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/trivy
         docker run --rm \
@@ -64,23 +113,12 @@ stages:
         ArtifactName: 'Trivy_Security_Report'
         publishLocation: 'Container'
 
-# Create archive for deployment
-    - task: ArchiveFiles@2
-      displayName: 'Archive files'
-      inputs:
-        rootFolderOrFile: '$(projectRoot)'
-        includeRootFolder: false
-        archiveType: zip
-        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-        replaceExistingArchive: true
-
-    - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-      displayName: 'Upload package'
-      artifact: drop
-
+# ============================================================
+# STAGE 3: DEPLOYMENT
+# ============================================================
 - stage: Deploy
   displayName: 'Deploy Web App'
-  dependsOn: Build
+  dependsOn: SecurityScans
   condition: succeeded()
   jobs:
   - deployment: DeploymentJob
@@ -91,7 +129,6 @@ stages:
       runOnce:
         deploy:
           steps:
-
           - task: UsePythonVersion@0
             inputs:
               versionSpec: '$(pythonVersion)'
@@ -106,6 +143,9 @@ stages:
               appSettings: '-DATABASE_PATH "/home/data/cyber_dashboard.db" -SCM_DO_BUILD_DURING_DEPLOYMENT true -WEBSITES_PORT 8000'
               startupCommand: 'gunicorn -w 2 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app'
 
+# ============================================================
+# STAGE 4: DAST (DYNAMIC APPLICATION SECURITY TESTING)
+# ============================================================
 - stage: DAST
   displayName: 'DAST Security Scan (OWASP ZAP)'
   dependsOn: Deploy
@@ -122,13 +162,13 @@ stages:
         # Pull and run OWASP ZAP Baseline Scan against the deployed Web App
         docker run --rm -v $(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable \
           zap-baseline.py \
-          -t $env:webAppUrl \
+          -t "$WEB_APP_URL" \
           -r zap_dast_report.html \
           -I
       env:
-        webAppUrl: $(webAppUrlSec)
+        WEB_APP_URL: $(webAppUrlSec)
       displayName: 'Run OWASP ZAP DAST Scan'
-      continueOnError: true # Set to false if you want DAST vulnerabilities to block pipeline completion
+      continueOnError: true
 
     # Publish the HTML report as an Azure DevOps Pipeline Artifact
     - task: PublishBuildArtifacts@1
