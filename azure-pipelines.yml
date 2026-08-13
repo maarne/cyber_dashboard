@@ -45,12 +45,16 @@ stages:
 
 # Security Scans
     - script: |
-        # Download and install Horusec CLI
-        curl -fsSL https://raw.githubusercontent.com/ZupIT/horusec/main/deployments/scripts/install.sh | bash -s latest
-        
-        # Run Horusec SAST scan on project directory
-        horusec start -p="$(projectRoot)" -e="true" -o="json" -O="$(Build.ArtifactStagingDirectory)/horusec-report.json"
-      displayName: 'Run Horusec SAST Security Scan'
+        # Ensure Docker socket permissions
+        sudo chmod 666 /var/run/docker.sock
+
+        # Run Horusec via its official Docker image
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v $(projectRoot):/src \
+          horuszup/horusec-cli:latest \
+          horusec start -p /src -e="true" -o="json" -O="/src/horusec-report.json"
+      displayName: 'Run Horusec SAST'
       continueOnError: true # Set to true if you don't want security vulnerabilities to block deployment
 
 # Create archive for deployment
