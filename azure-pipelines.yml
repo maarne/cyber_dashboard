@@ -19,7 +19,7 @@ variables:
   # Environment name
   environmentName: 'cyberdash-dev'
 
-  # Project root folder. Point to the folder containing manage.py file.
+  # Project root folder. Point to the application root directory.
   projectRoot: $(System.DefaultWorkingDirectory)
 
   pythonVersion: '3.11'
@@ -38,12 +38,10 @@ stages:
       displayName: 'Use Python $(pythonVersion)'
 
     - script: |
-        python -m venv antenv
-        source antenv/bin/activate
         python -m pip install --upgrade pip
         pip install -r requirements.txt
       workingDirectory: $(projectRoot)
-      displayName: "Install requirements"
+      displayName: "Install requirements & validate build"
 
     - task: ArchiveFiles@2
       displayName: 'Archive files'
@@ -83,4 +81,5 @@ stages:
               azureSubscription: $(azureServiceConnectionId)
               appName: $(webAppName)
               package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
-              startupCommand: 'gunicorn -w 2 -k uvicorn.workers.UvicornWorker app.main:app'
+              appSettings: '-DATABASE_PATH "/home/data/cyber_dashboard.db" -SCM_DO_BUILD_DURING_DEPLOYMENT true'
+              startupCommand: 'gunicorn -w 2 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app'
