@@ -29,7 +29,7 @@ import os
 from fastapi import FastAPI, Request, Response, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import JSONResponse, Response, RedirectResponse
+from fastapi.responses import JSONResponse, Response, RedirectResponse, PlainTextResponse
 
 # Import auth & RBAC service
 from app.services.auth_service import (
@@ -188,6 +188,70 @@ app = FastAPI(
 
 
 # ============================================================
+# SECURITY HEADERS & DEFENSE-IN-DEPTH MIDDLEWARE
+# ============================================================
+
+SENSITIVE_EXTENSIONS = (
+    ".sql", ".db", ".sqlite", ".sqlite3", ".py", ".pyc", ".env", ".git",
+    ".bak", ".conf", ".ini", ".sh", ".yml", ".yaml", ".log"
+)
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """
+    Inject strict HTTP Security Headers across all responses:
+    - Content-Security-Policy (CSP) with frame-ancestors 'none'
+    - X-Frame-Options: DENY (Anti-Clickjacking)
+    - X-Content-Type-Options: nosniff
+    - X-XSS-Protection: 1; mode=block
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - Permissions-Policy: geolocation=(), microphone=(), camera=()
+    - Intercepts and blocks direct requests to sensitive source/database files.
+    """
+    path_lower = request.url.path.lower()
+    # Prevent source code / SQL / database disclosure
+    if any(path_lower.endswith(ext) or f"/{ext}" in path_lower for ext in SENSITIVE_EXTENSIONS):
+        return PlainTextResponse(status_code=404, content="Not Found")
+
+    response = await call_next(request)
+
+    # 1. Content Security Policy (CSP) & Frame Ancestors (Anti-Clickjacking)
+    csp_policy = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self' data:; "
+        "img-src 'self' data: https: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none';"
+    )
+    response.headers["Content-Security-Policy"] = csp_policy
+
+    # 2. Anti-Clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # 3. MIME-Sniffing Protection
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # 4. Cross-Site Scripting Filter
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # 5. Referrer Policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # 6. Permissions Policy (Feature Policy)
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+
+    # 7. Sanitize / Override Server Header
+    response.headers["Server"] = "CyberDash-Core"
+
+    return response
+
+
+# ============================================================
 # FIRST-TIME SETUP REDIRECTION MIDDLEWARE
 # ============================================================
 
@@ -206,6 +270,33 @@ async def setup_redirection_middleware(request: Request, call_next):
         return RedirectResponse(url="/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
     return await call_next(request)
+
+
+# ============================================================
+# GLOBAL ERROR SANITIZATION HANDLERS
+# ============================================================
+
+@app.exception_handler(500)
+async def internal_server_error_handler(request: Request, exc: Exception):
+    """Sanitize 500 error responses to prevent database/SQL/traceback leakage."""
+    if request.url.path.startswith("/api"):
+        return JSONResponse(
+            status_code=500,
+            content={"error": "An internal server error occurred. Please contact the administrator."},
+        )
+    return PlainTextResponse(status_code=500, content="Internal Server Error")
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """Catch-all unhandled exception handler ensuring no internal state/tracebacks leak."""
+    if request.url.path.startswith("/api"):
+        return JSONResponse(
+            status_code=500,
+            content={"error": "An internal server error occurred. Please contact the administrator."},
+        )
+    return PlainTextResponse(status_code=500, content="Internal Server Error")
+
 
 
 

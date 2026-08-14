@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CyberDash — Initial Security Setup</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         .setup-wrapper {
             min-height: 100vh;
@@ -176,12 +173,18 @@
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <script id="policy-data" type="application/json">
+        {{ password_policy | tojson | safe }}
+    </script>
+
     <script>
-        const MIN_LEN = {{ password_policy.min_length }};
-        const REQ_UPPER = {{ 'true' if password_policy.require_uppercase else 'false' }};
-        const REQ_LOWER = {{ 'true' if password_policy.require_lowercase else 'false' }};
-        const REQ_NUM = {{ 'true' if password_policy.require_numbers else 'false' }};
-        const REQ_SPECIAL = {{ 'true' if password_policy.require_special else 'false' }};
+        const policyElem = document.getElementById('policy-data');
+        const policyData = policyElem ? JSON.parse(policyElem.textContent) : { min_length: 10, require_uppercase: true, require_lowercase: true, require_numbers: true, require_special: true };
+        const MIN_LEN = policyData.min_length || 10;
+        const REQ_UPPER = Boolean(policyData.require_uppercase);
+        const REQ_LOWER = Boolean(policyData.require_lowercase);
+        const REQ_NUM = Boolean(policyData.require_numbers);
+        const REQ_SPECIAL = Boolean(policyData.require_special);
 
         function togglePasswordVisibility(inputId, btn) {
             const input = document.getElementById(inputId);
