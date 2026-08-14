@@ -832,24 +832,27 @@ async function loadAuditLogs() {
             return;
         }
 
-        var html = '';
-        for (var i = 0; i < logs.length; i++) {
-            var log = logs[i];
+        tableBody.innerHTML = '';
+        var fragment = document.createDocumentFragment();
+
+        logs.forEach(function(log) {
+            var tr = document.createElement('tr');
             var statusClass = log.status === 'SUCCESS' ? 'status-low' : (log.status === 'FAILED' ? 'status-critical' : 'status-med');
             var hashShort = (log.integrity_hash || '').substring(0, 12) + '…';
 
-            html += '<tr>'
-                 + '<td style="font-size: 0.8rem; color: #9ca3af; white-space: nowrap;">' + escapeHtml(log.timestamp) + '</td>'
+            tr.innerHTML = '<td style="font-size: 0.8rem; color: #9ca3af; white-space: nowrap;">' + escapeHtml(log.timestamp) + '</td>'
                  + '<td><strong style="color: #f3f4f6;">' + escapeHtml(log.username) + '</strong><span style="display: block; font-size: 0.7rem; color: #60a5fa; text-transform: uppercase;">' + escapeHtml(log.role) + '</span></td>'
                  + '<td><span class="audit-action-tag action-' + escapeHtml((log.action || '').toLowerCase()) + '">' + escapeHtml(log.action) + '</span></td>'
                  + '<td style="font-size: 0.8rem; color: #cbd5e1;">' + escapeHtml(log.resource_type || '-') + (log.resource_id ? ' <span style="color: #93c5fd;">(' + escapeHtml(log.resource_id) + ')</span>' : '') + '</td>'
                  + '<td><span class="actor-status-badge ' + statusClass + '">' + escapeHtml(log.status) + '</span></td>'
                  + '<td style="font-family: var(--font-mono); font-size: 0.75rem; color: #94a3b8;">' + escapeHtml(log.ip_address || '127.0.0.1') + '</td>'
                  + '<td style="font-size: 0.8rem; color: #cbd5e1; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + escapeHtml(log.details || '') + '">' + escapeHtml(log.details || '-') + '</td>'
-                 + '<td style="font-family: var(--font-mono); font-size: 0.7rem; color: #a7f3d0;" title="' + escapeHtml(log.integrity_hash || '') + '">' + hashShort + '</td>'
-                 + '</tr>';
-        }
-        tableBody.innerHTML = html;
+                 + '<td style="font-family: var(--font-mono); font-size: 0.7rem; color: #a7f3d0;" title="' + escapeHtml(log.integrity_hash || '') + '">' + hashShort + '</td>';
+
+            fragment.appendChild(tr);
+        });
+
+        tableBody.appendChild(fragment);
     } catch (e) {
         console.error('Failed to load audit logs:', e);
     }
