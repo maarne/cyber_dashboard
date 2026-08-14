@@ -65,6 +65,13 @@
             <span class="settings-tab-badge" id="tab-badge-security">{{ audit_logs | length }}</span>
         </button>
         {% endif %}
+
+        {% if is_admin %}
+        <button type="button" class="settings-tab-btn" data-tab="api" onclick="switchSettingsTab('api')">
+            🔌 API &amp; Developer Access
+            <span class="settings-tab-badge" id="tab-badge-api">{{ api_tokens | length }}</span>
+        </button>
+        {% endif %}
     </div>
 
 
@@ -711,6 +718,208 @@
     </div>
     {% endif %}
 
+    <!-- =========================================================
+         TAB PANEL 5: API & DEVELOPER ACCESS (Admin Only)
+         ========================================================= -->
+    {% if is_admin %}
+    <div class="settings-tab-panel" id="panel-api">
+        <!-- Section Header -->
+        <div class="section-header" style="margin-bottom: 1.5rem;">
+            <div>
+                <h2 class="section-title">
+                    🔌 Developer API &amp; Machine Access
+                    <span class="webhook-count" id="api-token-count">{{ api_tokens | length }}</span>
+                </h2>
+                <p class="section-subtitle">
+                    Programmatically integrate vulnerability telemetry, threat feeds, and IOC investigations into SIEM (Splunk, Elastic), SOAR playbooks, or automated Python scripts.
+                </p>
+            </div>
+            {% if is_admin %}
+            <button type="button" class="btn btn-primary" onclick="openCreateTokenModal()">
+                ➕ Generate API Token
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- 1. API Base URL & Quick Links Card -->
+        <div class="settings-card" style="margin-bottom: 2rem;">
+            <div class="settings-card-header">
+                <h3>🌐 REST API Base Endpoint</h3>
+                <span class="badge" style="background: rgba(34, 211, 238, 0.15); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.3);">REST v1.0</span>
+            </div>
+            <div class="settings-card-body">
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 1rem;">
+                    All REST endpoints are served relative to this root URL. Authenticate your requests using either the <code>X-API-Key</code> header or <code>Authorization: Bearer &lt;token&gt;</code>.
+                </p>
+
+                <!-- Base URL Copy Box -->
+                <div style="display: flex; gap: 0.75rem; align-items: center; background: #0a0f1d; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
+                    <span style="color: #818cf8; font-family: var(--font-mono); font-size: 0.9rem; font-weight: bold;">BASE URL:</span>
+                    <input type="text" id="api-base-url-input" readonly value="/api" style="flex: 1; background: transparent; border: none; color: #38bdf8; font-family: var(--font-mono); font-size: 0.95rem; outline: none;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="copyApiBaseUrl()" id="copy-base-url-btn">
+                        📋 Copy Base URL
+                    </button>
+                </div>
+
+                <!-- API Spec Links & Features -->
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <a href="/docs" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none;">
+                        <span>📘</span> Interactive Swagger UI (<code>/docs</code>) ↗
+                    </a>
+                    <a href="/redoc" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none;">
+                        <span>📕</span> ReDoc API Reference (<code>/redoc</code>) ↗
+                    </a>
+                    <span style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #a7f3d0; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0.35rem 0.75rem;">
+                        <span>🔒</span> Dual Header Auth Supported
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Interactive Endpoint Explorer & cURL Generator Card -->
+        <div class="settings-card" style="margin-bottom: 2rem;">
+            <div class="settings-card-header">
+                <h3>⚡ Interactive Endpoint Explorer &amp; cURL Generator</h3>
+            </div>
+            <div class="settings-card-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;" class="api-explorer-grid">
+                    <!-- Left: Selector & Parameters -->
+                    <div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label for="api-endpoint-select">Select Target Endpoint</label>
+                            <select id="api-endpoint-select" class="form-input" onchange="handleEndpointSelection()">
+                                {% for ep in endpoints_catalog %}
+                                <option value="{{ ep.id }}" data-method="{{ ep.method }}" data-path="{{ ep.path }}" data-auth="{{ ep.auth_required }}">
+                                    [{{ ep.method }}] {{ ep.path }} — {{ ep.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div id="endpoint-meta-box" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span id="endpoint-method-badge" class="badge" style="background: #0284c7; color: white; font-weight: bold; font-size: 0.75rem;">GET</span>
+                                <span id="endpoint-path-text" style="font-family: var(--font-mono); color: #f1f5f9; font-weight: 600;">/api/summary</span>
+                            </div>
+                            <p id="endpoint-desc-text" style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.75rem;">Real-time vulnerability counts, active CISA zero-days, RSS articles, and threat indicators.</p>
+                            <div style="font-size: 0.8rem; color: #cbd5e1;">
+                                <strong>Authorization:</strong> <span id="endpoint-auth-text" style="color: #60a5fa;">Viewer / Optional</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="curl-api-token-input">Your API Token (Optional Preview)</label>
+                            <input type="text" id="curl-api-token-input" class="form-input" placeholder="cd_live_... (leave empty for sample token)" oninput="updateCurlPreview()">
+                        </div>
+                    </div>
+
+                    <!-- Right: Live cURL Command & Response Preview -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1;">Generated cURL Command</label>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="copyCurlCommand()" id="copy-curl-btn" style="font-size: 0.75rem; padding: 2px 8px;">
+                                📋 Copy cURL
+                            </button>
+                        </div>
+                        <pre id="curl-command-preview" style="background: #070a13; border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 1rem; color: #38bdf8; font-family: var(--font-mono); font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; margin-bottom: 1rem; min-height: 80px;"></pre>
+
+                        <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; display: block;">Sample JSON Response</label>
+                        <pre id="sample-response-preview" style="background: #070a13; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1rem; color: #a7f3d0; font-family: var(--font-mono); font-size: 0.75rem; max-height: 180px; overflow-y: auto; white-space: pre; margin: 0;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. API Tokens Table Card -->
+        <div class="settings-card">
+            <div class="settings-card-header">
+                <h3>🔑 Active Developer API Tokens</h3>
+                <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">Governance</span>
+            </div>
+            <div class="settings-card-body">
+                {% if not is_admin %}
+                <p style="color: #94a3b8; font-size: 0.9rem;">
+                    Administrator privileges are required to generate and revoke API keys. Contact an administrator to obtain a token for your automation scripts.
+                </p>
+                {% endif %}
+
+                <div class="table-responsive">
+                    <table class="data-table" id="api-tokens-table">
+                        <thead>
+                            <tr>
+                                <th>Token Name</th>
+                                <th>Key Prefix</th>
+                                <th>Role Scope</th>
+                                <th>Rate Limit</th>
+                                <th>Status</th>
+                                <th>Expires</th>
+                                <th>Last Used</th>
+                                {% if is_admin %}
+                                <th style="text-align: right;">Actions</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody id="api-tokens-table-body">
+                            {% if api_tokens | length == 0 %}
+                            <tr>
+                                <td colspan="{% if is_admin %}8{% else %}7{% endif %}" style="text-align: center; padding: 2rem; color: #94a3b8;">
+                                    No API tokens created yet. Click <strong>"➕ Generate API Token"</strong> to create a key for your automated integrations.
+                                </td>
+                            </tr>
+                            {% else %}
+                            {% for tok in api_tokens %}
+                            <tr id="token-row-{{ tok.id }}">
+                                <td>
+                                    <strong style="color: #f1f5f9;">{{ tok.name }}</strong>
+                                    <span style="display: block; font-size: 0.7rem; color: #94a3b8;">By {{ tok.created_by }}</span>
+                                </td>
+                                <td style="font-family: var(--font-mono); font-size: 0.8rem; color: #38bdf8;">
+                                    {{ tok.token_prefix }}
+                                </td>
+                                <td>
+                                    <span class="role-badge role-{{ tok.role }}">
+                                        {% if tok.role == 'admin' %}👑 Admin{% elif tok.role == 'analyst' %}🕵️ Analyst{% else %}👁️ Viewer{% endif %}
+                                    </span>
+                                </td>
+                                <td style="font-size: 0.8rem; color: #cbd5e1;">
+                                    {{ tok.rate_limit_per_min }} req/min
+                                </td>
+                                <td>
+                                    {% if tok.is_active %}
+                                    <span class="actor-status-badge status-low">Active</span>
+                                    {% else %}
+                                    <span class="actor-status-badge status-critical">Revoked</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size: 0.8rem; color: #94a3b8;">
+                                    {{ tok.expires_at or 'Never' }}
+                                </td>
+                                <td style="font-size: 0.8rem; color: #94a3b8;">
+                                    {{ tok.last_used_at or 'Never' }}
+                                </td>
+                                {% if is_admin %}
+                                <td style="text-align: right; white-space: nowrap;">
+                                    {% if tok.is_active %}
+                                    <button type="button" class="btn btn-secondary btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleRevokeApiToken(this.dataset.id, this.dataset.name)" style="margin-right: 4px;">
+                                        🚫 Revoke
+                                    </button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-danger btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleDeleteApiToken(this.dataset.id, this.dataset.name)">
+                                        🗑️
+                                    </button>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 </main>
 
 <!-- =========================================================
@@ -794,6 +1003,93 @@
         </div>
     </div>
 </div>
+
+{% if is_admin %}
+<!-- Create API Token Modal (Admin Only) -->
+<div id="create-token-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="modal-title">🔑 Generate Scoped API Token</h3>
+            <button type="button" class="modal-close" onclick="closeCreateTokenModal()">&times;</button>
+        </div>
+        <form id="create-token-form" onsubmit="handleCreateTokenSubmit(event)">
+            <div class="modal-body">
+                <div id="create-token-error" class="alert alert-danger" style="display: none;"></div>
+
+                <div class="form-group">
+                    <label for="token-name-input">Token Name / Integration Purpose</label>
+                    <input type="text" id="token-name-input" class="form-input" placeholder="e.g. SIEM Splunk Forwarder, SOAR Bot" required autocomplete="off">
+                    <span class="form-hint">A descriptive label to identify this token in audit ledgers.</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="token-role-select">Access Role / Permission Scope</label>
+                    <select id="token-role-select" class="form-input" required>
+                        <option value="viewer">👁️ Viewer (Read-only intelligence feeds &amp; metrics)</option>
+                        <option value="analyst" selected>🕵️ Analyst (Threat triage, IoC queries, webhook testing)</option>
+                        <option value="admin">👑 Admin (Full governance, rules management, token lifecycle)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="token-expiry-select">Expiration Schedule</label>
+                    <select id="token-expiry-select" class="form-input">
+                        <option value="30">30 Days</option>
+                        <option value="90" selected>90 Days (Recommended)</option>
+                        <option value="365">1 Year</option>
+                        <option value="0">Never Expires</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="token-rate-limit-input">Rate Limit (Requests per minute)</label>
+                    <input type="number" id="token-rate-limit-input" class="form-input" value="60" min="10" max="1000">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCreateTokenModal()">Cancel</button>
+                <button type="submit" id="create-token-submit-btn" class="btn btn-primary">Generate Key</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reveal API Token Modal (Shown only once upon generation) -->
+<div id="reveal-token-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="modal-title" style="color: #34d399;">🎉 API Token Generated Successfully</h3>
+        </div>
+        <div class="modal-body">
+            <div class="alert alert-warning" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 8px;">
+                ⚠️ <strong>Important:</strong> Copy your secret API token now. For security purposes, this secret key is hashed via SHA-256 and will <strong>never be shown again</strong>.
+            </div>
+
+            <div class="form-group">
+                <label>Your Secret API Token</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="text" id="reveal-token-input" class="form-input" readonly style="font-family: var(--font-mono); color: #38bdf8; background: #070a13; font-weight: bold;">
+                    <button type="button" class="btn btn-primary" onclick="copyRevealedToken()" id="copy-reveal-token-btn">
+                        📋 Copy
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Header Authentication Example</label>
+                <pre id="reveal-header-example" style="background: #070a13; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 0.75rem; font-family: var(--font-mono); font-size: 0.75rem; color: #a7f3d0; margin: 0; white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="closeRevealTokenModal()">I Have Saved My Token</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script id="endpoints-data" type="application/json">
+    {{ endpoints_catalog | tojson | safe }}
+</script>
 
 {% endblock %}
 

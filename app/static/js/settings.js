@@ -892,6 +892,10 @@ function switchSettingsTab(tabName) {
         }
     });
 
+    if (tabName === 'api') {
+        initApiExplorer();
+    }
+
     try {
         history.replaceState(null, null, '#' + tabName);
         localStorage.setItem('cyberdash_settings_tab', tabName);
@@ -1080,10 +1084,325 @@ async function generateUserModalPassword() {
     }
 }
 
+// =============================================================
+// API & DEVELOPER ACCESS MANAGEMENT
+// =============================================================
+
+function copyApiBaseUrl() {
+    var origin = window.location.origin;
+    var fullBaseUrl = origin + '/api';
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(fullBaseUrl).then(function() {
+            showToast('Copied Base URL to clipboard!', 'success');
+        });
+    } else {
+        var input = document.getElementById('api-base-url-input');
+        if (input) {
+            input.select();
+            document.execCommand('copy');
+            showToast('Copied Base URL!', 'success');
+        }
+    }
+}
+
+function initApiExplorer() {
+    var origin = window.location.origin;
+    var baseUrlInput = document.getElementById('api-base-url-input');
+    if (baseUrlInput) {
+        baseUrlInput.value = origin + '/api';
+    }
+    handleEndpointSelection();
+}
+
+function handleEndpointSelection() {
+    var select = document.getElementById('api-endpoint-select');
+    if (!select) return;
+
+    var endpointId = select.value;
+    var endpointsElem = document.getElementById('endpoints-data');
+    var catalog = [];
+    if (endpointsElem) {
+        try {
+            catalog = JSON.parse(endpointsElem.textContent);
+        } catch (e) {
+            catalog = [];
+        }
+    }
+
+    var ep = catalog.find(function(item) { return item.id === endpointId; });
+    if (!ep) return;
+
+    var methodBadge = document.getElementById('endpoint-method-badge');
+    var pathText = document.getElementById('endpoint-path-text');
+    var descText = document.getElementById('endpoint-desc-text');
+    var authText = document.getElementById('endpoint-auth-text');
+    var samplePreview = document.getElementById('sample-response-preview');
+
+    if (methodBadge) {
+        methodBadge.textContent = ep.method;
+        methodBadge.style.background = ep.method === 'POST' ? '#10b981' : (ep.method === 'DELETE' ? '#ef4444' : '#0284c7');
+    }
+    if (pathText) pathText.textContent = ep.path;
+    if (descText) descText.textContent = ep.description;
+    if (authText) authText.textContent = ep.auth_required;
+    if (samplePreview) samplePreview.textContent = ep.sample_response || '{}';
+
+    updateCurlPreview();
+}
+
+function updateCurlPreview() {
+    var select = document.getElementById('api-endpoint-select');
+    if (!select) return;
+
+    var endpointsElem = document.getElementById('endpoints-data');
+    var catalog = [];
+    if (endpointsElem) {
+        try {
+            catalog = JSON.parse(endpointsElem.textContent);
+        } catch (e) {
+            catalog = [];
+        }
+    }
+
+    var ep = catalog.find(function(item) { return item.id === select.value; });
+    if (!ep) return;
+
+    var tokenInput = document.getElementById('curl-api-token-input');
+    var tokenVal = (tokenInput && tokenInput.value.trim()) ? tokenInput.value.trim() : 'cd_live_YOUR_API_TOKEN';
+
+    var origin = window.location.origin;
+    var curlCmd = '';
+
+    if (ep.method === 'POST') {
+        var sampleBody = ep.id === 'investigate' ? '{"ioc": "198.51.100.44"}' : '{}';
+        curlCmd = 'curl -X POST "' + origin + ep.path + '" \\\n'
+                + '  -H "X-API-Key: ' + tokenVal + '" \\\n'
+                + '  -H "Content-Type: application/json" \\\n'
+                + "  -d '" + sampleBody + "'";
+    } else {
+        curlCmd = 'curl -X GET "' + origin + ep.path + '" \\\n'
+                + '  -H "X-API-Key: ' + tokenVal + '"';
+    }
+
+    var curlPreview = document.getElementById('curl-command-preview');
+    if (curlPreview) {
+        curlPreview.textContent = curlCmd;
+    }
+}
+
+function copyCurlCommand() {
+    var curlPreview = document.getElementById('curl-command-preview');
+    if (!curlPreview) return;
+    var cmd = curlPreview.textContent;
+
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(cmd).then(function() {
+            showToast('Copied cURL command to clipboard!', 'success');
+        });
+    } else {
+        showToast('cURL copied!', 'success');
+    }
+}
+
+function openCreateTokenModal() {
+    var modal = document.getElementById('create-token-modal');
+    var errorDiv = document.getElementById('create-token-error');
+    if (errorDiv) errorDiv.style.display = 'none';
+    var form = document.getElementById('create-token-form');
+    if (form) form.reset();
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCreateTokenModal() {
+    var modal = document.getElementById('create-token-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleCreateTokenSubmit(event) {
+    event.preventDefault();
+    var nameInput = document.getElementById('token-name-input');
+    var roleSelect = document.getElementById('token-role-select');
+    var expirySelect = document.getElementById('token-expiry-select');
+    var rateLimitInput = document.getElementById('token-rate-limit-input');
+    var submitBtn = document.getElementById('create-token-submit-btn');
+    var errorDiv = document.getElementById('create-token-error');
+
+    var name = nameInput ? nameInput.value.trim() : '';
+    var role = roleSelect ? roleSelect.value : 'viewer';
+    var expiryDays = expirySelect ? parseInt(expirySelect.value, 10) : 90;
+    var rateLimit = rateLimitInput ? parseInt(rateLimitInput.value, 10) : 60;
+
+    if (!name) {
+        if (errorDiv) {
+            errorDiv.textContent = 'Token name is required.';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        var res = await fetch('/api/tokens', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                role: role,
+                expires_in_days: expiryDays > 0 ? expiryDays : null,
+                rate_limit_per_min: rateLimit
+            })
+        });
+
+        var data = await res.json();
+        if (!res.ok) {
+            if (errorDiv) {
+                errorDiv.textContent = data.error || 'Failed to create API token.';
+                errorDiv.style.display = 'block';
+            }
+            return;
+        }
+
+        closeCreateTokenModal();
+        openRevealTokenModal(data.token);
+        showToast('API token created!', 'success');
+        refreshApiTokensList();
+    } catch (e) {
+        if (errorDiv) {
+            errorDiv.textContent = 'An error occurred while generating the API token.';
+            errorDiv.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+function openRevealTokenModal(rawToken) {
+    var modal = document.getElementById('reveal-token-modal');
+    var input = document.getElementById('reveal-token-input');
+    var example = document.getElementById('reveal-header-example');
+
+    if (input) input.value = rawToken;
+    if (example) {
+        example.textContent = 'X-API-Key: ' + rawToken + '\n# or\nAuthorization: Bearer ' + rawToken;
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeRevealTokenModal() {
+    var modal = document.getElementById('reveal-token-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function copyRevealedToken() {
+    var input = document.getElementById('reveal-token-input');
+    if (!input) return;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(input.value).then(function() {
+            showToast('Copied secret token to clipboard!', 'success');
+        });
+    } else {
+        input.select();
+        document.execCommand('copy');
+        showToast('Copied token!', 'success');
+    }
+}
+
+async function handleRevokeApiToken(tokenId, tokenName) {
+    if (!confirm('Are you sure you want to revoke API token "' + tokenName + '"? Automated integrations using this key will immediately fail.')) {
+        return;
+    }
+
+    try {
+        var res = await fetch('/api/tokens/' + tokenId + '/revoke', { method: 'POST' });
+        var data = await res.json();
+        if (!res.ok) {
+            showToast(data.error || 'Failed to revoke token.', 'error');
+            return;
+        }
+        showToast('API token revoked.', 'success');
+        refreshApiTokensList();
+    } catch (e) {
+        showToast('Error revoking API token.', 'error');
+    }
+}
+
+async function handleDeleteApiToken(tokenId, tokenName) {
+    if (!confirm('Are you sure you want to permanently delete API token "' + tokenName + '"?')) {
+        return;
+    }
+
+    try {
+        var res = await fetch('/api/tokens/' + tokenId, { method: 'DELETE' });
+        var data = await res.json();
+        if (!res.ok) {
+            showToast(data.error || 'Failed to delete token.', 'error');
+            return;
+        }
+        showToast('API token deleted.', 'success');
+        refreshApiTokensList();
+    } catch (e) {
+        showToast('Error deleting API token.', 'error');
+    }
+}
+
+async function refreshApiTokensList() {
+    try {
+        var res = await fetch('/api/tokens');
+        if (!res.ok) return;
+        var tokens = await res.json();
+
+        var badge = document.getElementById('tab-badge-api');
+        if (badge) badge.textContent = tokens.length;
+
+        var count = document.getElementById('api-token-count');
+        if (count) count.textContent = tokens.length;
+
+        var tbody = document.getElementById('api-tokens-table-body');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        var fragment = document.createDocumentFragment();
+
+        if (tokens.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: #94a3b8;">No API tokens created yet.</td></tr>';
+            return;
+        }
+
+        tokens.forEach(function(tok) {
+            var tr = document.createElement('tr');
+            tr.id = 'token-row-' + tok.id;
+
+            var roleLabel = tok.role === 'admin' ? '👑 Admin' : (tok.role === 'analyst' ? '🕵️ Analyst' : '👁️ Viewer');
+            var statusBadge = tok.is_active ? '<span class="actor-status-badge status-low">Active</span>' : '<span class="actor-status-badge status-critical">Revoked</span>';
+
+            tr.innerHTML = '<td><strong style="color: #f1f5f9;">' + escapeHtml(tok.name) + '</strong><span style="display: block; font-size: 0.7rem; color: #94a3b8;">By ' + escapeHtml(tok.created_by) + '</span></td>'
+                         + '<td style="font-family: var(--font-mono); font-size: 0.8rem; color: #38bdf8;">' + escapeHtml(tok.token_prefix) + '</td>'
+                         + '<td><span class="role-badge role-' + escapeHtml(tok.role) + '">' + roleLabel + '</span></td>'
+                         + '<td style="font-size: 0.8rem; color: #cbd5e1;">' + escapeHtml(String(tok.rate_limit_per_min)) + ' req/min</td>'
+                         + '<td>' + statusBadge + '</td>'
+                         + '<td style="font-size: 0.8rem; color: #94a3b8;">' + escapeHtml(tok.expires_at || 'Never') + '</td>'
+                         + '<td style="font-size: 0.8rem; color: #94a3b8;">' + escapeHtml(tok.last_used_at || 'Never') + '</td>'
+                         + '<td style="text-align: right; white-space: nowrap;">'
+                         + (tok.is_active ? '<button type="button" class="btn btn-secondary btn-sm" data-id="' + tok.id + '" data-name="' + escapeHtml(tok.name) + '" onclick="handleRevokeApiToken(this.dataset.id, this.dataset.name)" style="margin-right: 4px;">🚫 Revoke</button>' : '')
+                         + '<button type="button" class="btn btn-danger btn-sm" data-id="' + tok.id + '" data-name="' + escapeHtml(tok.name) + '" onclick="handleDeleteApiToken(this.dataset.id, this.dataset.name)">🗑️</button>'
+                         + '</td>';
+
+            fragment.appendChild(tr);
+        });
+
+        tbody.appendChild(fragment);
+    } catch (e) {
+        console.error('Failed to refresh tokens:', e);
+    }
+}
+
 // Wire tab initialization to DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
     initSettingsTabs();
     checkPasswordAgainstLivePolicy();
+    initApiExplorer();
 });
+
 
 

@@ -104,8 +104,9 @@ def is_safe_external_url(url: str) -> tuple[bool, str]:
 
 def mask_webhook_url(url: str) -> str:
     """
-    Mask a webhook URL to prevent secret tokens/keys from being exposed in UI/DOM.
+    Mask a webhook URL to prevent secret tokens/keys from being exposed in UI/DOM or API payloads.
     Example: https://hooks.slack.com/services/T00/B00/XXXXXX -> https://hooks.slack.com/services/••••••••
+             https://discord.com/api/webhooks/123/xyz -> https://discord.com/api/webhooks/••••••••
     """
     if not url:
         return ""
@@ -113,19 +114,26 @@ def mask_webhook_url(url: str) -> str:
         parts = url.split("://", 1)
         if len(parts) == 2:
             scheme, rest = parts
-            path_parts = rest.split("/", 2)
-            if len(path_parts) >= 2:
-                domain_and_base = f"{scheme}://{path_parts[0]}/{path_parts[1]}"
-                return f"{domain_and_base}/••••••••"
-            return f"{scheme}://{path_parts[0]}/••••••••"
+            path_parts = rest.split("/")
+            domain = path_parts[0]
+            if "discord.com" in domain and len(path_parts) >= 3:
+                return f"{scheme}://{domain}/api/webhooks/••••••••"
+            elif "slack.com" in domain and len(path_parts) >= 2:
+                return f"{scheme}://{domain}/services/••••••••"
+            elif "office.com" in domain or "microsoft.com" in domain:
+                return f"{scheme}://{domain}/webhook/••••••••"
+            elif len(path_parts) >= 2:
+                return f"{scheme}://{domain}/{path_parts[1]}/••••••••"
+            return f"{scheme}://{domain}/••••••••"
     except Exception:
         pass
     return "https://••••••••"
 
 
-def get_all_webhooks():
+def get_all_webhooks(masked: bool = True):
     """
     Retrieve all webhook configurations from the database.
+    If masked=True, webhook_url is masked to prevent secret token leakage over APIs or UI.
 
     Returns:
         list: A list of dictionaries, each representing a webhook.
@@ -141,17 +149,22 @@ def get_all_webhooks():
     webhooks = []
     for row in rows:
         item = dict(row)
-        item["masked_url"] = mask_webhook_url(item.get("webhook_url", ""))
+        raw_url = item.get("webhook_url", "")
+        masked_url = mask_webhook_url(raw_url)
+        item["masked_url"] = masked_url
+        if masked:
+            item["webhook_url"] = masked_url
         webhooks.append(item)
     return webhooks
 
 
-def get_webhook_by_id(webhook_id):
+def get_webhook_by_id(webhook_id, masked: bool = False):
     """
     Retrieve a single webhook by its ID.
 
     Args:
         webhook_id: The integer ID of the webhook to retrieve.
+        masked: If True, masks the secret token in webhook_url.
 
     Returns:
         dict or None: The webhook as a dictionary, or None if not found.
@@ -161,7 +174,15 @@ def get_webhook_by_id(webhook_id):
         cursor.execute("SELECT * FROM webhooks WHERE id = ?", (webhook_id,))
         row = cursor.fetchone()
 
-    return dict(row) if row else None
+    if not row:
+        return None
+    item = dict(row)
+    raw_url = item.get("webhook_url", "")
+    masked_url = mask_webhook_url(raw_url)
+    item["masked_url"] = masked_url
+    if masked:
+        item["webhook_url"] = masked_url
+    return item
 
 
 def save_webhook(data):
@@ -557,7 +578,7 @@ def notify_all_webhooks(new_critical_cves=None, new_high_cves=None, new_cisa_exp
         return {"sent": 0, "failed": 0, "skipped": 0}
 
     # Get all active webhooks from the database
-    all_webhooks = get_all_webhooks()
+    all_webhooks = get_all_webhooks(masked=False)
     active_webhooks = [w for w in all_webhooks if w["is_active"]]
 
     if not active_webhooks:

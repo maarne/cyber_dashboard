@@ -460,6 +460,33 @@ def initialize_database():
                 VALUES (10, 1, 1, 1, 1)
             """)
 
+        # --------------------------------------------------
+        # TABLE 14: api_tokens
+        # Stores programmatic developer API access tokens.
+        # Hashes secrets via SHA-256 for safe verification.
+        # --------------------------------------------------
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                name               TEXT NOT NULL,
+                token_prefix       TEXT NOT NULL,
+                token_hash         TEXT UNIQUE NOT NULL,
+                role               TEXT NOT NULL DEFAULT 'viewer',
+                created_by         TEXT NOT NULL,
+                created_at         TEXT DEFAULT (datetime('now')),
+                expires_at         TEXT,
+                last_used_at       TEXT,
+                rate_limit_per_min INTEGER DEFAULT 60,
+                is_active          INTEGER DEFAULT 1
+            )
+        """)
+
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_tokens_prefix ON api_tokens(token_prefix)")
+        except Exception:
+            pass
+
         conn.commit()
 
     # When the "with" block ends here, the connection is

@@ -294,5 +294,14 @@ class InitialSetupSchema(BaseModel):
     password: str
 
 
+class ApiTokenCreateSchema(BaseModel):
+    """Payload for generating developer API tokens."""
+    name: str
+    role: str = "viewer"
+    expires_in_days: Optional[int] = None
+    rate_limit_per_min: Optional[int] = 60
+
+
+
 
 

@@ -110,6 +110,18 @@ from app.models.schemas import (
     UserUpdateRoleSchema,
     PasswordPolicySchema,
     InitialSetupSchema,
+    ApiTokenCreateSchema,
+)
+
+# Import API Token service
+from app.services.api_token_service import (
+    generate_api_token,
+    verify_api_token,
+    list_api_tokens,
+    get_api_token_by_id,
+    revoke_api_token,
+    delete_api_token,
+    get_api_endpoints_catalog,
 )
 
 # Import the background scheduler service
@@ -179,12 +191,49 @@ async def lifespan(app: FastAPI):
     print("🛑 CyberDash shutting down gracefully...")
 
 
+from fastapi.openapi.utils import get_openapi
+
 app = FastAPI(
     title="CyberDash — Cyber Security Dashboard",
     description="Enterprise cyber intelligence dashboard with granular RBAC, detection rules, and cryptographic audit logs.",
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+def custom_openapi():
+    """Configure OpenAPI Schema with API Key and Bearer token security schemes."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "APIKeyHeader": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "Enter your CyberDash API Token (e.g. cd_live_...)",
+        },
+        "HTTPBearer": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT / cd_live_*",
+            "description": "Enter your Bearer Token or cd_live_ API token",
+        },
+    }
+    openapi_schema["security"] = [
+        {"APIKeyHeader": []},
+        {"HTTPBearer": []},
+    ]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 # ============================================================
@@ -216,18 +265,33 @@ async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
 
     # 1. Content Security Policy (CSP) & Frame Ancestors (Anti-Clickjacking)
-    csp_policy = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "font-src 'self' data:; "
-        "img-src 'self' data: https: blob:; "
-        "connect-src 'self'; "
-        "frame-ancestors 'none'; "
-        "form-action 'self'; "
-        "base-uri 'self'; "
-        "object-src 'none';"
-    )
+    if path_lower in ("/docs", "/docs/oauth2-redirect", "/redoc", "/redocs", "/openapi.json"):
+        # Swagger UI and ReDoc need their CDN distribution assets and stylesheets
+        csp_policy = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "img-src 'self' data: https: blob:; "
+            "connect-src 'self' https: blob:; "
+            "worker-src 'self' blob:; "
+            "frame-ancestors 'none'; "
+            "object-src 'none';"
+        )
+    else:
+        # Strict CSP for CyberDash application pages
+        csp_policy = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "font-src 'self' data:; "
+            "img-src 'self' data: https: blob:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none';"
+        )
     response.headers["Content-Security-Policy"] = csp_policy
 
     # 2. Anti-Clickjacking
@@ -259,14 +323,28 @@ async def security_headers_middleware(request: Request, call_next):
 async def setup_redirection_middleware(request: Request, call_next):
     """
     Ensure users are directed to the First-Time Setup Wizard if no admin account exists.
+    API callers receive structured JSON error codes rather than HTML page redirects.
     """
     path = request.url.path
+    accept_header = request.headers.get("accept", "").lower()
+    is_api_request = path.startswith("/api") or "application/json" in accept_header
+
     if is_initial_setup_required():
         allowed_prefixes = ("/static", "/favicon.ico")
-        allowed_paths = ("/setup", "/api/setup", "/api/security/password-policy", "/api/security/generate-password")
+        allowed_paths = ("/setup", "/api/setup", "/api/security/password-policy", "/api/security/generate-password", "/docs", "/redoc", "/redocs", "/openapi.json")
         if not (any(path.startswith(p) for p in allowed_prefixes) or path in allowed_paths):
+            if is_api_request:
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"error": "Initial setup required. Primary administrator credentials must be configured.", "setup_url": "/setup"},
+                )
             return RedirectResponse(url="/setup", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
     elif path == "/setup":
+        if is_api_request:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"message": "Initial setup has already been completed. Use /api/auth/login to authenticate."},
+            )
         return RedirectResponse(url="/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
     return await call_next(request)
@@ -314,16 +392,31 @@ def get_client_ip(request: Request) -> str:
 
 def get_current_user_and_role(request: Request) -> dict | None:
     """
-    Validate access token from cookie or Authorization header.
-    Returns: {"username": str, "role": str} if authenticated, else None.
+    Validate caller identity from:
+    1. X-API-Key header (Developer API token)
+    2. Authorization: Bearer <token> (JWT or API token)
+    3. Cookie: access_token (JWT session)
+    Returns: {"username": str, "role": str, ...} if authenticated, else None.
     """
+    # 1. Check X-API-Key header
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        api_auth = verify_api_token(api_key)
+        if api_auth:
+            return api_auth
+
+    # 2. Check Cookie or Authorization header
     token = request.cookies.get("access_token")
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
+
     if token:
+        if token.startswith("cd_live_"):
+            return verify_api_token(token)
         return verify_access_token(token)
+
     return None
 
 
@@ -411,7 +504,7 @@ templates.env.globals["get_cve_details"] = get_cve_details
 # PAGE ROUTE: First-Time Setup Wizard (GET /setup)
 # ============================================================
 
-@app.get("/setup")
+@app.get("/setup", include_in_schema=False)
 def setup_wizard_page(request: Request):
     """Render the first-time administrator onboarding wizard."""
     if not is_initial_setup_required():
@@ -432,7 +525,7 @@ def setup_wizard_page(request: Request):
 # PAGE ROUTE: Home Page (GET /)
 # ============================================================
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def dashboard_home(request: Request, start_date: str = None, end_date: str = None, search: str = None, q: str = None):
     """Render the main dashboard page."""
     search_query = (search or q or "").strip()
@@ -469,7 +562,7 @@ def dashboard_home(request: Request, start_date: str = None, end_date: str = Non
 # PAGE ROUTE: Threat Actors Directory (GET /actors)
 # ============================================================
 
-@app.get("/actors")
+@app.get("/actors", include_in_schema=False)
 def threat_actors_page(request: Request, search: str = None, sector: str = None):
     """Render the Threat Actors & Ransomware Groups directory page."""
     actors = get_all_threat_actors(search=search, sector=sector)
@@ -492,7 +585,7 @@ def threat_actors_page(request: Request, search: str = None, sector: str = None)
 # PAGE ROUTE: Detection Rule Repository (GET /rules)
 # ============================================================
 
-@app.get("/rules")
+@app.get("/rules", include_in_schema=False)
 def detection_rules_page(request: Request, rule_type: str = "ALL", search: str = None, siem: str = "ALL"):
     """Render the MITRE ATT&CK TTP & Detection Rule Repository page."""
     rules = get_all_detection_rules(rule_type=rule_type, search=search, siem=siem)
@@ -516,7 +609,7 @@ def detection_rules_page(request: Request, rule_type: str = "ALL", search: str =
 # PAGE ROUTE: IOC Investigator (GET /investigate)
 # ============================================================
 
-@app.get("/investigate")
+@app.get("/investigate", include_in_schema=False)
 def ioc_investigator_page(request: Request, ioc: str = ""):
     """Render the Threat Intelligence & IOC Investigator triage console."""
     auth_ctx = get_template_auth_context(request)
@@ -543,7 +636,7 @@ def ioc_investigator_page(request: Request, ioc: str = ""):
 # PAGE ROUTE: Settings, RBAC & Audit Console (GET /settings)
 # ============================================================
 
-@app.get("/settings")
+@app.get("/settings", include_in_schema=False)
 def settings_page(request: Request):
     """
     Render the Settings page with Webhooks, Schedules, RSS Feeds,
@@ -564,6 +657,10 @@ def settings_page(request: Request):
     # Fetch active password security policy
     password_policy = get_password_policy()
 
+    # Fetch API tokens (Admin only) & Endpoints Catalog (Admin only)
+    api_tokens_list = list_api_tokens() if auth_ctx["is_admin"] else []
+    endpoints_catalog = get_api_endpoints_catalog() if auth_ctx["is_admin"] else []
+
     return templates.TemplateResponse(
         request=request,
         name="settings.html",
@@ -576,6 +673,8 @@ def settings_page(request: Request):
             "audit_logs": audit_logs_list,
             "audit_integrity": audit_integrity,
             "password_policy": password_policy,
+            "api_tokens": api_tokens_list,
+            "endpoints_catalog": endpoints_catalog,
             **auth_ctx,
         },
     )
@@ -723,22 +822,12 @@ def api_logout(request: Request):
 
 
 @app.get("/api/auth/me")
-def api_get_current_user_info(request: Request):
+def api_get_current_user_info(user: dict = Depends(require_authenticated_user)):
     """Return authenticated user profile and permissions."""
-    info = get_current_user_and_role(request)
-    if not info:
-        return {
-            "is_authenticated": False,
-            "username": "",
-            "role": "anonymous",
-            "is_admin": False,
-            "is_analyst": False,
-            "is_viewer": False,
-        }
-    role = info.get("role", "viewer")
+    role = user.get("role", "viewer")
     return {
         "is_authenticated": True,
-        "username": info["username"],
+        "username": user["username"],
         "role": role,
         "is_admin": role == "admin",
         "is_analyst": role in ("admin", "analyst"),
@@ -1021,6 +1110,167 @@ def api_export_audit_logs(
 
 
 # ============================================================
+# DEVELOPER API TOKENS & ACCESS CONTROL ENDPOINTS (Admin Only)
+# ============================================================
+
+@app.get("/api/tokens")
+def api_list_tokens(admin: dict = Depends(require_admin)):
+    """List all registered API tokens (Admin only)."""
+    return list_api_tokens()
+
+
+@app.post("/api/tokens")
+def api_create_token(
+    payload: ApiTokenCreateSchema,
+    request: Request,
+    admin: dict = Depends(require_admin),
+):
+    """
+    Generate a new scoped developer API token (Admin only).
+    Returns the raw secret token once, alongside metadata.
+    """
+    client_ip = get_client_ip(request)
+    name = payload.name.strip()
+    if not name:
+        return JSONResponse(status_code=400, content={"error": "Token name is required."})
+
+    try:
+        raw_token, token_meta = generate_api_token(
+            name=name,
+            role=payload.role,
+            created_by=admin["username"],
+            expires_in_days=payload.expires_in_days,
+            rate_limit=payload.rate_limit_per_min,
+        )
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+    log_audit_event(
+        username=admin["username"],
+        role=admin["role"],
+        action="API_TOKEN_CREATED",
+        resource_type="API_TOKEN",
+        resource_id=name,
+        status="SUCCESS",
+        details=f"Created API token '{name}' with role '{payload.role}' (Expires in: {payload.expires_in_days or 'Never'}).",
+        ip_address=client_ip,
+    )
+
+    return {
+        "token": raw_token,
+        "metadata": token_meta,
+        "message": "API token created successfully. Store this secret safely; it will not be displayed again.",
+    }
+
+
+@app.post("/api/tokens/{token_id}/revoke")
+def api_revoke_token(
+    token_id: int,
+    request: Request,
+    admin: dict = Depends(require_admin),
+):
+    """Revoke an active API token (Admin only)."""
+    client_ip = get_client_ip(request)
+    token = get_api_token_by_id(token_id)
+    if not token:
+        return JSONResponse(status_code=404, content={"error": "API token not found."})
+
+    success = revoke_api_token(token_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"error": "Failed to revoke API token."})
+
+    log_audit_event(
+        username=admin["username"],
+        role=admin["role"],
+        action="API_TOKEN_REVOKED",
+        resource_type="API_TOKEN",
+        resource_id=token["name"],
+        status="SUCCESS",
+        details=f"Revoked API token '{token['name']}' (ID: {token_id}).",
+        ip_address=client_ip,
+    )
+    return {"message": f"API token '{token['name']}' revoked successfully."}
+
+
+@app.delete("/api/tokens/{token_id}")
+def api_delete_token(
+    token_id: int,
+    request: Request,
+    admin: dict = Depends(require_admin),
+):
+    """Delete an API token record permanently (Admin only)."""
+    client_ip = get_client_ip(request)
+    token = get_api_token_by_id(token_id)
+    if not token:
+        return JSONResponse(status_code=404, content={"error": "API token not found."})
+
+    success = delete_api_token(token_id)
+    if not success:
+        return JSONResponse(status_code=400, content={"error": "Failed to delete API token."})
+
+    log_audit_event(
+        username=admin["username"],
+        role=admin["role"],
+        action="API_TOKEN_DELETED",
+        resource_type="API_TOKEN",
+        resource_id=token["name"],
+        status="SUCCESS",
+        details=f"Deleted API token '{token['name']}' (ID: {token_id}).",
+        ip_address=client_ip,
+    )
+    return {"message": f"API token '{token['name']}' deleted successfully."}
+
+
+@app.get("/api/tokens/endpoints-meta")
+def api_get_endpoints_meta(admin: dict = Depends(require_admin)):
+    """Retrieve structured metadata catalog of all CyberDash endpoints for developers (Admin Only)."""
+    return get_api_endpoints_catalog()
+
+
+@app.api_route("/api", methods=["GET", "HEAD"])
+def api_root_index(user: dict = Depends(require_authenticated_user)):
+    """
+    CyberDash REST API Root Directory.
+    Returns status, version, documentation links, and available endpoints catalog.
+    """
+    return {
+        "name": "CyberDash Threat Intelligence & Vulnerability API",
+        "version": "1.0.0",
+        "status": "operational",
+        "documentation": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc",
+            "openapi_spec": "/openapi.json"
+        },
+        "authentication": {
+            "type": "Dual Header Support",
+            "headers": [
+                "X-API-Key: cd_live_<your_token>",
+                "Authorization: Bearer cd_live_<your_token>"
+            ],
+            "cookie_session": "access_token"
+        },
+        "endpoints": {
+            "summary": "/api/summary",
+            "cves": "/api/cves",
+            "cisa_exploits": "/api/cisa",
+            "threats": "/api/threats",
+            "news": "/api/news",
+            "investigate": "/api/investigate",
+            "rules": "/api/rules",
+            "tokens": "/api/tokens",
+            "audit_logs": "/api/audit-logs"
+        }
+    }
+
+
+@app.api_route("/redocs", methods=["GET", "HEAD"], include_in_schema=False)
+def redocs_redirect():
+    """Redirect /redocs (plural) to /redoc."""
+    return RedirectResponse(url="/redoc", status_code=status.HTTP_301_MOVED_PERMANENTLY)
+
+
+# ============================================================
 # API ROUTE: Refresh All Feeds (POST /api/refresh) — Analyst/Admin
 # ============================================================
 
@@ -1123,37 +1373,71 @@ def refresh_all_feeds(
 # ============================================================
 
 @app.get("/api/cves")
-def api_get_cves(limit: int = 20, severity: str = None, start_date: str = None, end_date: str = None):
+def api_get_cves(
+    limit: int = 20,
+    severity: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_recent_cves(limit=limit, severity_filter=severity, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/cisa")
-def api_get_cisa_exploits(limit: int = 20, start_date: str = None, end_date: str = None):
+def api_get_cisa_exploits(
+    limit: int = 20,
+    start_date: str = None,
+    end_date: str = None,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_cisa_exploits(limit=limit, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/news")
-def api_get_news(limit: int = 30, source: str = None, start_date: str = None, end_date: str = None):
+def api_get_news(
+    limit: int = 30,
+    source: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_rss_articles(limit=limit, source_filter=source, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/threats")
-def api_get_threats(limit: int = 30, indicator_type: str = None, start_date: str = None, end_date: str = None):
+def api_get_threats(
+    limit: int = 30,
+    indicator_type: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_threat_indicators(limit=limit, indicator_type=indicator_type, start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/summary")
-def api_get_summary(start_date: str = None, end_date: str = None):
+def api_get_summary(
+    start_date: str = None,
+    end_date: str = None,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_dashboard_summary(start_date=start_date, end_date=end_date)
 
 
 @app.get("/api/threat-actors")
-def api_get_threat_actors(search: str = None, sector: str = None):
+def api_get_threat_actors(
+    search: str = None,
+    sector: str = None,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_all_threat_actors(search=search, sector=sector)
 
 
 @app.get("/api/threat-actors/{actor_id}")
-def api_get_threat_actor_detail(actor_id: int):
+def api_get_threat_actor_detail(
+    actor_id: int,
+    user: dict = Depends(require_authenticated_user),
+):
     actor = get_threat_actor_by_id(actor_id)
     if actor:
         return actor
@@ -1161,24 +1445,36 @@ def api_get_threat_actor_detail(actor_id: int):
 
 
 @app.get("/api/mitre-ttps/{ttp_id}")
-def api_get_mitre_ttp_info(ttp_id: str):
+def api_get_mitre_ttp_info(
+    ttp_id: str,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_mitre_ttp_details(ttp_id)
 
 
 @app.get("/api/cve-intel/{cve_id}")
-def api_get_cve_intel_info(cve_id: str):
+def api_get_cve_intel_info(
+    cve_id: str,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_cve_details(cve_id)
 
 
 @app.get("/api/investigate")
-def api_investigate_ioc(ioc: str = ""):
+def api_investigate_ioc(
+    ioc: str = "",
+    user: dict = Depends(require_authenticated_user),
+):
     if not ioc.strip():
         return JSONResponse(status_code=400, content={"error": "IOC parameter is required."})
     return investigate_ioc(ioc.strip())
 
 
 @app.get("/api/investigate/history")
-def api_get_investigate_history(limit: int = 15):
+def api_get_investigate_history(
+    limit: int = 15,
+    user: dict = Depends(require_authenticated_user),
+):
     return get_recent_investigations(limit=limit)
 
 
@@ -1205,12 +1501,20 @@ def api_clear_investigate_history(request: Request, admin: dict = Depends(requir
 # ============================================================
 
 @app.get("/api/detection-rules")
-def api_list_detection_rules(rule_type: str = "ALL", search: str = None, siem: str = "ALL"):
+def api_list_detection_rules(
+    rule_type: str = "ALL",
+    search: str = None,
+    siem: str = "ALL",
+    user: dict = Depends(require_authenticated_user),
+):
     return get_all_detection_rules(rule_type=rule_type, search=search, siem=siem)
 
 
 @app.get("/api/detection-rules/{rule_id}")
-def api_get_detection_rule_detail(rule_id: int):
+def api_get_detection_rule_detail(
+    rule_id: int,
+    user: dict = Depends(require_authenticated_user),
+):
     rule = get_rule_by_id(rule_id)
     if rule:
         return rule
@@ -1301,12 +1605,22 @@ def api_delete_detection_rule(
 
 
 # ============================================================
-# API ROUTES: Webhooks CRUD (Admin Only)
+# API ROUTES: Webhooks CRUD (Admin / Authenticated Only)
 # ============================================================
 
 @app.get("/api/webhooks")
-def api_list_webhooks():
-    return get_all_webhooks()
+def api_list_webhooks(user: dict = Depends(require_authenticated_user)):
+    """List all webhook configurations with secret tokens safely masked."""
+    return get_all_webhooks(masked=True)
+
+
+@app.get("/api/webhooks/{webhook_id}")
+def api_get_webhook(webhook_id: int, user: dict = Depends(require_authenticated_user)):
+    """Retrieve a single webhook configuration with secret tokens safely masked."""
+    webhook = get_webhook_by_id(webhook_id, masked=True)
+    if not webhook:
+        return JSONResponse(status_code=404, content={"error": "Webhook not found"})
+    return webhook
 
 
 @app.post("/api/webhooks")
@@ -1451,7 +1765,7 @@ def api_test_webhook(
 # ============================================================
 
 @app.get("/api/schedule")
-def api_get_schedule():
+def api_get_schedule(user: dict = Depends(require_authenticated_user)):
     return get_scheduler_status()
 
 
@@ -1490,7 +1804,7 @@ def api_update_schedule(
 
 
 @app.get("/api/rss-feeds")
-def api_list_rss_feeds():
+def api_list_rss_feeds(user: dict = Depends(require_authenticated_user)):
     return get_all_rss_feeds()
 
 
