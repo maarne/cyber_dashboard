@@ -98,6 +98,8 @@
         <div id="webhook-form-card" class="webhook-form-card" style="display: none;">
             <h3 id="form-title">Add Webhook</h3>
             <form id="webhook-form">
+                <input type="hidden" id="webhook-id" name="id" value="">
+
                 <!-- Name -->
                 <div class="form-group">
                     <label for="webhook-name">Friendly Name</label>
@@ -175,6 +177,7 @@
                     <label class="toggle-switch" title="{% if not is_admin %}Admin privileges required to toggle webhooks{% else %}Enable or disable this webhook{% endif %}">
                         <input type="checkbox" class="toggle-input webhook-toggle"
                                data-id="{{ webhook.id }}"
+                               data-webhook-id="{{ webhook.id }}"
                                {% if webhook.is_active %}checked{% endif %}
                                {% if not is_admin %}disabled{% endif %}>
                         <span class="toggle-slider"></span>
@@ -192,13 +195,26 @@
                 </div>
 
                 <div class="webhook-card-actions">
-                    <button class="btn btn-sm btn-test" data-id="{{ webhook.id }}" title="Send a test notification">
+                    <button class="btn btn-sm btn-test" data-id="{{ webhook.id }}" data-webhook-id="{{ webhook.id }}" title="Send a test notification">
                         🧪 Test
                     </button>
-                    <button class="btn btn-sm btn-edit" data-id="{{ webhook.id }}" {% if not is_admin %}disabled{% endif %}>
+                    <button class="btn btn-sm btn-edit"
+                            data-id="{{ webhook.id }}"
+                            data-webhook-id="{{ webhook.id }}"
+                            data-name="{{ webhook.name }}"
+                            data-platform="{{ webhook.platform }}"
+                            data-url="{{ webhook.webhook_url }}"
+                            data-critical="{{ webhook.notify_critical_cves }}"
+                            data-high="{{ webhook.notify_high_cves }}"
+                            data-cisa="{{ webhook.notify_cisa_exploits }}"
+                            {% if not is_admin %}disabled{% endif %}>
                         ✏️ Edit
                     </button>
-                    <button class="btn btn-sm btn-delete" data-id="{{ webhook.id }}" data-name="{{ webhook.name }}" {% if not is_admin %}disabled{% endif %}>
+                    <button class="btn btn-sm btn-delete"
+                            data-id="{{ webhook.id }}"
+                            data-webhook-id="{{ webhook.id }}"
+                            data-name="{{ webhook.name }}"
+                            {% if not is_admin %}disabled{% endif %}>
                         🗑️ Delete
                     </button>
                 </div>

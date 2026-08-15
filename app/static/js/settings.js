@@ -102,14 +102,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            var webhookId = button.dataset.webhookId;
+            var webhookId = button.dataset.webhookId || button.dataset.id;
+            var webhookName = button.dataset.name || button.dataset.webhookName;
 
             if (button.classList.contains('btn-test')) {
                 handleTestWebhook(webhookId);
             } else if (button.classList.contains('btn-edit')) {
                 handleEditWebhook(button);
             } else if (button.classList.contains('btn-delete')) {
-                showDeleteModal(webhookId, button.dataset.name);
+                showDeleteModal(webhookId, webhookName);
             }
         });
 
@@ -120,7 +121,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     openLoginModal('Log in as administrator to toggle webhooks.');
                     return;
                 }
-                handleToggleWebhook(event.target.dataset.webhookId);
+                var webhookId = event.target.dataset.webhookId || event.target.dataset.id;
+                handleToggleWebhook(webhookId);
             }
         });
     }
@@ -189,40 +191,42 @@ document.addEventListener('DOMContentLoaded', function() {
 function showForm(mode, data) {
     /**
      * Show the webhook form in either "add" or "edit" mode.
-     *
-     * JAVASCRIPT CONCEPT — Ternary Operator:
-     *   condition ? valueIfTrue : valueIfFalse
-     *   It's a compact if/else in a single expression.
-     *
-     * Args:
-     *   mode: "add" or "edit"
-     *   data: (optional) Object with webhook data for editing.
      */
-    var container = document.getElementById('webhook-form-container');
+    var container = document.getElementById('webhook-form-card') || document.getElementById('webhook-form-container');
+    if (!container) return;
+
     var formTitle = document.getElementById('form-title');
     var submitBtn = document.getElementById('form-submit-btn');
+    var idInput = document.getElementById('webhook-id');
+    var nameInput = document.getElementById('webhook-name');
+    var platformInput = document.getElementById('webhook-platform');
+    var urlInput = document.getElementById('webhook-url');
+    var critInput = document.getElementById('notify-critical');
+    var highInput = document.getElementById('notify-high');
+    var cisaInput = document.getElementById('notify-cisa');
 
     if (mode === 'edit' && data) {
         // Populate form with existing data for editing
-        formTitle.textContent = 'Edit Webhook';
-        submitBtn.textContent = '💾 Update Webhook';
+        if (formTitle) formTitle.textContent = 'Edit Webhook';
+        if (submitBtn) submitBtn.textContent = '💾 Update Webhook';
         editingWebhookId = data.id;
 
-        document.getElementById('webhook-id').value = data.id;
-        document.getElementById('webhook-name').value = data.name;
-        document.getElementById('webhook-platform').value = data.platform;
-        document.getElementById('webhook-url').value = data.url;
-        document.getElementById('notify-critical').checked = data.critical === '1' || data.critical === 'True';
-        document.getElementById('notify-high').checked = data.high === '1' || data.high === 'True';
-        document.getElementById('notify-cisa').checked = data.cisa === '1' || data.cisa === 'True';
+        if (idInput) idInput.value = data.id || '';
+        if (nameInput) nameInput.value = data.name || '';
+        if (platformInput) platformInput.value = data.platform || 'slack';
+        if (urlInput) urlInput.value = data.url || '';
+        if (critInput) critInput.checked = data.critical === '1' || data.critical === 'True' || data.critical === true;
+        if (highInput) highInput.checked = data.high === '1' || data.high === 'True' || data.high === true;
+        if (cisaInput) cisaInput.checked = data.cisa === '1' || data.cisa === 'True' || data.cisa === true;
     } else {
         // Reset form for new webhook
-        formTitle.textContent = 'Add New Webhook';
-        submitBtn.textContent = '💾 Save Webhook';
+        if (formTitle) formTitle.textContent = 'Add New Webhook';
+        if (submitBtn) submitBtn.textContent = '💾 Save Webhook';
         editingWebhookId = null;
 
-        document.getElementById('webhook-form').reset();
-        document.getElementById('webhook-id').value = '';
+        var form = document.getElementById('webhook-form');
+        if (form) form.reset();
+        if (idInput) idInput.value = '';
     }
 
     container.style.display = 'block';
@@ -234,8 +238,8 @@ function showForm(mode, data) {
 
 function hideForm() {
     /** Hide the webhook form and reset state. */
-    var container = document.getElementById('webhook-form-container');
-    container.style.display = 'none';
+    var container = document.getElementById('webhook-form-card') || document.getElementById('webhook-form-container');
+    if (container) container.style.display = 'none';
     editingWebhookId = null;
 }
 
@@ -318,17 +322,12 @@ async function handleFormSubmit(event) {
 function handleEditWebhook(button) {
     /**
      * Populate the form with data from the clicked webhook card.
-     *
-     * JAVASCRIPT CONCEPT — data-* Attributes:
-     *   HTML elements can store custom data in attributes like
-     *   data-name="My Webhook". In JavaScript, these are accessed
-     *   via element.dataset.name (camelCase for multi-word attrs).
      */
     showForm('edit', {
-        id: button.dataset.webhookId,
-        name: button.dataset.name,
-        platform: button.dataset.platform,
-        url: button.dataset.url,
+        id: button.dataset.webhookId || button.dataset.id,
+        name: button.dataset.name || '',
+        platform: button.dataset.platform || 'slack',
+        url: button.dataset.url || '',
         critical: button.dataset.critical,
         high: button.dataset.high,
         cisa: button.dataset.cisa,
@@ -442,7 +441,7 @@ async function handleTestWebhook(webhookId) {
      */
     // Find the test button and show loading state
     var button = document.querySelector(
-        '.btn-test[data-webhook-id="' + webhookId + '"]'
+        '.btn-test[data-webhook-id="' + webhookId + '"], .btn-test[data-id="' + webhookId + '"]'
     );
     if (button) {
         button.textContent = '⏳ Sending...';

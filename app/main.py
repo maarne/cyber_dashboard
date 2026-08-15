@@ -1661,9 +1661,10 @@ def api_update_webhook(
     admin: dict = Depends(require_admin),
 ):
     client_ip = get_client_ip(request)
-    is_safe, err_msg = is_safe_external_url(webhook.webhook_url)
-    if not is_safe:
-        return JSONResponse(status_code=400, content={"error": f"Invalid webhook URL: {err_msg}"})
+    if "••••" not in webhook.webhook_url:
+        is_safe, err_msg = is_safe_external_url(webhook.webhook_url)
+        if not is_safe:
+            return JSONResponse(status_code=400, content={"error": f"Invalid webhook URL: {err_msg}"})
 
     success = update_webhook(webhook_id, webhook.model_dump())
     if success:
