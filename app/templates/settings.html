@@ -95,63 +95,73 @@
         </div>
 
         <!-- Add/Edit Form Card (hidden by default) -->
-        <div id="webhook-form-card" class="webhook-form-card" style="display: none;">
-            <h3 id="form-title">Add Webhook</h3>
+        <div id="webhook-form-card" class="webhook-form-card settings-card" style="display: none; margin-bottom: 2rem;">
+            <div class="settings-card-header" style="padding-bottom: 1rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: space-between; align-items: center;">
+                <h3 id="form-title" style="margin: 0; font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: #f8fafc;">
+                    🔔 Configure Webhook Integration
+                </h3>
+                <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">Automation</span>
+            </div>
+
             <form id="webhook-form">
                 <input type="hidden" id="webhook-id" name="id" value="">
 
-                <!-- Name -->
-                <div class="form-group">
-                    <label for="webhook-name">Friendly Name</label>
-                    <input type="text" id="webhook-name" name="name"
-                           placeholder="e.g. SOC Slack Channel, Security Discord"
-                           required>
-                    <span class="form-hint">A label to help you identify this webhook.</span>
-                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
+                    <!-- Name -->
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="webhook-name" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Friendly Name</label>
+                        <input type="text" id="webhook-name" name="name" class="form-input"
+                               placeholder="e.g. SOC Slack Channel, Security Discord"
+                               required autocomplete="off">
+                        <span class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">A descriptive label to identify this alert destination in logs.</span>
+                    </div>
 
-                <!-- Platform -->
-                <div class="form-group">
-                    <label for="webhook-platform">Platform</label>
-                    <select id="webhook-platform" name="platform">
-                        <option value="slack">🟣 Slack</option>
-                        <option value="discord">🟦 Discord</option>
-                        <option value="teams">🔵 Microsoft Teams</option>
-                        <option value="generic">⚪ Generic (Custom HTTP POST)</option>
-                    </select>
+                    <!-- Platform -->
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="webhook-platform" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Notification Platform</label>
+                        <select id="webhook-platform" name="platform" class="form-input">
+                            <option value="slack">🟣 Slack Webhook</option>
+                            <option value="discord">🟦 Discord Webhook</option>
+                            <option value="teams">🔵 Microsoft Teams Webhook</option>
+                            <option value="generic">⚪ Generic (Custom HTTP POST)</option>
+                        </select>
+                        <span class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">Payload schema is tailored specifically for the chosen platform.</span>
+                    </div>
                 </div>
 
                 <!-- Webhook URL -->
-                <div class="form-group">
-                    <label for="webhook-url">Webhook URL</label>
-                    <input type="url" id="webhook-url" name="webhook_url"
-                           placeholder="https://hooks.slack.com/services/..."
-                           required>
-                    <span class="form-hint">The incoming webhook URL provided by your platform.</span>
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label for="webhook-url" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Webhook URL (Incoming Target Endpoint)</label>
+                    <input type="url" id="webhook-url" name="webhook_url" class="form-input"
+                           placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/services/..."
+                           style="font-family: var(--font-mono); font-size: 0.85rem;"
+                           required autocomplete="off">
+                    <span class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">Incoming URL generated by Slack, Discord, or Teams. Secret tokens are encrypted at rest.</span>
                 </div>
 
                 <!-- Notification Preferences -->
-                <div class="form-group">
-                    <label>Notify On:</label>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; display: block;">Event Triggers &amp; Alert Subscriptions</label>
                     <div class="checkbox-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="notify-critical" name="notify_critical_cves" checked>
-                            <span>🚨 CRITICAL CVEs (CVSS ≥ 9.0)</span>
+                            <span>🚨 <strong>CRITICAL CVEs</strong> (CVSS ≥ 9.0)</span>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" id="notify-high" name="notify_high_cves" checked>
-                            <span>⚠️ HIGH Severity CVEs (CVSS 7.0–8.9)</span>
+                            <span>⚠️ <strong>HIGH Severity</strong> (CVSS 7.0–8.9)</span>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" id="notify-cisa" name="notify_cisa_exploits" checked>
-                            <span>🎯 CISA Known Exploited Vulnerabilities</span>
+                            <span>🎯 <strong>CISA KEV</strong> Zero-Days</span>
                         </label>
                     </div>
                 </div>
 
                 <!-- Form Actions -->
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="form-submit-btn">Save Webhook</button>
+                <div class="form-actions" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: flex-end; gap: 0.75rem;">
                     <button type="button" class="btn btn-secondary" id="form-cancel-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="form-submit-btn">💾 Save Webhook</button>
                 </div>
             </form>
         </div>
