@@ -40,6 +40,18 @@
     <!-- Primary Application CSS Stylesheet (Self-Contained & Secure) -->
     <link rel="stylesheet" href="/static/css/style.css">
 
+    <!-- Blocking Theme Initializer (Prevents Flash of Unstyled Theme) -->
+    <script>
+        (function() {
+            try {
+                var savedTheme = localStorage.getItem('cyberdash_theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+
     <!-- Any extra head content from child templates -->
     {% block extra_head %}{% endblock %}
 </head>
@@ -58,6 +70,84 @@
 
             <!-- Header Action Buttons -->
             <div class="header-actions">
+                <!-- Theme Switcher Dropdown -->
+                <div class="theme-dropdown-container">
+                    <button type="button" class="theme-dropdown-toggle" id="theme-dropdown-btn" onclick="CyberDashTheme.toggleThemeDropdown(event)" title="Change Appearance & Theme">
+                        <span class="theme-btn-icon">🌙</span>
+                        <span class="theme-btn-text">Cyber Night</span>
+                        <span class="dropdown-caret">▼</span>
+                    </button>
+                    <div id="theme-dropdown-menu" class="theme-dropdown-menu" style="display: none;">
+                        <div class="theme-dropdown-header">Select Dashboard Theme</div>
+                        <button type="button" class="theme-option-item active" data-theme-id="dark" onclick="CyberDashTheme.setTheme('dark'); CyberDashTheme.closeThemeDropdown();">
+                            <div class="theme-option-left">
+                                <span class="theme-option-icon">🌙</span>
+                                <span class="theme-option-name">Cyber Night</span>
+                            </div>
+                            <div class="theme-option-swatches">
+                                <span class="theme-mini-swatch" style="background: #0a0e1a;"></span>
+                                <span class="theme-mini-swatch" style="background: #818cf8;"></span>
+                                <span class="theme-option-check">✓</span>
+                            </div>
+                        </button>
+                        <button type="button" class="theme-option-item" data-theme-id="light" onclick="CyberDashTheme.setTheme('light'); CyberDashTheme.closeThemeDropdown();">
+                            <div class="theme-option-left">
+                                <span class="theme-option-icon">☀️</span>
+                                <span class="theme-option-name">Daylight SOC</span>
+                            </div>
+                            <div class="theme-option-swatches">
+                                <span class="theme-mini-swatch" style="background: #f8fafc;"></span>
+                                <span class="theme-mini-swatch" style="background: #4f46e5;"></span>
+                                <span class="theme-option-check">✓</span>
+                            </div>
+                        </button>
+                        <button type="button" class="theme-option-item" data-theme-id="matrix" onclick="CyberDashTheme.setTheme('matrix'); CyberDashTheme.closeThemeDropdown();">
+                            <div class="theme-option-left">
+                                <span class="theme-option-icon">📟</span>
+                                <span class="theme-option-name">Terminal Matrix</span>
+                            </div>
+                            <div class="theme-option-swatches">
+                                <span class="theme-mini-swatch" style="background: #050805;"></span>
+                                <span class="theme-mini-swatch" style="background: #22c55e;"></span>
+                                <span class="theme-option-check">✓</span>
+                            </div>
+                        </button>
+                        <button type="button" class="theme-option-item" data-theme-id="cyberpunk" onclick="CyberDashTheme.setTheme('cyberpunk'); CyberDashTheme.closeThemeDropdown();">
+                            <div class="theme-option-left">
+                                <span class="theme-option-icon">🔮</span>
+                                <span class="theme-option-name">Synthwave Neon</span>
+                            </div>
+                            <div class="theme-option-swatches">
+                                <span class="theme-mini-swatch" style="background: #0c0517;"></span>
+                                <span class="theme-mini-swatch" style="background: #ec4899;"></span>
+                                <span class="theme-option-check">✓</span>
+                            </div>
+                        </button>
+                        <button type="button" class="theme-option-item" data-theme-id="midnight" onclick="CyberDashTheme.setTheme('midnight'); CyberDashTheme.closeThemeDropdown();">
+                            <div class="theme-option-left">
+                                <span class="theme-option-icon">🌌</span>
+                                <span class="theme-option-name">Midnight Abyss</span>
+                            </div>
+                            <div class="theme-option-swatches">
+                                <span class="theme-mini-swatch" style="background: #030712;"></span>
+                                <span class="theme-mini-swatch" style="background: #38bdf8;"></span>
+                                <span class="theme-option-check">✓</span>
+                            </div>
+                        </button>
+                        <button type="button" class="theme-option-item" data-theme-id="oled" onclick="CyberDashTheme.setTheme('oled'); CyberDashTheme.closeThemeDropdown();">
+                            <div class="theme-option-left">
+                                <span class="theme-option-icon">⬛</span>
+                                <span class="theme-option-name">OLED Stealth</span>
+                            </div>
+                            <div class="theme-option-swatches">
+                                <span class="theme-mini-swatch" style="background: #000000;"></span>
+                                <span class="theme-mini-swatch" style="background: #ffffff;"></span>
+                                <span class="theme-option-check">✓</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
                 {% if is_authenticated %}
                     <div class="user-dropdown-container">
                         <button type="button" class="auth-badge {% if is_admin %}auth-badge-admin{% elif is_analyst %}auth-badge-analyst{% else %}auth-badge-viewer{% endif %} user-dropdown-toggle" onclick="toggleUserDropdown(event)" title="Account options">
@@ -212,7 +302,8 @@
          ========================================================= -->
     <div id="toast-container" class="toast-container"></div>
 
-    <!-- Our custom JavaScript file -->
+    <!-- Theme Engine & Dashboard Scripts -->
+    <script src="/static/js/theme.js"></script>
     <script src="/static/js/dashboard.js"></script>
 
     <!-- Any extra scripts from child templates -->

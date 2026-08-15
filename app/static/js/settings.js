@@ -893,6 +893,10 @@ function switchSettingsTab(tabName) {
 
     if (tabName === 'api') {
         initApiExplorer();
+    } else if (tabName === 'appearance') {
+        if (window.CyberDashTheme) {
+            window.CyberDashTheme.setTheme(window.CyberDashTheme.getCurrentTheme(), false);
+        }
     }
 
     try {

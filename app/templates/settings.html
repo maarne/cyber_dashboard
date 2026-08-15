@@ -52,6 +52,11 @@
             <span class="settings-tab-badge" id="tab-badge-feeds">{{ rss_feeds | length }}</span>
         </button>
 
+        <button type="button" class="settings-tab-btn" data-tab="appearance" onclick="switchSettingsTab('appearance')">
+            🎨 Appearance &amp; Themes
+            <span class="settings-tab-badge" id="tab-badge-appearance">6</span>
+        </button>
+
         {% if is_admin %}
         <button type="button" class="settings-tab-btn" data-tab="users" onclick="switchSettingsTab('users')">
             👥 User Governance &amp; RBAC
@@ -429,7 +434,239 @@
 
 
     <!-- =========================================================
-         TAB PANEL 3: USER GOVERNANCE & RBAC (Admin Only)
+         TAB PANEL 3: APPEARANCE & THEMES
+         ========================================================= -->
+    <div class="settings-tab-panel" id="panel-appearance">
+        <div class="webhooks-section">
+            <div class="section-header" style="margin-bottom: 1.5rem;">
+                <div>
+                    <h2 class="section-title">
+                        🎨 Dashboard Themes &amp; Visual Appearance
+                        <span class="webhook-count">6 Available</span>
+                    </h2>
+                    <p class="section-subtitle">
+                        Personalize your security command center with tailored high-contrast daylight modes, classic phosphor terminal green, synthwave neon, or stealth OLED true black.
+                    </p>
+                </div>
+            </div>
+
+            <div class="theme-gallery-grid">
+                <!-- 1. Cyber Night (Default) -->
+                <div class="theme-card active" data-theme-id="dark" onclick="CyberDashTheme.setTheme('dark')">
+                    <div>
+                        <div class="theme-card-header">
+                            <div class="theme-card-title-group">
+                                <span class="theme-card-icon">🌙</span>
+                                <h3 class="theme-card-title">Cyber Night</h3>
+                            </div>
+                            <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">Default Dark</span>
+                        </div>
+
+                        <div class="theme-card-preview" style="background: #0a0e1a; border-color: rgba(99, 102, 241, 0.25);">
+                            <div class="theme-card-preview-bar">
+                                <span style="font-size: 0.75rem; color: #f1f5f9; font-weight: 600;">SOC Telemetry</span>
+                                <div class="theme-preview-palette">
+                                    <span class="theme-preview-chip" style="background: #0a0e1a;"></span>
+                                    <span class="theme-preview-chip" style="background: #111827;"></span>
+                                    <span class="theme-preview-chip" style="background: #818cf8;"></span>
+                                    <span class="theme-preview-chip" style="background: #22d3ee;"></span>
+                                </div>
+                            </div>
+                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #818cf8, #22d3ee);"></div>
+                        </div>
+
+                        <p class="theme-card-desc">
+                            Sleek dark slate aesthetic tailored for low-light environments with neon cyan highlights and glowing indigo accents.
+                        </p>
+                    </div>
+
+                    <div class="theme-card-footer">
+                        <span class="theme-card-selected-badge">✓ Active Theme</span>
+                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
+                    </div>
+                </div>
+
+                <!-- 2. Daylight SOC -->
+                <div class="theme-card" data-theme-id="light" onclick="CyberDashTheme.setTheme('light')">
+                    <div>
+                        <div class="theme-card-header">
+                            <div class="theme-card-title-group">
+                                <span class="theme-card-icon">☀️</span>
+                                <h3 class="theme-card-title">Daylight SOC</h3>
+                            </div>
+                            <span class="badge" style="background: rgba(79, 70, 229, 0.1); color: #4f46e5; border: 1px solid rgba(79, 70, 229, 0.25);">Clean Light</span>
+                        </div>
+
+                        <div class="theme-card-preview" style="background: #f8fafc; border-color: rgba(203, 213, 225, 0.9);">
+                            <div class="theme-card-preview-bar">
+                                <span style="font-size: 0.75rem; color: #0f172a; font-weight: 600;">SOC Telemetry</span>
+                                <div class="theme-preview-palette">
+                                    <span class="theme-preview-chip" style="background: #f8fafc; border-color: #cbd5e1;"></span>
+                                    <span class="theme-preview-chip" style="background: #ffffff; border-color: #cbd5e1;"></span>
+                                    <span class="theme-preview-chip" style="background: #4f46e5;"></span>
+                                    <span class="theme-preview-chip" style="background: #0284c7;"></span>
+                                </div>
+                            </div>
+                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #4f46e5, #0284c7);"></div>
+                        </div>
+
+                        <p class="theme-card-desc">
+                            Crisp, high-contrast daylight theme designed for bright workspaces with deep slate typography and crystal-clear severity indicators.
+                        </p>
+                    </div>
+
+                    <div class="theme-card-footer">
+                        <span class="theme-card-selected-badge">✓ Active Theme</span>
+                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
+                    </div>
+                </div>
+
+                <!-- 3. Terminal Matrix -->
+                <div class="theme-card" data-theme-id="matrix" onclick="CyberDashTheme.setTheme('matrix')">
+                    <div>
+                        <div class="theme-card-header">
+                            <div class="theme-card-title-group">
+                                <span class="theme-card-icon">📟</span>
+                                <h3 class="theme-card-title">Terminal Matrix</h3>
+                            </div>
+                            <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3);">Phosphor Green</span>
+                        </div>
+
+                        <div class="theme-card-preview" style="background: #050805; border-color: rgba(34, 197, 94, 0.3);">
+                            <div class="theme-card-preview-bar">
+                                <span style="font-size: 0.75rem; color: #dcfce7; font-weight: 600; font-family: var(--font-mono);">root@cyberdash:~#</span>
+                                <div class="theme-preview-palette">
+                                    <span class="theme-preview-chip" style="background: #050805; border-color: #22c55e;"></span>
+                                    <span class="theme-preview-chip" style="background: #0a100a; border-color: #22c55e;"></span>
+                                    <span class="theme-preview-chip" style="background: #22c55e;"></span>
+                                    <span class="theme-preview-chip" style="background: #00ff66;"></span>
+                                </div>
+                            </div>
+                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #22c55e, #00ff66);"></div>
+                        </div>
+
+                        <p class="theme-card-desc">
+                            Classic hacker terminal aesthetic featuring glowing phosphor emerald accents, deep monochrome canvases, and cyber typography.
+                        </p>
+                    </div>
+
+                    <div class="theme-card-footer">
+                        <span class="theme-card-selected-badge">✓ Active Theme</span>
+                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
+                    </div>
+                </div>
+
+                <!-- 4. Synthwave Neon -->
+                <div class="theme-card" data-theme-id="cyberpunk" onclick="CyberDashTheme.setTheme('cyberpunk')">
+                    <div>
+                        <div class="theme-card-header">
+                            <div class="theme-card-title-group">
+                                <span class="theme-card-icon">🔮</span>
+                                <h3 class="theme-card-title">Synthwave Neon</h3>
+                            </div>
+                            <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.3);">High Voltage</span>
+                        </div>
+
+                        <div class="theme-card-preview" style="background: #0c0517; border-color: rgba(236, 72, 153, 0.3);">
+                            <div class="theme-card-preview-bar">
+                                <span style="font-size: 0.75rem; color: #fdf2f8; font-weight: 600;">SOC Telemetry</span>
+                                <div class="theme-preview-palette">
+                                    <span class="theme-preview-chip" style="background: #0c0517; border-color: #ec4899;"></span>
+                                    <span class="theme-preview-chip" style="background: #170b2c; border-color: #ec4899;"></span>
+                                    <span class="theme-preview-chip" style="background: #ec4899;"></span>
+                                    <span class="theme-preview-chip" style="background: #06b6d4;"></span>
+                                </div>
+                            </div>
+                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #ec4899, #06b6d4);"></div>
+                        </div>
+
+                        <p class="theme-card-desc">
+                            High-voltage cyberpunk theme with rich ultraviolet foundations, radiant hot-magenta glows, and electric cyan highlights.
+                        </p>
+                    </div>
+
+                    <div class="theme-card-footer">
+                        <span class="theme-card-selected-badge">✓ Active Theme</span>
+                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
+                    </div>
+                </div>
+
+                <!-- 5. Midnight Abyss -->
+                <div class="theme-card" data-theme-id="midnight" onclick="CyberDashTheme.setTheme('midnight')">
+                    <div>
+                        <div class="theme-card-header">
+                            <div class="theme-card-title-group">
+                                <span class="theme-card-icon">🌌</span>
+                                <h3 class="theme-card-title">Midnight Abyss</h3>
+                            </div>
+                            <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">Deep Ocean</span>
+                        </div>
+
+                        <div class="theme-card-preview" style="background: #030712; border-color: rgba(56, 189, 248, 0.25);">
+                            <div class="theme-card-preview-bar">
+                                <span style="font-size: 0.75rem; color: #f0f9ff; font-weight: 600;">SOC Telemetry</span>
+                                <div class="theme-preview-palette">
+                                    <span class="theme-preview-chip" style="background: #030712; border-color: #38bdf8;"></span>
+                                    <span class="theme-preview-chip" style="background: #0b1329; border-color: #38bdf8;"></span>
+                                    <span class="theme-preview-chip" style="background: #38bdf8;"></span>
+                                    <span class="theme-preview-chip" style="background: #0ea5e9;"></span>
+                                </div>
+                            </div>
+                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #38bdf8, #0ea5e9);"></div>
+                        </div>
+
+                        <p class="theme-card-desc">
+                            Deep oceanic navy abyss paired with soothing electric cobalt and sky-blue accents for calm, extended monitoring sessions.
+                        </p>
+                    </div>
+
+                    <div class="theme-card-footer">
+                        <span class="theme-card-selected-badge">✓ Active Theme</span>
+                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
+                    </div>
+                </div>
+
+                <!-- 6. OLED Stealth -->
+                <div class="theme-card" data-theme-id="oled" onclick="CyberDashTheme.setTheme('oled')">
+                    <div>
+                        <div class="theme-card-header">
+                            <div class="theme-card-title-group">
+                                <span class="theme-card-icon">⬛</span>
+                                <h3 class="theme-card-title">OLED Stealth</h3>
+                            </div>
+                            <span class="badge" style="background: rgba(255, 255, 255, 0.1); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.25);">True Black</span>
+                        </div>
+
+                        <div class="theme-card-preview" style="background: #000000; border-color: rgba(255, 255, 255, 0.2);">
+                            <div class="theme-card-preview-bar">
+                                <span style="font-size: 0.75rem; color: #ffffff; font-weight: 600;">SOC Telemetry</span>
+                                <div class="theme-preview-palette">
+                                    <span class="theme-preview-chip" style="background: #000000; border-color: #ffffff;"></span>
+                                    <span class="theme-preview-chip" style="background: #0a0a0a; border-color: #ffffff;"></span>
+                                    <span class="theme-preview-chip" style="background: #ffffff; border-color: #ffffff;"></span>
+                                    <span class="theme-preview-chip" style="background: #e2e8f0; border-color: #ffffff;"></span>
+                                </div>
+                            </div>
+                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #ffffff, #64748b);"></div>
+                        </div>
+
+                        <p class="theme-card-desc">
+                            True pitch-black (#000000) canvas optimizing OLED screen energy efficiency with ultra-sharp monochrome contrast.
+                        </p>
+                    </div>
+
+                    <div class="theme-card-footer">
+                        <span class="theme-card-selected-badge">✓ Active Theme</span>
+                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         TAB PANEL 4: USER GOVERNANCE & RBAC (Admin Only)
          ========================================================= -->
     {% if is_admin %}
     <div class="settings-tab-panel" id="panel-users">
