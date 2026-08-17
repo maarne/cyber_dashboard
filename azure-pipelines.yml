@@ -10,8 +10,8 @@ trigger:
 
 variables:
   # Azure Resource Manager & Container Registry Service Connections
-  azureServiceConnectionId: 'f65a0d7f-7fa4-4312-a946-ecc64a7d70bf'
-  acrServiceConnection: 'Cyberdash-registry-conn' # Update to match your Azure DevOps ACR Service Connection name
+  azureServiceConnectionId: '21873dc2-9960-450e-8684-dbd380230f52' # Azure Resource Manager (AzureRM) service connection
+  acrServiceConnection: 'Cyberdash-registry-conn' # Docker Registry service connection for ACR
 
   # Container Registry & Image configuration
   containerRegistry: 'cyberdashregistry.azurecr.io' # Replace with your ACR login server
