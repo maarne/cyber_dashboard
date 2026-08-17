@@ -21,6 +21,7 @@ variables:
 
   # Azure Web App target configuration
   webAppName: 'cyberdash-dev'
+  webAppUrlSec: 'https://cyberdash-dev-esfwefgxcza3bter.centralus-01.azurewebsites.net'
   environmentName: 'cyberdash-dev'
   vmImageName: 'ubuntu-latest'
   projectRoot: $(System.DefaultWorkingDirectory)
@@ -82,7 +83,18 @@ stages:
         ArtifactName: 'Semgrep_SAST_Report'
         publishLocation: 'Container'
 
-    # 2. Trivy Container Image Scan (Vulnerabilities, Secrets, Misconfigurations)
+    # 2. Log in to ACR and pull image for Trivy scan
+    - task: Docker@2
+      displayName: 'Log in to ACR for Trivy'
+      inputs:
+        command: login
+        containerRegistry: $(acrServiceConnection)
+
+    - script: |
+        docker pull $(containerRegistry)/$(imageRepository):$(tag)
+      displayName: 'Pull Container Image from ACR'
+
+    # 3. Trivy Container Image Scan (Vulnerabilities, Secrets, Misconfigurations)
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/trivy
         docker run --rm \
