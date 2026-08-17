@@ -17,3 +17,6 @@ __pycache__/
 *.swp
 *.swo
 *~
+
+# projectinfo
+projectinfo.md

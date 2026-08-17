@@ -1,77 +1,67 @@
-# Python to Linux Web App on Azure
-# Build your Python project and deploy it to Azure as a Linux Web App.
-# https://docs.microsoft.com/azure/devops/pipelines/languages/python
+# ============================================================
+# CyberDash — Docker Container Pipeline for Azure Web App
+# ============================================================
+# Builds and pushes a hardened Docker container to Azure Container Registry (ACR),
+# runs SAST & Container Vulnerability Scans, deploys to Azure Web App for Containers,
+# and verifies security with OWASP ZAP DAST testing.
 
 trigger:
 - main
 
 variables:
-  # Azure Resource Manager connection created during pipeline creation
+  # Azure Resource Manager & Container Registry Service Connections
   azureServiceConnectionId: '21873dc2-9960-450e-8684-dbd380230f52'
+  acrServiceConnection: 'acr-service-connection' # Update to match your Azure DevOps ACR Service Connection name
 
-  # Web app name
+  # Container Registry & Image configuration
+  containerRegistry: 'cyberdashregistry.azurecr.io' # Replace with your ACR login server
+  imageRepository: 'cyberdash'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+  # Azure Web App target configuration
   webAppName: 'cyberdash-dev'
-
-  # Agent VM image name
-  vmImageName: 'ubuntu-latest'
-
-  # Environment name
   environmentName: 'cyberdash-dev'
-
-  # Project root folder. Point to the application root directory.
+  vmImageName: 'ubuntu-latest'
   projectRoot: $(System.DefaultWorkingDirectory)
-
-  pythonVersion: '3.11'
 
 stages:
 # ============================================================
-# STAGE 1: BUILD
+# STAGE 1: BUILD & PUSH DOCKER CONTAINER
 # ============================================================
-- stage: Build
-  displayName: Build stage
+- stage: BuildAndPush
+  displayName: 'Build & Push Container'
   jobs:
-  - job: BuildJob
+  - job: DockerBuildJob
+    displayName: 'Build & Push to ACR'
     pool:
       vmImage: $(vmImageName)
     steps:
-    - task: UsePythonVersion@0
+    - task: Docker@2
+      displayName: 'Build and Push Docker image to ACR'
       inputs:
-        versionSpec: '$(pythonVersion)'
-      displayName: 'Use Python $(pythonVersion)'
-
-    - script: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-      workingDirectory: $(projectRoot)
-      displayName: "Install requirements & validate build"
-
-    - task: ArchiveFiles@2
-      displayName: 'Archive files'
-      inputs:
-        rootFolderOrFile: '$(projectRoot)'
-        includeRootFolder: false
-        archiveType: zip
-        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-        replaceExistingArchive: true
-
-    - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-      displayName: 'Upload package'
-      artifact: drop
+        command: buildAndPush
+        containerRegistry: $(acrServiceConnection)
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        tags: |
+          $(tag)
+          latest
 
 # ============================================================
-# STAGE 2: SECURITY SCANS (SAST & SCA)
+# STAGE 2: SECURITY SCANS (SAST & CONTAINER VULNERABILITY SCAN)
 # ============================================================
 - stage: SecurityScans
-  displayName: 'Security Scans (SAST & SCA)'
-  dependsOn: Build
+  displayName: 'Security Scans (SAST & Container Image)'
+  dependsOn: BuildAndPush
   condition: succeeded()
   jobs:
-  - job: SAST_SCA_Job
-    displayName: 'SAST & SCA Vulnerability Scans'
+  - job: ScansJob
+    displayName: 'SAST & Container Vulnerability Scans'
     pool:
       vmImage: $(vmImageName)
     steps:
-    # 1. Semgrep SAST Scan (Code Security Analysis)
+    # 1. Semgrep SAST Scan (Source Code Analysis)
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/semgrep
         docker run --rm \
@@ -92,32 +82,32 @@ stages:
         ArtifactName: 'Semgrep_SAST_Report'
         publishLocation: 'Container'
 
-    # 2. Trivy Security Scan (SCA, Secrets & Configs)
+    # 2. Trivy Container Image Scan (Vulnerabilities, Secrets, Misconfigurations)
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/trivy
         docker run --rm \
-          -v $(projectRoot):/src \
+          -v /var/run/docker.sock:/var/run/docker.sock \
           -v $(Build.ArtifactStagingDirectory)/trivy:/output \
-          aquasec/trivy:latest fs \
-          --scanners config,vuln,secret \
+          aquasec/trivy:latest image \
+          --scanners vuln,secret,config \
           --format template --template "@contrib/html.tpl" \
-          -o /output/trivy-report.html \
-          /src
-      displayName: 'Run Trivy Security Scan'
+          -o /output/trivy-image-report.html \
+          $(containerRegistry)/$(imageRepository):$(tag)
+      displayName: 'Run Trivy Container Image Scan'
       continueOnError: true
 
     - task: PublishBuildArtifacts@1
-      displayName: 'Publish Trivy Security Report'
+      displayName: 'Publish Trivy Container Report'
       inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy/trivy-report.html'
-        ArtifactName: 'Trivy_Security_Report'
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy/trivy-image-report.html'
+        ArtifactName: 'Trivy_Container_Report'
         publishLocation: 'Container'
 
 # ============================================================
-# STAGE 3: DEPLOYMENT
+# STAGE 3: DEPLOY CONTAINER TO AZURE WEB APP
 # ============================================================
 - stage: Deploy
-  displayName: 'Deploy Web App'
+  displayName: 'Deploy Container to Azure'
   dependsOn: SecurityScans
   condition: succeeded()
   jobs:
@@ -129,19 +119,13 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: UsePythonVersion@0
-            inputs:
-              versionSpec: '$(pythonVersion)'
-            displayName: 'Use Python version'
-
-          - task: AzureWebApp@1
-            displayName: 'Deploy Azure Web App : cyberdash-dev'
+          - task: AzureWebAppContainer@1
+            displayName: 'Deploy Azure Web App for Containers'
             inputs:
               azureSubscription: $(azureServiceConnectionId)
               appName: $(webAppName)
-              package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
-              appSettings: '-DATABASE_PATH "/home/data/cyber_dashboard.db" -SCM_DO_BUILD_DURING_DEPLOYMENT true -WEBSITES_PORT 8000'
-              startupCommand: 'gunicorn -w 2 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app'
+              containers: $(containerRegistry)/$(imageRepository):$(tag)
+              appSettings: '-WEBSITES_PORT 8000 -DATABASE_PATH "/app/data/cyber_dashboard.db"'
 
 # ============================================================
 # STAGE 4: DAST (DYNAMIC APPLICATION SECURITY TESTING)
@@ -156,11 +140,9 @@ stages:
       vmImage: $(vmImageName)
     steps:
     - script: |
-        # Ensure report staging directory exists with write permissions
         mkdir -p $(Build.ArtifactStagingDirectory)/zap
         sudo chmod -R 777 $(Build.ArtifactStagingDirectory)/zap
 
-        # Warm up Azure Web App and wait until it is ready
         echo "Warming up Web App at $WEB_APP_URL..."
         for i in {1..12}; do
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$WEB_APP_URL" || echo "000")
@@ -173,7 +155,6 @@ stages:
             sleep 10
         done
 
-        # Pull and run OWASP ZAP Baseline Scan as root container user
         docker run --rm -v $(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw -u root -t ghcr.io/zaproxy/zaproxy:stable \
           zap-baseline.py \
           -t "$WEB_APP_URL" \
@@ -186,7 +167,6 @@ stages:
       displayName: 'Run OWASP ZAP DAST Scan'
       continueOnError: true
 
-    # Publish the HTML report as an Azure DevOps Pipeline Artifact
     - task: PublishBuildArtifacts@1
       displayName: 'Publish OWASP ZAP DAST Report'
       inputs:
