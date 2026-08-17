@@ -137,12 +137,17 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
+                echo "Fetching resource group for $(webAppName)..."
+                RG_NAME=$(az webapp list --query "[?name=='$(webAppName)'].resourceGroup" -o tsv)
+                echo "Found Resource Group: $RG_NAME"
+
                 echo "Fetching ACR credentials for cyberdashregistry..."
                 ACR_PASS=$(az acr credential show --name cyberdashregistry --query "passwords[0].value" -o tsv)
 
                 echo "Configuring container image and registry credentials on $(webAppName)..."
                 az webapp config container set \
                   --name $(webAppName) \
+                  --resource-group "$RG_NAME" \
                   --docker-custom-image-name $(containerRegistry)/$(imageRepository):$(tag) \
                   --docker-registry-server-url https://$(containerRegistry) \
                   --docker-registry-server-user cyberdashregistry \
@@ -151,10 +156,11 @@ stages:
                 echo "Setting application environment variables..."
                 az webapp config appsettings set \
                   --name $(webAppName) \
+                  --resource-group "$RG_NAME" \
                   --settings WEBSITES_PORT=8000 DATABASE_PATH="/app/data/cyber_dashboard.db" WEBSITES_CONTAINER_START_TIME_LIMIT=1800
 
                 echo "Restarting Web App $(webAppName)..."
-                az webapp restart --name $(webAppName)
+                az webapp restart --name $(webAppName) --resource-group "$RG_NAME"
 
 # ============================================================
 # STAGE 4: DAST (DYNAMIC APPLICATION SECURITY TESTING)
