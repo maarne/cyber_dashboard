@@ -1,7 +1,7 @@
 # ============================================================
 # CyberDash — Production Multi-Stage / Hardened Dockerfile
 # ============================================================
-FROM python:3.11-slim AS base
+FROM python:3.11-slim-bookworm AS base
 
 # Prevent Python from writing .pyc files and buffer stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -11,16 +11,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install minimal OS dependencies for cryptography and sqlite
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    sqlite3 \
-    && rm -rf /var/lib/apt/lists/*
+# Apply latest Debian security updates and remove package manager caches
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first (leverages Docker layer caching)
+# Install and upgrade Python dependencies with modern secure build tooling
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip "setuptools>=83.0.0" "wheel>=0.46.2" && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --upgrade "msgpack>=1.2.1" "jaraco.context>=6.1.0"
 
 # Copy application source code
 COPY app ./app
@@ -33,9 +33,9 @@ RUN groupadd -g 10001 cyberdash && \
 
 USER cyberdash
 
-# Health check to ensure the container is alive
+# Native Python healthcheck (avoids installing curl and 30+ dependent OS packages)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
 
 EXPOSE 8000
 

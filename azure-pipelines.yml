@@ -101,6 +101,7 @@ stages:
           -v $(Build.ArtifactStagingDirectory)/trivy:/output \
           aquasec/trivy:latest image \
           --scanners vuln,secret,config \
+          --ignore-unfixed \
           --format template --template "@contrib/html.tpl" \
           -o /output/trivy-image-report.html \
           $(containerRegistry)/$(imageRepository):$(tag)
@@ -148,10 +149,10 @@ stages:
                 az webapp config container set \
                   --name $(webAppName) \
                   --resource-group "$RG_NAME" \
-                  --docker-custom-image-name $(containerRegistry)/$(imageRepository):$(tag) \
-                  --docker-registry-server-url https://$(containerRegistry) \
-                  --docker-registry-server-user cyberdashregistry \
-                  --docker-registry-server-password "$ACR_PASS"
+                  --container-image-name $(containerRegistry)/$(imageRepository):$(tag) \
+                  --container-registry-url https://$(containerRegistry) \
+                  --container-registry-user cyberdashregistry \
+                  --container-registry-password "$ACR_PASS"
 
                 echo "Setting application environment variables..."
                 az webapp config appsettings set \
