@@ -203,7 +203,7 @@ class TestApiTokensAndDeveloperAccess(unittest.TestCase):
         self.assertIn("🔌 API &amp; Developer Access", html)
         self.assertIn("panel-api", html)
         self.assertIn("api-base-url-input", html)
-        self.assertIn("curl-command-preview", html)
+        self.assertIn("explorer-endpoint-select", html)
         self.assertIn("create-token-modal", html)
         self.assertIn("reveal-token-modal", html)
 

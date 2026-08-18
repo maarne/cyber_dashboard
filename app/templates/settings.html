@@ -3,12 +3,10 @@
      app/templates/settings.html — Settings & Governance Console
      =============================================================
 
-     Organized into 4 categorized tabs:
-     1. 🔔 Notifications & Webhooks (Webhooks, testing, setup guides)
-     2. 📡 Feeds & Automation (Scheduled auto-refreshes, RSS sources)
-     3. 👥 User Governance & RBAC (Admin-only user lifecycle & roles)
-     4. 🛡️ Security & Compliance (Password policy, strength tester,
-        1-click generator, and tamper-evident SHA-256 audit ledger)
+     Organized into 3 streamlined tabs:
+     1. 🔔 Notifications & Feeds (Webhooks, auto-refreshes, RSS feeds)
+     2. 🛡️ Security (User governance & RBAC, password policy, audit ledger)
+     3. 🔌 API & Developer Access (API tokens, Swagger UI, ReDoc, explorer)
 #}
 
 {% extends "base.html" %}
@@ -39,35 +37,18 @@
     {% endif %}
 
     <!-- =========================================================
-         SETTINGS CATEGORY TABS
+         SETTINGS CATEGORY TABS (Consolidated 3-Tab Structure)
          ========================================================= -->
     <div class="settings-tabs-nav" id="settings-tab-bar">
-        <button type="button" class="settings-tab-btn active" data-tab="webhooks" onclick="switchSettingsTab('webhooks')">
-            🔔 Notifications &amp; Webhooks
-            <span class="settings-tab-badge" id="tab-badge-webhooks">{{ webhooks | length }}</span>
+        <button type="button" class="settings-tab-btn active" data-tab="alerts" onclick="switchSettingsTab('alerts')">
+            🔔 Notifications &amp; Feeds
+            <span class="settings-tab-badge" id="tab-badge-alerts">{{ webhooks | length + rss_feeds | length }}</span>
         </button>
-
-        <button type="button" class="settings-tab-btn" data-tab="feeds" onclick="switchSettingsTab('feeds')">
-            📡 Feeds &amp; Automation
-            <span class="settings-tab-badge" id="tab-badge-feeds">{{ rss_feeds | length }}</span>
-        </button>
-
-        <button type="button" class="settings-tab-btn" data-tab="appearance" onclick="switchSettingsTab('appearance')">
-            🎨 Appearance &amp; Themes
-            <span class="settings-tab-badge" id="tab-badge-appearance">6</span>
-        </button>
-
-        {% if is_admin %}
-        <button type="button" class="settings-tab-btn" data-tab="users" onclick="switchSettingsTab('users')">
-            👥 User Governance &amp; RBAC
-            <span class="settings-tab-badge" id="tab-badge-users">{{ users | length }}</span>
-        </button>
-        {% endif %}
 
         {% if is_analyst %}
         <button type="button" class="settings-tab-btn" data-tab="security" onclick="switchSettingsTab('security')">
-            🛡️ Security &amp; Compliance
-            <span class="settings-tab-badge" id="tab-badge-security">{{ audit_logs | length }}</span>
+            🛡️ Security
+            <span class="settings-tab-badge" id="tab-badge-security">{% if is_admin %}{{ users | length }}{% else %}{{ audit_logs | length }}{% endif %}</span>
         </button>
         {% endif %}
 
@@ -81,9 +62,11 @@
 
 
     <!-- =========================================================
-         TAB PANEL 1: NOTIFICATIONS & WEBHOOKS
+         TAB PANEL 1: NOTIFICATIONS & FEEDS
          ========================================================= -->
-    <div class="settings-tab-panel active" id="panel-webhooks">
+    <div class="settings-tab-panel active" id="panel-alerts">
+        
+        <!-- SECTION 1A: Webhooks -->
         <div class="section-header" style="margin-bottom: 1.5rem;">
             <div>
                 <h2 class="section-title">
@@ -118,182 +101,151 @@
                         <input type="text" id="webhook-name" name="name" class="form-input"
                                placeholder="e.g. SOC Slack Channel, Security Discord"
                                required autocomplete="off">
-                        <span class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">A descriptive label to identify this alert destination in logs.</span>
                     </div>
 
                     <!-- Platform -->
                     <div class="form-group" style="margin-bottom: 0;">
-                        <label for="webhook-platform" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Notification Platform</label>
-                        <select id="webhook-platform" name="platform" class="form-input">
-                            <option value="slack">🟣 Slack Webhook</option>
-                            <option value="discord">🟦 Discord Webhook</option>
-                            <option value="teams">🔵 Microsoft Teams Webhook</option>
-                            <option value="generic">⚪ Generic (Custom HTTP POST)</option>
+                        <label for="webhook-platform" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Platform / Target Type</label>
+                        <select id="webhook-platform" name="platform" class="form-input" required>
+                            <option value="slack">💬 Slack Webhook</option>
+                            <option value="discord">🎮 Discord Webhook</option>
+                            <option value="teams">👥 Microsoft Teams (Connectors/Workflows)</option>
+                            <option value="generic">⚡ Generic HTTP POST (JSON Payload)</option>
                         </select>
-                        <span class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">Payload schema is tailored specifically for the chosen platform.</span>
                     </div>
                 </div>
 
                 <!-- Webhook URL -->
                 <div class="form-group" style="margin-bottom: 1.25rem;">
-                    <label for="webhook-url" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Webhook URL (Incoming Target Endpoint)</label>
+                    <label for="webhook-url" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.4rem; display: block;">Webhook Endpoint URL</label>
                     <input type="url" id="webhook-url" name="webhook_url" class="form-input"
                            placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/services/..."
-                           style="font-family: var(--font-mono); font-size: 0.85rem;"
                            required autocomplete="off">
-                    <span class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">Incoming URL generated by Slack, Discord, or Teams. Secret tokens are encrypted at rest.</span>
+                    <span class="form-hint" id="webhook-url-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">
+                        🔒 Webhook token credentials are encrypted and masked on the server.
+                    </span>
                 </div>
 
-                <!-- Notification Preferences -->
+                <!-- Notification Triggers (Checkboxes) -->
                 <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; display: block;">Event Triggers &amp; Alert Subscriptions</label>
-                    <div class="checkbox-group">
-                        <label class="checkbox-label">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; display: block;">Notification Triggers &amp; Filters</label>
+                    <div class="checkbox-group" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;">
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; color: #e2e8f0; cursor: pointer;">
                             <input type="checkbox" id="notify-critical" name="notify_critical_cves" checked>
-                            <span>🚨 <strong>CRITICAL CVEs</strong> (CVSS ≥ 9.0)</span>
+                            <span>🚨 Critical CVEs (CVSS 9.0+)</span>
                         </label>
-                        <label class="checkbox-label">
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; color: #e2e8f0; cursor: pointer;">
                             <input type="checkbox" id="notify-high" name="notify_high_cves" checked>
-                            <span>⚠️ <strong>HIGH Severity</strong> (CVSS 7.0–8.9)</span>
+                            <span>⚠️ High Severity CVEs (7.0 - 8.9)</span>
                         </label>
-                        <label class="checkbox-label">
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; color: #e2e8f0; cursor: pointer;">
                             <input type="checkbox" id="notify-cisa" name="notify_cisa_exploits" checked>
-                            <span>🎯 <strong>CISA KEV</strong> Zero-Days</span>
+                            <span>⚡ Active CISA KEV Exploits</span>
                         </label>
                     </div>
                 </div>
 
                 <!-- Form Actions -->
-                <div class="form-actions" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: flex-end; gap: 0.75rem;">
-                    <button type="button" class="btn btn-secondary" id="form-cancel-btn">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="form-submit-btn">💾 Save Webhook</button>
+                <div class="form-actions" style="display: flex; gap: 0.75rem; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 1rem;">
+                    <button type="button" id="form-cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="form-submit-btn" class="btn btn-primary">Save Webhook</button>
                 </div>
             </form>
         </div>
 
-        <!-- Webhooks List -->
-        <div class="webhooks-list" id="webhooks-list">
-            {% for webhook in webhooks %}
-            <div class="webhook-card" data-id="{{ webhook.id }}">
-                <div class="webhook-card-header">
-                    <div class="webhook-card-title">
-                        <span class="platform-icon platform-{{ webhook.platform }}">
-                            {% if webhook.platform == "slack" %}🟣
-                            {% elif webhook.platform == "discord" %}🟦
-                            {% elif webhook.platform == "teams" %}🔵
-                            {% else %}⚪{% endif %}
-                        </span>
+        <!-- Webhooks List Grid -->
+        <div id="webhooks-list" class="webhooks-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem; margin-bottom: 2.5rem;">
+            {% for wh in webhooks %}
+            <div class="webhook-card data-card" data-id="{{ wh.id }}" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div class="card-header" style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <h3>{{ webhook.name }}</h3>
-                            <span class="platform-badge">{{ webhook.platform | upper }}</span>
+                            <span class="card-id" style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 0.4rem;">
+                                {% if wh.platform == 'slack' %}💬{% elif wh.platform == 'discord' %}🎮{% elif wh.platform == 'teams' %}👥{% else %}⚡{% endif %}
+                                {{ wh.name }}
+                            </span>
+                            <span class="source-tag" style="margin-top: 0.25rem; font-size: 0.7rem; text-transform: uppercase;">{{ wh.platform }}</span>
+                        </div>
+
+                        <!-- Active/Inactive Status Pill & Toggle -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label class="toggle-switch" title="Toggle active status">
+                                <input type="checkbox" class="toggle-input webhook-toggle-status"
+                                       data-id="{{ wh.id }}"
+                                       onchange="handleToggleWebhook('{{ wh.id }}')"
+                                       {% if wh.is_active %}checked{% endif %}
+                                       {% if not is_admin %}disabled{% endif %}>
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
                     </div>
 
-                    <label class="toggle-switch" title="{% if not is_admin %}Admin privileges required to toggle webhooks{% else %}Enable or disable this webhook{% endif %}">
-                        <input type="checkbox" class="toggle-input webhook-toggle"
-                               data-id="{{ webhook.id }}"
-                               data-webhook-id="{{ webhook.id }}"
-                               {% if webhook.is_active %}checked{% endif %}
-                               {% if not is_admin %}disabled{% endif %}>
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <!-- Masked URL -->
+                    <div class="webhook-url-box" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 0.5rem 0.75rem; margin-bottom: 0.85rem; font-family: var(--font-mono); font-size: 0.75rem; color: #94a3b8; word-break: break-all;">
+                        {{ wh.masked_url or wh.webhook_url }}
+                    </div>
+
+                    <!-- Trigger Badges -->
+                    <div class="card-meta" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                        {% if wh.notify_critical_cves %}
+                        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.7rem;">🚨 Critical CVEs</span>
+                        {% endif %}
+                        {% if wh.notify_high_cves %}
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.7rem;">⚠️ High CVEs</span>
+                        {% endif %}
+                        {% if wh.notify_cisa_exploits %}
+                        <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 0.7rem;">⚡ CISA KEV</span>
+                        {% endif %}
+                    </div>
                 </div>
 
-                <div class="webhook-card-url" title="{{ webhook.webhook_url }}">
-                    <code>{{ webhook.webhook_url }}</code>
-                </div>
+                <!-- Footer Actions -->
+                <div class="webhook-card-footer" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                    <button type="button" class="btn btn-secondary btn-sm webhook-test-btn"
+                            data-id="{{ wh.id }}"
+                            onclick="handleTestWebhook('{{ wh.id }}', this)"
+                            {% if not is_analyst %}disabled title="Analyst or Admin role required"{% endif %}>
+                        🔔 Test Alert
+                    </button>
 
-                <div class="webhook-card-events">
-                    <span class="event-tag {% if webhook.notify_critical_cves %}active{% endif %}">🚨 Critical CVEs</span>
-                    <span class="event-tag {% if webhook.notify_high_cves %}active{% endif %}">⚠️ High CVEs</span>
-                    <span class="event-tag {% if webhook.notify_cisa_exploits %}active{% endif %}">🎯 CISA KEV</span>
-                </div>
-
-                <div class="webhook-card-actions">
-                    <button class="btn btn-sm btn-test" data-id="{{ webhook.id }}" data-webhook-id="{{ webhook.id }}" title="Send a test notification">
-                        🧪 Test
-                    </button>
-                    <button class="btn btn-sm btn-edit"
-                            data-id="{{ webhook.id }}"
-                            data-webhook-id="{{ webhook.id }}"
-                            data-name="{{ webhook.name }}"
-                            data-platform="{{ webhook.platform }}"
-                            data-url="{{ webhook.webhook_url }}"
-                            data-critical="{{ webhook.notify_critical_cves }}"
-                            data-high="{{ webhook.notify_high_cves }}"
-                            data-cisa="{{ webhook.notify_cisa_exploits }}"
-                            {% if not is_admin %}disabled{% endif %}>
-                        ✏️ Edit
-                    </button>
-                    <button class="btn btn-sm btn-delete"
-                            data-id="{{ webhook.id }}"
-                            data-webhook-id="{{ webhook.id }}"
-                            data-name="{{ webhook.name }}"
-                            {% if not is_admin %}disabled{% endif %}>
-                        🗑️ Delete
-                    </button>
+                    <div style="display: flex; gap: 0.4rem;">
+                        <button type="button" class="btn btn-secondary btn-sm webhook-edit-btn"
+                                data-id="{{ wh.id }}"
+                                data-name="{{ wh.name }}"
+                                data-platform="{{ wh.platform }}"
+                                data-url="{{ wh.masked_url or wh.webhook_url }}"
+                                data-critical="{{ 1 if wh.notify_critical_cves else 0 }}"
+                                data-high="{{ 1 if wh.notify_high_cves else 0 }}"
+                                data-cisa="{{ 1 if wh.notify_cisa_exploits else 0 }}"
+                                onclick="handleEditWebhook(this)"
+                                {% if not is_admin %}disabled{% endif %}>
+                            ✏️ Edit
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm webhook-delete-btn"
+                                data-id="{{ wh.id }}"
+                                data-name="{{ wh.name }}"
+                                onclick="showDeleteModal('{{ wh.id }}', '{{ wh.name }}')"
+                                {% if not is_admin %}disabled{% endif %}>
+                            🗑️ Delete
+                        </button>
+                    </div>
                 </div>
             </div>
             {% endfor %}
         </div>
 
         {% if webhooks | length == 0 %}
-        <div class="empty-state" id="empty-state">
+        <div class="empty-state" id="webhooks-empty-state" style="margin-bottom: 2.5rem;">
             <div class="empty-icon">🔔</div>
-            <h3>No Webhooks Configured</h3>
-            <p>Add a webhook above to receive automated security alerts in Slack, Discord, or Microsoft Teams.</p>
+            <h3>No Webhook Alerting Endpoints Configured</h3>
+            <p>Register your Slack, Discord, or Microsoft Teams webhooks to broadcast critical zero-day advisories automatically.</p>
         </div>
         {% endif %}
 
-        <!-- Webhook Integration Documentation -->
-        <div class="settings-help" style="margin-top: 2.5rem;">
-            <h2 class="section-title">📖 Webhook Platform Setup Guides</h2>
-            <div class="help-cards">
-                <div class="help-card">
-                    <h3>🟣 Slack</h3>
-                    <ol>
-                        <li>Go to <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Slack Incoming Webhooks</a></li>
-                        <li>Create a new app or use an existing one</li>
-                        <li>Enable "Incoming Webhooks" and add a new webhook</li>
-                        <li>Copy the webhook URL</li>
-                    </ol>
-                </div>
+        <!-- Horizontal Divider -->
+        <hr class="settings-divider" style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
 
-                <div class="help-card">
-                    <h3>🟦 Discord</h3>
-                    <ol>
-                        <li>Open your Discord server settings</li>
-                        <li>Go to <strong>Integrations → Webhooks</strong></li>
-                        <li>Click "New Webhook" and choose a channel</li>
-                        <li>Copy the webhook URL</li>
-                    </ol>
-                </div>
-
-                <div class="help-card">
-                    <h3>🔵 Microsoft Teams</h3>
-                    <ol>
-                        <li>In your Teams channel, click <strong>⋯ → Connectors</strong></li>
-                        <li>Search for "Incoming Webhook" and configure it</li>
-                        <li>Give it a name and copy the webhook URL</li>
-                    </ol>
-                </div>
-
-                <div class="help-card">
-                    <h3>⚪ Generic</h3>
-                    <p>
-                        Any HTTP endpoint that accepts <code>POST</code> requests with a JSON body containing <code>title</code>, <code>message</code>, and <code>items</code> fields.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- =========================================================
-         TAB PANEL 2: FEEDS & AUTOMATION
-         ========================================================= -->
-    <div class="settings-tab-panel" id="panel-feeds">
-        <!-- Scheduled Refresh Section -->
+        <!-- SECTION 1B: Scheduled Refresh Section -->
         <div class="schedule-section" style="margin-bottom: 2.5rem;">
             <div class="section-header">
                 <div>
@@ -318,7 +270,7 @@
                 </div>
 
                 <div class="schedule-interval" id="schedule-interval-group">
-                    <label class="interval-label">Refresh Interval:</label>
+                    <label class="schedule-interval-label">Refresh Frequency:</label>
                     <div class="interval-options">
                         <label class="interval-option {% if schedule.interval_hours == 6 %}active{% endif %}">
                             <input type="radio" name="schedule-interval" value="6"
@@ -336,7 +288,7 @@
                             <input type="radio" name="schedule-interval" value="24"
                                    {% if schedule.interval_hours == 24 %}checked{% endif %}
                                    {% if not is_admin %}disabled{% endif %}>
-                            <span class="interval-pill">24 hours (Default)</span>
+                            <span class="interval-pill">24 hours (Recommended)</span>
                         </label>
                         <label class="interval-option {% if schedule.interval_hours == 48 %}active{% endif %}">
                             <input type="radio" name="schedule-interval" value="48"
@@ -361,12 +313,15 @@
             </div>
         </div>
 
-        <!-- RSS Feeds Manager -->
+        <!-- Horizontal Divider -->
+        <hr class="settings-divider" style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+        <!-- SECTION 1C: RSS Feeds Manager -->
         <div class="webhooks-section">
             <div class="section-header">
                 <div>
                     <h2 class="section-title">
-                        📡 RSS Security News Sources
+                        📡 Monitored RSS &amp; Threat News Sources
                         <span class="webhook-count" id="feeds-count">{{ rss_feeds | length }}</span>
                     </h2>
                     <p class="section-subtitle">Add or manage RSS/Atom syndication feeds for security advisories and zero-day news.</p>
@@ -389,33 +344,28 @@
                 </form>
             </div>
 
-            <!-- Feed Sources List -->
-            <div class="feeds-list" id="feeds-list">
+            <!-- Feeds List -->
+            <div class="feeds-list" id="feeds-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
                 {% for feed in rss_feeds %}
-                <div class="feed-item" data-feed-id="{{ feed.id }}">
-                    <div class="feed-info">
-                        <span class="feed-icon">📡</span>
-                        <div class="feed-name">
-                            <strong>{{ feed.name }}</strong>
-                            <a href="{{ feed.url }}" target="_blank" rel="noopener" class="feed-url" title="{{ feed.url }}">
-                                {{ feed.url[:60] }}{% if feed.url | length > 60 %}…{% endif %}
-                            </a>
-                        </div>
-                    </div>
-                    <div class="feed-actions">
-                        <label class="toggle-switch toggle-sm" title="{% if not is_admin %}Admin privileges required to toggle feeds{% else %}Enable or disable this feed{% endif %}">
-                            <input type="checkbox" class="toggle-input feed-toggle"
-                                   data-feed-id="{{ feed.id }}"
+                <div class="feed-card data-card" data-id="{{ feed.id }}">
+                    <div class="feed-card-header">
+                        <span class="feed-name" style="font-weight: 600; color: #f8fafc;">📡 {{ feed.name }}</span>
+                        <label class="toggle-switch" title="Toggle active status">
+                            <input type="checkbox" class="toggle-input feed-toggle-status"
+                                   data-id="{{ feed.id }}"
+                                   onchange="handleToggleFeed('{{ feed.id }}')"
                                    {% if feed.is_active %}checked{% endif %}
                                    {% if not is_admin %}disabled{% endif %}>
                             <span class="toggle-slider"></span>
                         </label>
-                        <button class="btn btn-sm btn-delete feed-delete-btn"
-                                data-feed-id="{{ feed.id }}"
-                                data-feed-name="{{ feed.name }}"
-                                title="{% if not is_admin %}Admin privileges required to remove feeds{% else %}Remove this feed{% endif %}"
-                                {% if not is_admin %}disabled{% endif %}>
-                            🗑️
+                    </div>
+                    <p class="feed-url" style="font-family: var(--font-mono); font-size: 0.75rem; color: #94a3b8; word-break: break-all; margin: 0.5rem 0 1rem 0;">{{ feed.url }}</p>
+                    <div class="feed-card-footer" style="display: flex; justify-content: flex-end;">
+                        <button type="button" class="btn btn-danger btn-sm feed-delete-btn"
+                                data-id="{{ feed.id }}" data-name="{{ feed.name }}"
+                                onclick="handleDeleteFeed('{{ feed.id }}', '{{ feed.name }}')"
+                                {% if not is_admin %}disabled title="Admin privileges required to remove feeds"{% endif %}>
+                            🗑️ Remove Feed
                         </button>
                     </div>
                 </div>
@@ -434,243 +384,16 @@
 
 
     <!-- =========================================================
-         TAB PANEL 3: APPEARANCE & THEMES
+         TAB PANEL 2: SECURITY (Users, Password Policy, Audit Ledger)
          ========================================================= -->
-    <div class="settings-tab-panel" id="panel-appearance">
-        <div class="webhooks-section">
-            <div class="section-header" style="margin-bottom: 1.5rem;">
-                <div>
-                    <h2 class="section-title">
-                        🎨 Dashboard Themes &amp; Visual Appearance
-                        <span class="webhook-count">6 Available</span>
-                    </h2>
-                    <p class="section-subtitle">
-                        Personalize your security command center with tailored high-contrast daylight modes, classic phosphor terminal green, synthwave neon, or stealth OLED true black.
-                    </p>
-                </div>
-            </div>
+    {% if is_analyst %}
+    <div class="settings-tab-panel" id="panel-security">
 
-            <div class="theme-gallery-grid">
-                <!-- 1. Cyber Night (Default) -->
-                <div class="theme-card active" data-theme-id="dark" onclick="CyberDashTheme.setTheme('dark')">
-                    <div>
-                        <div class="theme-card-header">
-                            <div class="theme-card-title-group">
-                                <span class="theme-card-icon">🌙</span>
-                                <h3 class="theme-card-title">Cyber Night</h3>
-                            </div>
-                            <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">Default Dark</span>
-                        </div>
-
-                        <div class="theme-card-preview" style="background: #0a0e1a; border-color: rgba(99, 102, 241, 0.25);">
-                            <div class="theme-card-preview-bar">
-                                <span style="font-size: 0.75rem; color: #f1f5f9; font-weight: 600;">SOC Telemetry</span>
-                                <div class="theme-preview-palette">
-                                    <span class="theme-preview-chip" style="background: #0a0e1a;"></span>
-                                    <span class="theme-preview-chip" style="background: #111827;"></span>
-                                    <span class="theme-preview-chip" style="background: #818cf8;"></span>
-                                    <span class="theme-preview-chip" style="background: #22d3ee;"></span>
-                                </div>
-                            </div>
-                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #818cf8, #22d3ee);"></div>
-                        </div>
-
-                        <p class="theme-card-desc">
-                            Sleek dark slate aesthetic tailored for low-light environments with neon cyan highlights and glowing indigo accents.
-                        </p>
-                    </div>
-
-                    <div class="theme-card-footer">
-                        <span class="theme-card-selected-badge">✓ Active Theme</span>
-                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
-                    </div>
-                </div>
-
-                <!-- 2. Daylight SOC -->
-                <div class="theme-card" data-theme-id="light" onclick="CyberDashTheme.setTheme('light')">
-                    <div>
-                        <div class="theme-card-header">
-                            <div class="theme-card-title-group">
-                                <span class="theme-card-icon">☀️</span>
-                                <h3 class="theme-card-title">Daylight SOC</h3>
-                            </div>
-                            <span class="badge" style="background: rgba(79, 70, 229, 0.1); color: #4f46e5; border: 1px solid rgba(79, 70, 229, 0.25);">Clean Light</span>
-                        </div>
-
-                        <div class="theme-card-preview" style="background: #f8fafc; border-color: rgba(203, 213, 225, 0.9);">
-                            <div class="theme-card-preview-bar">
-                                <span style="font-size: 0.75rem; color: #0f172a; font-weight: 600;">SOC Telemetry</span>
-                                <div class="theme-preview-palette">
-                                    <span class="theme-preview-chip" style="background: #f8fafc; border-color: #cbd5e1;"></span>
-                                    <span class="theme-preview-chip" style="background: #ffffff; border-color: #cbd5e1;"></span>
-                                    <span class="theme-preview-chip" style="background: #4f46e5;"></span>
-                                    <span class="theme-preview-chip" style="background: #0284c7;"></span>
-                                </div>
-                            </div>
-                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #4f46e5, #0284c7);"></div>
-                        </div>
-
-                        <p class="theme-card-desc">
-                            Crisp, high-contrast daylight theme designed for bright workspaces with deep slate typography and crystal-clear severity indicators.
-                        </p>
-                    </div>
-
-                    <div class="theme-card-footer">
-                        <span class="theme-card-selected-badge">✓ Active Theme</span>
-                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
-                    </div>
-                </div>
-
-                <!-- 3. Terminal Matrix -->
-                <div class="theme-card" data-theme-id="matrix" onclick="CyberDashTheme.setTheme('matrix')">
-                    <div>
-                        <div class="theme-card-header">
-                            <div class="theme-card-title-group">
-                                <span class="theme-card-icon">📟</span>
-                                <h3 class="theme-card-title">Terminal Matrix</h3>
-                            </div>
-                            <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3);">Phosphor Green</span>
-                        </div>
-
-                        <div class="theme-card-preview" style="background: #050805; border-color: rgba(34, 197, 94, 0.3);">
-                            <div class="theme-card-preview-bar">
-                                <span style="font-size: 0.75rem; color: #dcfce7; font-weight: 600; font-family: var(--font-mono);">root@cyberdash:~#</span>
-                                <div class="theme-preview-palette">
-                                    <span class="theme-preview-chip" style="background: #050805; border-color: #22c55e;"></span>
-                                    <span class="theme-preview-chip" style="background: #0a100a; border-color: #22c55e;"></span>
-                                    <span class="theme-preview-chip" style="background: #22c55e;"></span>
-                                    <span class="theme-preview-chip" style="background: #00ff66;"></span>
-                                </div>
-                            </div>
-                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #22c55e, #00ff66);"></div>
-                        </div>
-
-                        <p class="theme-card-desc">
-                            Classic hacker terminal aesthetic featuring glowing phosphor emerald accents, deep monochrome canvases, and cyber typography.
-                        </p>
-                    </div>
-
-                    <div class="theme-card-footer">
-                        <span class="theme-card-selected-badge">✓ Active Theme</span>
-                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
-                    </div>
-                </div>
-
-                <!-- 4. Synthwave Neon -->
-                <div class="theme-card" data-theme-id="cyberpunk" onclick="CyberDashTheme.setTheme('cyberpunk')">
-                    <div>
-                        <div class="theme-card-header">
-                            <div class="theme-card-title-group">
-                                <span class="theme-card-icon">🔮</span>
-                                <h3 class="theme-card-title">Synthwave Neon</h3>
-                            </div>
-                            <span class="badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.3);">High Voltage</span>
-                        </div>
-
-                        <div class="theme-card-preview" style="background: #0c0517; border-color: rgba(236, 72, 153, 0.3);">
-                            <div class="theme-card-preview-bar">
-                                <span style="font-size: 0.75rem; color: #fdf2f8; font-weight: 600;">SOC Telemetry</span>
-                                <div class="theme-preview-palette">
-                                    <span class="theme-preview-chip" style="background: #0c0517; border-color: #ec4899;"></span>
-                                    <span class="theme-preview-chip" style="background: #170b2c; border-color: #ec4899;"></span>
-                                    <span class="theme-preview-chip" style="background: #ec4899;"></span>
-                                    <span class="theme-preview-chip" style="background: #06b6d4;"></span>
-                                </div>
-                            </div>
-                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #ec4899, #06b6d4);"></div>
-                        </div>
-
-                        <p class="theme-card-desc">
-                            High-voltage cyberpunk theme with rich ultraviolet foundations, radiant hot-magenta glows, and electric cyan highlights.
-                        </p>
-                    </div>
-
-                    <div class="theme-card-footer">
-                        <span class="theme-card-selected-badge">✓ Active Theme</span>
-                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
-                    </div>
-                </div>
-
-                <!-- 5. Midnight Abyss -->
-                <div class="theme-card" data-theme-id="midnight" onclick="CyberDashTheme.setTheme('midnight')">
-                    <div>
-                        <div class="theme-card-header">
-                            <div class="theme-card-title-group">
-                                <span class="theme-card-icon">🌌</span>
-                                <h3 class="theme-card-title">Midnight Abyss</h3>
-                            </div>
-                            <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">Deep Ocean</span>
-                        </div>
-
-                        <div class="theme-card-preview" style="background: #030712; border-color: rgba(56, 189, 248, 0.25);">
-                            <div class="theme-card-preview-bar">
-                                <span style="font-size: 0.75rem; color: #f0f9ff; font-weight: 600;">SOC Telemetry</span>
-                                <div class="theme-preview-palette">
-                                    <span class="theme-preview-chip" style="background: #030712; border-color: #38bdf8;"></span>
-                                    <span class="theme-preview-chip" style="background: #0b1329; border-color: #38bdf8;"></span>
-                                    <span class="theme-preview-chip" style="background: #38bdf8;"></span>
-                                    <span class="theme-preview-chip" style="background: #0ea5e9;"></span>
-                                </div>
-                            </div>
-                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #38bdf8, #0ea5e9);"></div>
-                        </div>
-
-                        <p class="theme-card-desc">
-                            Deep oceanic navy abyss paired with soothing electric cobalt and sky-blue accents for calm, extended monitoring sessions.
-                        </p>
-                    </div>
-
-                    <div class="theme-card-footer">
-                        <span class="theme-card-selected-badge">✓ Active Theme</span>
-                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
-                    </div>
-                </div>
-
-                <!-- 6. OLED Stealth -->
-                <div class="theme-card" data-theme-id="oled" onclick="CyberDashTheme.setTheme('oled')">
-                    <div>
-                        <div class="theme-card-header">
-                            <div class="theme-card-title-group">
-                                <span class="theme-card-icon">⬛</span>
-                                <h3 class="theme-card-title">OLED Stealth</h3>
-                            </div>
-                            <span class="badge" style="background: rgba(255, 255, 255, 0.1); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.25);">True Black</span>
-                        </div>
-
-                        <div class="theme-card-preview" style="background: #000000; border-color: rgba(255, 255, 255, 0.2);">
-                            <div class="theme-card-preview-bar">
-                                <span style="font-size: 0.75rem; color: #ffffff; font-weight: 600;">SOC Telemetry</span>
-                                <div class="theme-preview-palette">
-                                    <span class="theme-preview-chip" style="background: #000000; border-color: #ffffff;"></span>
-                                    <span class="theme-preview-chip" style="background: #0a0a0a; border-color: #ffffff;"></span>
-                                    <span class="theme-preview-chip" style="background: #ffffff; border-color: #ffffff;"></span>
-                                    <span class="theme-preview-chip" style="background: #e2e8f0; border-color: #ffffff;"></span>
-                                </div>
-                            </div>
-                            <div style="height: 6px; border-radius: 3px; background: linear-gradient(90deg, #ffffff, #64748b);"></div>
-                        </div>
-
-                        <p class="theme-card-desc">
-                            True pitch-black (#000000) canvas optimizing OLED screen energy efficiency with ultra-sharp monochrome contrast.
-                        </p>
-                    </div>
-
-                    <div class="theme-card-footer">
-                        <span class="theme-card-selected-badge">✓ Active Theme</span>
-                        <button type="button" class="btn btn-secondary btn-sm" style="margin-left: auto;">Select Theme</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- =========================================================
-         TAB PANEL 4: USER GOVERNANCE & RBAC (Admin Only)
-         ========================================================= -->
-    {% if is_admin %}
-    <div class="settings-tab-panel" id="panel-users">
-        <div class="webhooks-section" id="user-management-section">
+        <!-- =====================================================
+             SECTION 2A: USER GOVERNANCE & RBAC (Admin Only)
+             ===================================================== -->
+        {% if is_admin %}
+        <div class="webhooks-section" id="user-management-section" style="margin-bottom: 2.5rem;">
             <div class="section-header">
                 <div>
                     <h2 class="section-title">
@@ -750,20 +473,13 @@
                 </table>
             </div>
         </div>
-    </div>
-    {% endif %}
 
-
-    <!-- =========================================================
-         TAB PANEL 4: SECURITY & COMPLIANCE (Analyst & Admin)
-         ========================================================= -->
-    {% if is_analyst %}
-    <div class="settings-tab-panel" id="panel-security">
+        <!-- Horizontal Divider -->
+        <hr class="settings-divider" style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
 
         <!-- =====================================================
-             SECTION A: PASSWORD SECURITY POLICY & GENERATOR (Admin)
+             SECTION 2B: PASSWORD SECURITY POLICY & GENERATOR (Admin)
              ===================================================== -->
-        {% if is_admin %}
         <div class="webhooks-section" style="margin-bottom: 2.5rem;">
             <div class="section-header">
                 <div>
@@ -778,211 +494,190 @@
 
             <div class="policy-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem;">
                 <!-- Policy Configuration Form -->
-                <div class="policy-card" style="background: rgba(17, 24, 39, 0.7); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.5rem;">
-                    <h3 style="font-size: 1.05rem; font-weight: 700; color: #f3f4f6; margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>⚙️ Policy Parameters</span>
-                    </h3>
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3>⚙️ Minimum Policy Configuration</h3>
+                    </div>
+                    <div class="settings-card-body">
+                        <form id="password-policy-form" onsubmit="handleSavePasswordPolicy(event)">
+                            <div class="form-group">
+                                <label for="policy-min-length">Minimum Password Length (Characters)</label>
+                                <input type="number" id="policy-min-length" class="form-input" min="8" max="64" value="{{ password_policy.min_length }}" required>
+                                <span class="form-hint">Industry recommendation: 10+ characters for enterprise SOC analysts.</span>
+                            </div>
 
-                    <form id="password-policy-form" onsubmit="handleSavePasswordPolicy(event)">
-                        <div class="form-group" style="margin-bottom: 1rem;">
-                            <label for="policy-min-length" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem;">
-                                Minimum Password Length: <span id="min-length-val" style="color: #60a5fa; font-weight: 700;">{{ password_policy.min_length }}</span> characters
-                            </label>
-                            <input type="number" id="policy-min-length" class="form-input" min="6" max="64" value="{{ password_policy.min_length }}" required style="width: 100%;" oninput="document.getElementById('min-length-val').textContent = this.value; checkPasswordAgainstLivePolicy();">
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 1.25rem;">
-                            <label style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem; display: block; margin-bottom: 0.5rem;">Character Class Requirements:</label>
-                            <div class="checkbox-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
-                                    <input type="checkbox" id="policy-require-upper" {% if password_policy.require_uppercase %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
-                                    <span>Require Uppercase Letters (A-Z)</span>
+                            <div class="checkbox-group" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #e5e7eb;">
+                                    <input type="checkbox" id="policy-require-upper" {% if password_policy.require_uppercase %}checked{% endif %}>
+                                    <span>Require at least one uppercase letter (A-Z)</span>
                                 </label>
-                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
-                                    <input type="checkbox" id="policy-require-lower" {% if password_policy.require_lowercase %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
-                                    <span>Require Lowercase Letters (a-z)</span>
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #e5e7eb;">
+                                    <input type="checkbox" id="policy-require-lower" {% if password_policy.require_lowercase %}checked{% endif %}>
+                                    <span>Require at least one lowercase letter (a-z)</span>
                                 </label>
-                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
-                                    <input type="checkbox" id="policy-require-numbers" {% if password_policy.require_numbers %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
-                                    <span>Require Numeric Digits (0-9)</span>
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #e5e7eb;">
+                                    <input type="checkbox" id="policy-require-numbers" {% if password_policy.require_numbers %}checked{% endif %}>
+                                    <span>Require at least one numeric digit (0-9)</span>
                                 </label>
-                                <label class="checkbox-label" style="font-size: 0.85rem; color: #e2e8f0;">
-                                    <input type="checkbox" id="policy-require-special" {% if password_policy.require_special %}checked{% endif %} onchange="checkPasswordAgainstLivePolicy()">
-                                    <span>Require Special Characters (<code>!@#$%^&amp;*()_+-=</code>)</span>
+                                <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #e5e7eb;">
+                                    <input type="checkbox" id="policy-require-special" {% if password_policy.require_special %}checked{% endif %}>
+                                    <span>Require at least one special character (!@#$%^&amp;*)</span>
                                 </label>
                             </div>
-                        </div>
 
-                        <button type="submit" id="save-policy-btn" class="btn btn-primary" style="width: 100%;">
-                            💾 Save Security Policy
-                        </button>
-                    </form>
+                            <button type="submit" id="save-policy-btn" class="btn btn-primary">
+                                💾 Save Policy Changes
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
-                <!-- Live Strength Tester & 1-Click Generator -->
-                <div class="policy-card" style="background: rgba(17, 24, 39, 0.7); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.5rem;">
-                    <h3 style="font-size: 1.05rem; font-weight: 700; color: #f3f4f6; margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>🧪 Live Policy Tester &amp; Generator</span>
-                    </h3>
+                <!-- 1-Click Generator & Strength Tester -->
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <h3>🎲 1-Click Compliant Password Generator</h3>
+                    </div>
+                    <div class="settings-card-body">
+                        <p style="color: #9ca3af; font-size: 0.85rem; margin-bottom: 1rem;">
+                            Generate high-entropy random passwords mathematically guaranteed to satisfy the active complexity rules above.
+                        </p>
 
-                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                        <label for="tester-input" style="font-weight: 600; color: #cbd5e1; font-size: 0.85rem;">Test Candidate Password:</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="text" id="tester-input" class="form-input" placeholder="Type a password to test..." style="flex: 1; font-family: var(--font-mono); font-size: 0.9rem;" oninput="checkPasswordAgainstLivePolicy()">
-                            <button type="button" class="btn btn-secondary" onclick="handleGenerateCompliantPassword()" title="Generate 10-char random compliant password">
-                                🎲 Generate
+                        <div class="generated-password-box" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                            <input type="text" id="generated-password-display" class="form-input" readonly placeholder="Click Generate below..." style="font-family: var(--font-mono); color: #38bdf8; font-weight: bold; background: #070a13;">
+                            <button type="button" class="btn btn-primary" onclick="copyGeneratedPassword()" id="copy-pwd-btn" title="Copy to clipboard">
+                                📋 Copy
                             </button>
                         </div>
-                    </div>
 
-                    <!-- Live Compliance Checklist -->
-                    <div id="policy-checklist" style="display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.75rem; font-size: 0.8rem;">
-                        <div id="check-length" class="policy-check-item" style="color: #94a3b8;">⚪ Minimum <span id="check-length-num">{{ password_policy.min_length }}</span> Characters</div>
-                        <div id="check-upper" class="policy-check-item" style="color: #94a3b8;">⚪ Uppercase Letter (A-Z)</div>
-                        <div id="check-lower" class="policy-check-item" style="color: #94a3b8;">⚪ Lowercase Letter (a-z)</div>
-                        <div id="check-number" class="policy-check-item" style="color: #94a3b8;">⚪ Numeric Digit (0-9)</div>
-                        <div id="check-special" class="policy-check-item" style="color: #94a3b8;">⚪ Special Character (!@#$%...)</div>
-                    </div>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="fetchNewRandomPassword()" style="flex: 1;">
+                                🎲 Generate Compliant Password
+                            </button>
+                        </div>
 
-                    <div id="tester-verdict" style="font-size: 0.85rem; font-weight: 600; text-align: center; color: #94a3b8; padding: 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.04);">
-                        Enter a password above to evaluate compliance
+                        <h4 style="font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.5rem;">Active Policy Checklist:</h4>
+                        <ul id="policy-checklist" style="list-style: none; padding: 0; margin: 0; font-size: 0.8rem; color: #9ca3af; display: flex; flex-direction: column; gap: 4px;">
+                            <li id="chk-len">📏 Minimum {{ password_policy.min_length }} characters</li>
+                            <li id="chk-upper">🔠 Uppercase letter</li>
+                            <li id="chk-lower">🔡 Lowercase letter</li>
+                            <li id="chk-num">🔢 Number digit</li>
+                            <li id="chk-spec">⚡ Special symbol</li>
+                        </ul>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Horizontal Divider -->
+        <hr class="settings-divider" style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
         {% endif %}
 
         <!-- =====================================================
-             SECTION B: TAMPER-EVIDENT CRYPTOGRAPHIC AUDIT LEDGER
+             SECTION 2C: CRYPTOGRAPHIC AUDIT LEDGER (Analyst & Admin)
              ===================================================== -->
-        <div class="webhooks-section" id="audit-log-section">
-            <div class="section-header">
+        <div class="webhooks-section">
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
                 <div>
                     <h2 class="section-title">
-                        🛡️ Tamper-Evident Cryptographic Audit Ledger
-                        <span class="webhook-count" id="audit-count">{{ audit_logs | length }}</span>
+                        📜 Cryptographic Tamper-Evident Audit Ledger
+                        <span class="webhook-count">{{ audit_logs | length }}</span>
                     </h2>
                     <p class="section-subtitle">
-                        Blockchain-style SHA-256 hash-chained immutable audit log recording administrative, authentication, and operational events.
+                        Every security event, user modification, and threat rule change is hashed and chained with SHA-256 for cryptographic non-repudiation.
                     </p>
                 </div>
-
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-secondary" onclick="handleVerifyAuditChain()" id="verify-audit-btn">
-                        🔍 Verify Cryptographic Chain
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="verifyAuditLedgerIntegrity()" id="verify-audit-btn">
+                        🔍 Verify Chain Integrity
                     </button>
                     {% if is_admin %}
-                    <a href="/api/audit-logs/export?format=csv" class="btn btn-secondary" style="text-decoration: none;">
+                    <a href="/api/audit-logs/export?format=csv" class="btn btn-secondary btn-sm" download>
                         📥 Export CSV
                     </a>
-                    <a href="/api/audit-logs/export?format=json" class="btn btn-secondary" style="text-decoration: none;" download="audit_ledger.json">
+                    <a href="/api/audit-logs/export?format=json" class="btn btn-secondary btn-sm" download>
                         📥 Export JSON
                     </a>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Integrity Verification Banner -->
-            <div id="audit-integrity-banner" class="alert {% if audit_integrity.is_valid %}alert-success-glass{% else %}alert-danger-glass{% endif %}" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <span style="font-size: 1.5rem;">{% if audit_integrity.is_valid %}🛡️{% else %}⚠️{% endif %}</span>
-                    <div>
-                        {% if audit_integrity.is_valid %}
-                        <strong style="color: #34d399; font-size: 0.95rem;">SHA-256 Hash Chain: Cryptographically Verified Intact</strong>
-                        {% else %}
-                        <strong style="color: #f87171; font-size: 0.95rem;">Integrity Warning: Chain Inconsistency Detected</strong>
-                        {% endif %}
-                        <p style="margin: 0; font-size: 0.8rem; color: #9ca3af;" id="audit-integrity-msg">
-                            {{ audit_integrity.message }}
-                        </p>
-                    </div>
-                </div>
-                <span class="status-dot {% if audit_integrity.is_valid %}online{% else %}offline{% endif %}"></span>
-            </div>
+            <!-- Verification Status Banner (populated on verify click) -->
+            <div id="audit-verify-result" style="display: none; margin-bottom: 1.25rem;"></div>
 
-            <!-- Filter Controls -->
-            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                <input type="text" id="audit-search-input" class="form-input" placeholder="Search audit logs by user, action, resource..." style="flex: 1; min-width: 250px; font-size: 0.85rem;" oninput="debounceAuditSearch()">
-                
-                <select id="audit-action-filter" class="form-input" style="width: auto; font-size: 0.85rem;" onchange="loadAuditLogs()">
-                    <option value="ALL">All Actions</option>
-                    <option value="AUTH_LOGIN_SUCCESS">AUTH_LOGIN_SUCCESS</option>
-                    <option value="AUTH_LOGIN_FAILED">AUTH_LOGIN_FAILED</option>
-                    <option value="AUTH_LOGOUT">AUTH_LOGOUT</option>
-                    <option value="PASSWORD_CHANGED">PASSWORD_CHANGED</option>
-                    <option value="PASSWORD_POLICY_UPDATED">PASSWORD_POLICY_UPDATED</option>
-                    <option value="USER_CREATED">USER_CREATED</option>
-                    <option value="USER_ROLE_UPDATED">USER_ROLE_UPDATED</option>
-                    <option value="USER_DELETED">USER_DELETED</option>
-                    <option value="RULE_CREATED">RULE_CREATED</option>
-                    <option value="RULE_UPDATED">RULE_UPDATED</option>
-                    <option value="RULE_DELETED">RULE_DELETED</option>
-                    <option value="WEBHOOK_CREATED">WEBHOOK_CREATED</option>
-                    <option value="WEBHOOK_UPDATED">WEBHOOK_UPDATED</option>
-                    <option value="WEBHOOK_DELETED">WEBHOOK_DELETED</option>
-                    <option value="WEBHOOK_TESTED">WEBHOOK_TESTED</option>
-                    <option value="FEED_REFRESH_TRIGGERED">FEED_REFRESH_TRIGGERED</option>
-                    <option value="SCHEDULE_UPDATED">SCHEDULE_UPDATED</option>
-                    <option value="RSS_FEED_CREATED">RSS_FEED_CREATED</option>
-                    <option value="RSS_FEED_DELETED">RSS_FEED_DELETED</option>
-                    <option value="HISTORY_CLEARED">HISTORY_CLEARED</option>
-                </select>
-            </div>
-
-            <!-- Audit Table -->
             <div class="table-responsive">
-                <table class="data-table">
+                <table class="data-table" style="font-size: 0.8rem;">
                     <thead>
                         <tr>
-                            <th>Timestamp (UTC)</th>
-                            <th>Actor</th>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Role</th>
                             <th>Action</th>
                             <th>Resource</th>
                             <th>Status</th>
-                            <th>Client IP</th>
-                            <th>Details</th>
-                            <th>Integrity Hash</th>
+                            <th>IP Address</th>
+                            <th>Integrity Hash (SHA-256)</th>
                         </tr>
                     </thead>
-                    <tbody id="audit-table-body">
+                    <tbody id="audit-logs-table-body">
                         {% for log in audit_logs %}
                         <tr>
-                            <td style="font-size: 0.8rem; color: #9ca3af; white-space: nowrap;">{{ log.timestamp }}</td>
-                            <td>
-                                <strong style="color: #f3f4f6;">{{ log.username }}</strong>
-                                <span style="display: block; font-size: 0.7rem; color: #60a5fa; text-transform: uppercase;">{{ log.role }}</span>
+                            <td style="color: #9ca3af; font-family: var(--font-mono); white-space: nowrap;">
+                                {{ log.timestamp }}
                             </td>
                             <td>
-                                <span class="audit-action-tag action-{{ log.action | lower }}">
+                                <strong>{{ log.username }}</strong>
+                            </td>
+                            <td>
+                                {% if log.role == 'admin' %}
+                                    <span class="role-pill role-pill-admin">admin</span>
+                                {% elif log.role == 'analyst' %}
+                                    <span class="role-pill role-pill-analyst">analyst</span>
+                                {% else %}
+                                    <span class="role-pill role-pill-viewer">viewer</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.25);">
                                     {{ log.action }}
                                 </span>
                             </td>
-                            <td style="font-size: 0.8rem; color: #cbd5e1;">
-                                {{ log.resource_type or '-' }} {% if log.resource_id %}<span style="color: #93c5fd;">({{ log.resource_id }})</span>{% endif %}
+                            <td style="color: #e5e7eb; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ log.resource_id }}">
+                                {{ log.resource_id or '-' }}
                             </td>
                             <td>
-                                <span class="actor-status-badge {% if log.status == 'SUCCESS' %}status-low{% elif log.status == 'FAILED' %}status-critical{% else %}status-med{% endif %}">
-                                    {{ log.status }}
+                                {% if log.status == 'SUCCESS' %}
+                                    <span style="color: #34d399; font-weight: 600;">✓ SUCCESS</span>
+                                {% else %}
+                                    <span style="color: #f87171; font-weight: 600;">✗ {{ log.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="color: #9ca3af; font-family: var(--font-mono);">
+                                {{ log.ip_address or '127.0.0.1' }}
+                            </td>
+                            <td>
+                                <span class="audit-hash-chip" style="font-family: var(--font-mono); font-size: 0.7rem; background: #080c16; border: 1px solid rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; color: #38bdf8;" title="Chained SHA-256: {{ log.integrity_hash }}">
+                                    {{ log.integrity_hash[:12] }}...{{ log.integrity_hash[-8:] }}
                                 </span>
-                            </td>
-                            <td style="font-family: var(--font-mono); font-size: 0.75rem; color: #94a3b8;">{{ log.ip_address or '127.0.0.1' }}</td>
-                            <td style="font-size: 0.8rem; color: #cbd5e1; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ log.details }}">
-                                {{ log.details or '-' }}
-                            </td>
-                            <td style="font-family: var(--font-mono); font-size: 0.7rem; color: #a7f3d0;" title="{{ log.integrity_hash }}">
-                                {{ log.integrity_hash[:12] }}…
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            {% if audit_logs | length == 0 %}
+            <div class="empty-state">
+                <div class="empty-icon">📜</div>
+                <h3>No Audit Events Recorded</h3>
+                <p>System activities and security events will automatically append to this cryptographic ledger.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
 
     <!-- =========================================================
-         TAB PANEL 5: API & DEVELOPER ACCESS (Admin Only)
+         TAB PANEL 3: API & DEVELOPER ACCESS (Admin Only)
          ========================================================= -->
     {% if is_admin %}
     <div class="settings-tab-panel" id="panel-api">
@@ -1018,166 +713,179 @@
                 <!-- Base URL Copy Box -->
                 <div style="display: flex; gap: 0.75rem; align-items: center; background: #0a0f1d; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.25rem;">
                     <span style="color: #818cf8; font-family: var(--font-mono); font-size: 0.9rem; font-weight: bold;">BASE URL:</span>
-                    <input type="text" id="api-base-url-input" readonly value="/api" style="flex: 1; background: transparent; border: none; color: #38bdf8; font-family: var(--font-mono); font-size: 0.95rem; outline: none;">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="copyApiBaseUrl()" id="copy-base-url-btn">
-                        📋 Copy Base URL
+                    <input type="text" id="api-base-url-input" class="form-input" readonly value="/api" style="font-family: var(--font-mono); color: #38bdf8; background: transparent; border: none; padding: 0; font-size: 0.9rem; flex: 1;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="copyApiBaseUrl()">📋 Copy Base URL</button>
+                </div>
+
+                <!-- Documentation Quick-Links -->
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <a href="/docs" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+                        📖 Interactive Swagger UI (/docs) ↗
+                    </a>
+                    <a href="/redoc" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+                        📘 ReDoc Documentation (/redoc) ↗
+                    </a>
+                    <a href="/openapi.json" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+                        📄 OpenAPI 3.0 Specification JSON ↗
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Active API Tokens List -->
+        <div class="webhooks-section" style="margin-bottom: 2.5rem;">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">🔑 Active Developer API Tokens</h2>
+                    <p class="section-subtitle">Scoped machine credentials for external SIEM, SOAR, and orchestration agents.</p>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Token Identifier</th>
+                            <th>Role Scope</th>
+                            <th>Key Prefix</th>
+                            <th>Rate Limit</th>
+                            <th>Expires</th>
+                            <th>Last Used</th>
+                            <th>Created By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="api-tokens-table-body">
+                        {% if api_tokens | length == 0 %}
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: #94a3b8; padding: 2rem;">
+                                No active API tokens. Click <strong>"➕ Generate API Token"</strong> to create a credential.
+                            </td>
+                        </tr>
+                        {% else %}
+                        {% for tok in api_tokens %}
+                        <tr data-token-id="{{ tok.id }}">
+                            <td>
+                                <strong style="color: #f3f4f6;">{{ tok.name }}</strong>
+                                {% if not tok.is_active %}
+                                    <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; margin-left: 0.5rem;">Revoked</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if tok.role == 'admin' %}
+                                    <span class="role-pill role-pill-admin">admin</span>
+                                {% elif tok.role == 'analyst' %}
+                                    <span class="role-pill role-pill-analyst">analyst</span>
+                                {% else %}
+                                    <span class="role-pill role-pill-viewer">viewer</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code style="color: #38bdf8; background: #070a13; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">{{ tok.token_prefix }}...</code>
+                            </td>
+                            <td style="color: #9ca3af;">
+                                {{ tok.rate_limit_per_min }}/min
+                            </td>
+                            <td style="color: #9ca3af;">
+                                {{ tok.expires_at or 'Never' }}
+                            </td>
+                            <td style="color: #9ca3af;">
+                                {{ tok.last_used_at or 'Never' }}
+                            </td>
+                            <td style="color: #9ca3af;">
+                                {{ tok.created_by }}
+                            </td>
+                            <td>
+                                {% if tok.is_active %}
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleRevokeApiToken(this.dataset.id, this.dataset.name)" title="Deactivate token without deleting history">
+                                        🚫 Revoke
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleDeleteApiToken(this.dataset.id, this.dataset.name)" title="Permanently delete token">
+                                        🗑️
+                                    </button>
+                                </div>
+                                {% else %}
+                                <button type="button" class="btn btn-danger btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleDeleteApiToken(this.dataset.id, this.dataset.name)">
+                                    🗑️ Delete
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. Interactive API Explorer -->
+        <div class="settings-card" style="margin-bottom: 2rem;">
+            <div class="settings-card-header">
+                <h3>🧪 Interactive REST API Explorer</h3>
+                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">Live Console</span>
+            </div>
+            <div class="settings-card-body">
+                <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem;">
+                    Test live queries against the CyberDash API. Responses include real-time JSON payloads directly from the database and feed parsers.
+                </p>
+
+                <!-- Explorer Controls -->
+                <div style="display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
+                    <span class="badge" id="explorer-method-badge" style="background: rgba(34, 211, 238, 0.15); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.3); font-weight: bold; font-family: var(--font-mono); padding: 6px 12px;">GET</span>
+                    
+                    <select id="explorer-endpoint-select" class="form-input" style="font-family: var(--font-mono); font-size: 0.9rem;" onchange="handleExplorerEndpointChange()">
+                        <!-- Options injected dynamically by settings.js -->
+                    </select>
+
+                    <button type="button" id="explorer-send-btn" class="btn btn-primary" onclick="handleSendExplorerRequest()">
+                        🚀 Send Request
                     </button>
                 </div>
 
-                <!-- API Spec Links & Features -->
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                    <a href="/docs" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none;">
-                        <span>📘</span> Interactive Swagger UI (<code>/docs</code>) ↗
-                    </a>
-                    <a href="/redoc" target="_blank" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none;">
-                        <span>📕</span> ReDoc API Reference (<code>/redoc</code>) ↗
-                    </a>
-                    <span style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #a7f3d0; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; padding: 0.35rem 0.75rem;">
-                        <span>🔒</span> Dual Header Auth Supported
-                    </span>
+                <!-- Endpoint Description & Query Params Input -->
+                <div id="explorer-params-container" style="margin-bottom: 1rem; display: none;">
+                    <label style="font-size: 0.8rem; color: #cbd5e1; font-weight: 600; display: block; margin-bottom: 0.35rem;">Optional Query Parameters (URL Query String):</label>
+                    <input type="text" id="explorer-params-input" class="form-input" placeholder="e.g. limit=10&severity=CRITICAL" style="font-family: var(--font-mono); font-size: 0.85rem;">
+                </div>
+
+                <!-- Response Viewer -->
+                <div style="background: #050811; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 600;">RESPONSE STATUS:</span>
+                            <span id="explorer-status-badge" style="font-size: 0.75rem; font-family: var(--font-mono); color: #94a3b8;">Idle</span>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm" style="font-size: 0.7rem; padding: 2px 8px;" onclick="copyExplorerResponse()">📋 Copy JSON</button>
+                    </div>
+                    <pre id="explorer-response-body" style="padding: 1rem; margin: 0; font-family: var(--font-mono); font-size: 0.8rem; color: #a7f3d0; max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;">Select an endpoint above and click "Send Request" to test live API telemetry...</pre>
                 </div>
             </div>
         </div>
 
-        <!-- 2. Interactive Endpoint Explorer & cURL Generator Card -->
-        <div class="settings-card" style="margin-bottom: 2rem;">
-            <div class="settings-card-header">
-                <h3>⚡ Interactive Endpoint Explorer &amp; cURL Generator</h3>
-            </div>
-            <div class="settings-card-body">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;" class="api-explorer-grid">
-                    <!-- Left: Selector & Parameters -->
-                    <div>
-                        <div class="form-group" style="margin-bottom: 1rem;">
-                            <label for="api-endpoint-select">Select Target Endpoint</label>
-                            <select id="api-endpoint-select" class="form-input" onchange="handleEndpointSelection()">
-                                {% for ep in endpoints_catalog %}
-                                <option value="{{ ep.id }}" data-method="{{ ep.method }}" data-path="{{ ep.path }}" data-auth="{{ ep.auth_required }}">
-                                    [{{ ep.method }}] {{ ep.path }} — {{ ep.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div id="endpoint-meta-box" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                <span id="endpoint-method-badge" class="badge" style="background: #0284c7; color: white; font-weight: bold; font-size: 0.75rem;">GET</span>
-                                <span id="endpoint-path-text" style="font-family: var(--font-mono); color: #f1f5f9; font-weight: 600;">/api/summary</span>
-                            </div>
-                            <p id="endpoint-desc-text" style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 0.75rem;">Real-time vulnerability counts, active CISA zero-days, RSS articles, and threat indicators.</p>
-                            <div style="font-size: 0.8rem; color: #cbd5e1;">
-                                <strong>Authorization:</strong> <span id="endpoint-auth-text" style="color: #60a5fa;">Viewer / Optional</span>
-                            </div>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label for="curl-api-token-input">Your API Token (Optional Preview)</label>
-                            <input type="text" id="curl-api-token-input" class="form-input" placeholder="cd_live_... (leave empty for sample token)" oninput="updateCurlPreview()">
-                        </div>
-                    </div>
-
-                    <!-- Right: Live cURL Command & Response Preview -->
-                    <div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1;">Generated cURL Command</label>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="copyCurlCommand()" id="copy-curl-btn" style="font-size: 0.75rem; padding: 2px 8px;">
-                                📋 Copy cURL
-                            </button>
-                        </div>
-                        <pre id="curl-command-preview" style="background: #070a13; border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 1rem; color: #38bdf8; font-family: var(--font-mono); font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; margin-bottom: 1rem; min-height: 80px;"></pre>
-
-                        <label style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; margin-bottom: 0.5rem; display: block;">Sample JSON Response</label>
-                        <pre id="sample-response-preview" style="background: #070a13; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1rem; color: #a7f3d0; font-family: var(--font-mono); font-size: 0.75rem; max-height: 180px; overflow-y: auto; white-space: pre; margin: 0;"></pre>
-                    </div>
+        <!-- 4. Available Endpoints Directory Table -->
+        <div class="webhooks-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">📚 REST API Endpoints Catalog</h2>
+                    <p class="section-subtitle">Detailed reference of all 20+ programmatic endpoints provided by CyberDash Core.</p>
                 </div>
             </div>
-        </div>
 
-        <!-- 3. API Tokens Table Card -->
-        <div class="settings-card">
-            <div class="settings-card-header">
-                <h3>🔑 Active Developer API Tokens</h3>
-                <span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">Governance</span>
-            </div>
-            <div class="settings-card-body">
-                {% if not is_admin %}
-                <p style="color: #94a3b8; font-size: 0.9rem;">
-                    Administrator privileges are required to generate and revoke API keys. Contact an administrator to obtain a token for your automation scripts.
-                </p>
-                {% endif %}
-
-                <div class="table-responsive">
-                    <table class="data-table" id="api-tokens-table">
-                        <thead>
-                            <tr>
-                                <th>Token Name</th>
-                                <th>Key Prefix</th>
-                                <th>Role Scope</th>
-                                <th>Rate Limit</th>
-                                <th>Status</th>
-                                <th>Expires</th>
-                                <th>Last Used</th>
-                                {% if is_admin %}
-                                <th style="text-align: right;">Actions</th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody id="api-tokens-table-body">
-                            {% if api_tokens | length == 0 %}
-                            <tr>
-                                <td colspan="{% if is_admin %}8{% else %}7{% endif %}" style="text-align: center; padding: 2rem; color: #94a3b8;">
-                                    No API tokens created yet. Click <strong>"➕ Generate API Token"</strong> to create a key for your automated integrations.
-                                </td>
-                            </tr>
-                            {% else %}
-                            {% for tok in api_tokens %}
-                            <tr id="token-row-{{ tok.id }}">
-                                <td>
-                                    <strong style="color: #f1f5f9;">{{ tok.name }}</strong>
-                                    <span style="display: block; font-size: 0.7rem; color: #94a3b8;">By {{ tok.created_by }}</span>
-                                </td>
-                                <td style="font-family: var(--font-mono); font-size: 0.8rem; color: #38bdf8;">
-                                    {{ tok.token_prefix }}
-                                </td>
-                                <td>
-                                    <span class="role-badge role-{{ tok.role }}">
-                                        {% if tok.role == 'admin' %}👑 Admin{% elif tok.role == 'analyst' %}🕵️ Analyst{% else %}👁️ Viewer{% endif %}
-                                    </span>
-                                </td>
-                                <td style="font-size: 0.8rem; color: #cbd5e1;">
-                                    {{ tok.rate_limit_per_min }} req/min
-                                </td>
-                                <td>
-                                    {% if tok.is_active %}
-                                    <span class="actor-status-badge status-low">Active</span>
-                                    {% else %}
-                                    <span class="actor-status-badge status-critical">Revoked</span>
-                                    {% endif %}
-                                </td>
-                                <td style="font-size: 0.8rem; color: #94a3b8;">
-                                    {{ tok.expires_at or 'Never' }}
-                                </td>
-                                <td style="font-size: 0.8rem; color: #94a3b8;">
-                                    {{ tok.last_used_at or 'Never' }}
-                                </td>
-                                {% if is_admin %}
-                                <td style="text-align: right; white-space: nowrap;">
-                                    {% if tok.is_active %}
-                                    <button type="button" class="btn btn-secondary btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleRevokeApiToken(this.dataset.id, this.dataset.name)" style="margin-right: 4px;">
-                                        🚫 Revoke
-                                    </button>
-                                    {% endif %}
-                                    <button type="button" class="btn btn-danger btn-sm" data-id="{{ tok.id }}" data-name="{{ tok.name }}" onclick="handleDeleteApiToken(this.dataset.id, this.dataset.name)">
-                                        🗑️
-                                    </button>
-                                </td>
-                                {% endif %}
-                            </tr>
-                            {% endfor %}
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="table-responsive">
+                <table class="data-table" style="font-size: 0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">Method</th>
+                            <th>Endpoint Path</th>
+                            <th>Required Role</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="endpoints-table-body">
+                        <!-- Populated dynamically via endpoints_catalog JSON -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

@@ -97,22 +97,18 @@ class TestMultiThemeEngine(unittest.TestCase):
         # Check script inclusion
         self.assertIn("/static/js/theme.js", html)
 
-    def test_04_settings_appearance_tab_and_gallery(self):
-        """Verify settings.html includes Appearance tab and theme gallery grid with 6 cards."""
+    def test_04_header_theme_dropdown_support(self):
+        """Verify header navigation includes 6-theme quick switcher across templates."""
         res = self.client.get("/settings", headers=self.headers)
         self.assertEqual(res.status_code, 200)
         html = res.text
 
-        # Check Appearance tab button
-        self.assertIn('data-tab="appearance"', html)
-        self.assertIn("Appearance &amp; Themes", html)
-
-        # Check panel-appearance and theme cards
-        self.assertIn('id="panel-appearance"', html)
-        self.assertIn('class="theme-gallery-grid"', html)
+        # Verify header theme dropdown exists
+        self.assertIn('class="theme-dropdown-container"', html)
+        self.assertIn("theme-dropdown-menu", html)
 
         for t in ["dark", "light", "matrix", "cyberpunk", "midnight", "oled"]:
-            self.assertIn(f'data-theme-id="{t}"', html)
+            self.assertIn(f"setTheme('{t}')", html)
 
     def test_05_all_pages_render_with_theme_support(self):
         """Verify all application routes include theme switcher and scripts."""

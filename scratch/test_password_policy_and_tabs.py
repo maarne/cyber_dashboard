@@ -105,18 +105,17 @@ def test_password_policy_and_tabs():
     assert is_valid is True
     print(f"✅ 5. GET /api/security/generate-password returned valid compliant password: {gen_pwd}")
 
-    # 6. Test Settings Page HTML 4 Tabs Rendering
+    # 6. Test Settings Page HTML 3 Tabs Rendering
     res = admin_s.get(f"{BASE_URL}/settings")
     assert res.status_code == 200
     html = res.text
-    assert 'id="panel-webhooks"' in html
-    assert 'id="panel-feeds"' in html
-    assert 'id="panel-users"' in html
+    assert 'id="panel-alerts"' in html
     assert 'id="panel-security"' in html
+    assert 'id="panel-api"' in html
     assert 'switchSettingsTab' in html
     assert 'policy-min-length' in html
     assert 'policy-checklist' in html
-    print("✅ 6. Settings Page 4-tab console and Security Policy UI rendering verified.")
+    print("✅ 6. Settings Page 3-tab console and Security Policy UI rendering verified.")
 
     print("\n🎉 ALL RANDOM PASSWORD, POLICY ENGINE & TABBED SETTINGS TESTS PASSED!")
 

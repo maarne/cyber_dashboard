@@ -93,8 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var webhooksList = document.getElementById('webhooks-list');
     if (webhooksList) {
         webhooksList.addEventListener('click', function(event) {
-            var target = event.target;
-            var button = target.closest('button');
+            var button = event.target.closest('button');
             if (!button) return;
 
             if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
@@ -105,17 +104,17 @@ document.addEventListener('DOMContentLoaded', function() {
             var webhookId = button.dataset.webhookId || button.dataset.id;
             var webhookName = button.dataset.name || button.dataset.webhookName;
 
-            if (button.classList.contains('btn-test')) {
-                handleTestWebhook(webhookId);
-            } else if (button.classList.contains('btn-edit')) {
+            if (button.classList.contains('webhook-test-btn') || button.classList.contains('btn-test')) {
+                handleTestWebhook(webhookId, button);
+            } else if (button.classList.contains('webhook-edit-btn') || button.classList.contains('btn-edit')) {
                 handleEditWebhook(button);
-            } else if (button.classList.contains('btn-delete')) {
+            } else if (button.classList.contains('webhook-delete-btn') || button.classList.contains('btn-delete')) {
                 showDeleteModal(webhookId, webhookName);
             }
         });
 
         webhooksList.addEventListener('change', function(event) {
-            if (event.target.classList.contains('toggle-input')) {
+            if (event.target.classList.contains('webhook-toggle-status') || event.target.classList.contains('toggle-input')) {
                 if (typeof isUserAuthenticated === 'function' && !isUserAuthenticated()) {
                     event.target.checked = !event.target.checked;
                     openLoginModal('Log in as administrator to toggle webhooks.');
@@ -166,18 +165,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- RSS Feed List Event Delegation (Toggle & Delete) ---
-    var rssFeedsList = document.getElementById('rss-feeds-list');
-    if (rssFeedsList) {
-        rssFeedsList.addEventListener('click', function(event) {
+    var feedsList = document.getElementById('feeds-list') || document.getElementById('rss-feeds-list');
+    if (feedsList) {
+        feedsList.addEventListener('click', function(event) {
             var button = event.target.closest('button');
-            if (button && button.classList.contains('feed-delete-btn')) {
-                handleDeleteFeed(button.dataset.feedId, button.dataset.feedName);
+            if (button && (button.classList.contains('feed-delete-btn') || button.classList.contains('btn-delete'))) {
+                handleDeleteFeed(button.dataset.feedId || button.dataset.id, button.dataset.feedName || button.dataset.name);
             }
         });
 
-        rssFeedsList.addEventListener('change', function(event) {
-            if (event.target.classList.contains('feed-toggle')) {
-                handleToggleFeed(event.target.dataset.feedId);
+        feedsList.addEventListener('change', function(event) {
+            if (event.target.classList.contains('feed-toggle-status') || event.target.classList.contains('feed-toggle')) {
+                handleToggleFeed(event.target.dataset.feedId || event.target.dataset.id);
             }
         });
     }
@@ -319,19 +318,78 @@ async function handleFormSubmit(event) {
 // EDIT WEBHOOK
 // =============================================================
 
-function handleEditWebhook(button) {
+// =============================================================
+// WEBHOOK COUNT HELPER
+// =============================================================
+
+function updateWebhookCount() {
+    var cards = document.querySelectorAll('.webhook-card');
+    var countElem = document.getElementById('webhook-count');
+    if (countElem) countElem.textContent = cards.length;
+
+    var rssCards = document.querySelectorAll('.feed-card');
+    var badge = document.getElementById('tab-badge-alerts');
+    if (badge) badge.textContent = cards.length + rssCards.length;
+
+    var emptyState = document.getElementById('webhooks-empty-state');
+    if (emptyState) {
+        emptyState.style.display = cards.length === 0 ? 'block' : 'none';
+    }
+}
+
+
+// =============================================================
+// EDIT WEBHOOK
+// =============================================================
+
+async function handleEditWebhook(button) {
     /**
      * Populate the form with data from the clicked webhook card.
      */
-    showForm('edit', {
-        id: button.dataset.webhookId || button.dataset.id,
-        name: button.dataset.name || '',
-        platform: button.dataset.platform || 'slack',
-        url: button.dataset.url || '',
-        critical: button.dataset.critical,
-        high: button.dataset.high,
-        cisa: button.dataset.cisa,
-    });
+    if (!button) return;
+    var webhookId = button.dataset ? (button.dataset.webhookId || button.dataset.id) : button;
+
+    var name = button.dataset ? (button.dataset.name || button.dataset.webhookName) : '';
+    var platform = button.dataset ? button.dataset.platform : '';
+    var url = button.dataset ? button.dataset.url : '';
+    var critical = button.dataset ? button.dataset.critical : null;
+    var high = button.dataset ? button.dataset.high : null;
+    var cisa = button.dataset ? button.dataset.cisa : null;
+
+    if (name && url) {
+        showForm('edit', {
+            id: webhookId,
+            name: name,
+            platform: platform || 'slack',
+            url: url,
+            critical: critical,
+            high: high,
+            cisa: cisa
+        });
+        return;
+    }
+
+    try {
+        var res = await fetch('/api/webhooks');
+        if (res.ok) {
+            var webhooks = await res.json();
+            var wh = webhooks.find(function(w) { return String(w.id) === String(webhookId); });
+            if (wh) {
+                showForm('edit', {
+                    id: wh.id,
+                    name: wh.name,
+                    platform: wh.platform,
+                    url: wh.masked_url || wh.webhook_url,
+                    critical: wh.notify_critical_cves,
+                    high: wh.notify_high_cves,
+                    cisa: wh.notify_cisa_exploits
+                });
+                return;
+            }
+        }
+    } catch (e) {
+        console.error('Error fetching webhook for edit:', e);
+    }
 }
 
 
@@ -342,27 +400,22 @@ function handleEditWebhook(button) {
 function showDeleteModal(webhookId, webhookName) {
     /** Show the delete confirmation modal. */
     deletingWebhookId = webhookId;
-    document.getElementById('delete-webhook-name').textContent = webhookName;
-    document.getElementById('delete-modal').style.display = 'flex';
+    var nameElem = document.getElementById('delete-webhook-name');
+    if (nameElem) nameElem.textContent = webhookName || 'this webhook';
+    var modal = document.getElementById('delete-modal');
+    if (modal) modal.style.display = 'flex';
 }
 
 
 function hideDeleteModal() {
     /** Hide the delete confirmation modal. */
     deletingWebhookId = null;
-    document.getElementById('delete-modal').style.display = 'none';
+    var modal = document.getElementById('delete-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 
 async function handleConfirmDelete() {
-    /**
-     * Send a DELETE request to remove the webhook.
-     *
-     * JAVASCRIPT CONCEPT — HTTP DELETE Method:
-     *   REST APIs use the DELETE method to remove resources.
-     *   The server identifies which resource to delete by the
-     *   ID in the URL path: DELETE /api/webhooks/3
-     */
     if (!deletingWebhookId) return;
 
     try {
@@ -374,22 +427,22 @@ async function handleConfirmDelete() {
             showToast('Webhook deleted!', 'success');
             hideDeleteModal();
 
-            // Remove the card from the DOM without a page reload.
-            // querySelector finds the card element by its data attribute.
             var card = document.querySelector(
-                '.webhook-card[data-webhook-id="' + deletingWebhookId + '"]'
+                '.webhook-card[data-id="' + deletingWebhookId + '"], .webhook-card[data-webhook-id="' + deletingWebhookId + '"]'
             );
             if (card) {
-                // CSS transition for smooth removal
                 card.style.opacity = '0';
                 card.style.transform = 'scale(0.95)';
                 setTimeout(function() {
                     card.remove();
                     updateWebhookCount();
                 }, 300);
+            } else {
+                updateWebhookCount();
             }
         } else {
-            showToast('Failed to delete webhook.', 'error');
+            var data = await response.json();
+            showToast(data.error || 'Failed to delete webhook.', 'error');
         }
     } catch (error) {
         showToast('Network error: ' + error.message, 'error');
@@ -404,9 +457,6 @@ async function handleConfirmDelete() {
 async function handleToggleWebhook(webhookId) {
     /**
      * Toggle a webhook between active and inactive states.
-     *
-     * We send a POST to /api/webhooks/{id}/toggle and the
-     * server flips the is_active flag.
      */
     try {
         var response = await fetch('/api/webhooks/' + webhookId + '/toggle', {
@@ -432,19 +482,16 @@ async function handleToggleWebhook(webhookId) {
 // TEST WEBHOOK
 // =============================================================
 
-async function handleTestWebhook(webhookId) {
+async function handleTestWebhook(webhookId, btnElem) {
     /**
      * Send a test notification to the specified webhook.
-     *
-     * The button shows a loading state while the request is
-     * in progress to provide visual feedback.
      */
-    // Find the test button and show loading state
-    var button = document.querySelector(
-        '.btn-test[data-webhook-id="' + webhookId + '"], .btn-test[data-id="' + webhookId + '"]'
+    var button = btnElem || document.querySelector(
+        '.webhook-test-btn[data-id="' + webhookId + '"], .btn-test[data-id="' + webhookId + '"]'
     );
+    var origText = button ? button.innerHTML : '🔔 Test Alert';
     if (button) {
-        button.textContent = '⏳ Sending...';
+        button.innerHTML = '⏳ Testing...';
         button.disabled = true;
     }
 
@@ -463,10 +510,8 @@ async function handleTestWebhook(webhookId) {
     } catch (error) {
         showToast('Network error: ' + error.message, 'error');
     } finally {
-        // Reset button state regardless of success/failure.
-        // "finally" always runs, even if there was an error.
         if (button) {
-            button.textContent = '🧪 Test';
+            button.innerHTML = origText;
             button.disabled = false;
         }
     }
@@ -574,11 +619,26 @@ async function handleAddFeed(event) {
 }
 
 
+function updateFeedCount() {
+    var cards = document.querySelectorAll('.feed-card');
+    var countElem = document.getElementById('feeds-count');
+    if (countElem) countElem.textContent = cards.length;
+
+    var webhookCards = document.querySelectorAll('.webhook-card');
+    var badge = document.getElementById('tab-badge-alerts');
+    if (badge) badge.textContent = webhookCards.length + cards.length;
+
+    var emptyState = document.getElementById('feeds-empty-state');
+    if (emptyState) {
+        emptyState.style.display = cards.length === 0 ? 'block' : 'none';
+    }
+}
+
 async function handleDeleteFeed(feedId, feedName) {
     /**
      * Remove an RSS feed source via DELETE /api/rss-feeds/{id}.
      */
-    if (!confirm('Are you sure you want to remove "' + feedName + '"?')) {
+    if (!confirm('Are you sure you want to remove "' + (feedName || 'this RSS feed') + '"?')) {
         return;
     }
 
@@ -589,14 +649,18 @@ async function handleDeleteFeed(feedId, feedName) {
 
         if (response.ok) {
             showToast('RSS feed removed.', 'success');
-            var feedRow = document.querySelector('.feed-row[data-feed-id="' + feedId + '"]');
-            if (feedRow) {
-                feedRow.style.opacity = '0';
-                feedRow.style.transform = 'scale(0.95)';
+            var feedCard = document.querySelector(
+                '.feed-card[data-id="' + feedId + '"], .feed-card[data-feed-id="' + feedId + '"], .feed-row[data-feed-id="' + feedId + '"]'
+            );
+            if (feedCard) {
+                feedCard.style.opacity = '0';
+                feedCard.style.transform = 'scale(0.95)';
                 setTimeout(function() {
-                    feedRow.remove();
+                    feedCard.remove();
                     updateFeedCount();
                 }, 300);
+            } else {
+                updateFeedCount();
             }
         } else {
             showToast('Failed to remove RSS feed.', 'error');
@@ -872,6 +936,10 @@ function escapeHtml(str) {
 // =============================================================
 
 function switchSettingsTab(tabName) {
+    // Map legacy/alias tab names
+    if (tabName === 'webhooks' || tabName === 'feeds' || tabName === 'automation') tabName = 'alerts';
+    if (tabName === 'users') tabName = 'security';
+
     var buttons = document.querySelectorAll('.settings-tab-btn');
     var panels = document.querySelectorAll('.settings-tab-panel');
 
@@ -893,10 +961,6 @@ function switchSettingsTab(tabName) {
 
     if (tabName === 'api') {
         initApiExplorer();
-    } else if (tabName === 'appearance') {
-        if (window.CyberDashTheme) {
-            window.CyberDashTheme.setTheme(window.CyberDashTheme.getCurrentTheme(), false);
-        }
     }
 
     try {
@@ -912,12 +976,15 @@ function initSettingsTabs() {
     var savedTab = null;
     try { savedTab = localStorage.getItem('cyberdash_settings_tab'); } catch (e) {}
 
-    var targetTab = tabParam || hashTab || savedTab || 'webhooks';
-    var targetPanel = document.getElementById('panel-' + targetTab);
+    var rawTab = tabParam || hashTab || savedTab || 'alerts';
+    if (rawTab === 'webhooks' || rawTab === 'feeds' || rawTab === 'automation') rawTab = 'alerts';
+    if (rawTab === 'users' || rawTab === 'appearance') rawTab = 'security';
+
+    var targetPanel = document.getElementById('panel-' + rawTab);
     if (targetPanel) {
-        switchSettingsTab(targetTab);
+        switchSettingsTab(rawTab);
     } else {
-        switchSettingsTab('webhooks');
+        switchSettingsTab('alerts');
     }
 }
 
@@ -1091,6 +1158,114 @@ async function generateUserModalPassword() {
 // API & DEVELOPER ACCESS MANAGEMENT
 // =============================================================
 
+var DEFAULT_ENDPOINTS_CATALOG = [
+    {
+        id: "summary",
+        name: "Dashboard Summary Metrics",
+        method: "GET",
+        path: "/api/summary",
+        description: "Real-time vulnerability counts, active CISA zero-days, RSS articles, and threat indicators.",
+        auth_required: "Viewer / Optional",
+        params: [
+            { name: "start_date", type: "string", example: "2026-01-01", desc: "Filter by start date (YYYY-MM-DD)" },
+            { name: "end_date", type: "string", example: "2026-08-14", desc: "Filter by end date (YYYY-MM-DD)" }
+        ],
+        sample_response: '{\n  "total_cves": 142,\n  "critical_cves": 28,\n  "high_cves": 54,\n  "active_exploits": 19,\n  "total_articles": 85,\n  "total_threats": 42\n}'
+    },
+    {
+        id: "cves",
+        name: "Vulnerability Intelligence Feed",
+        method: "GET",
+        path: "/api/cves",
+        description: "Paginated CVE disclosures with EPSS scores, CVSS v3.1 vectors, Ransomware Campaign tags, and CISA flags.",
+        auth_required: "Viewer / Optional",
+        params: [
+            { name: "limit", type: "integer", example: "25", desc: "Max records to return (1-200)" },
+            { name: "severity", type: "string", example: "CRITICAL", desc: "CRITICAL, HIGH, MEDIUM, LOW" },
+            { name: "search", type: "string", example: "Fortinet", desc: "Keyword or CVE ID search" }
+        ],
+        sample_response: '[\n  {\n    "cve_id": "CVE-2026-1135",\n    "severity": "CRITICAL",\n    "cvss_score": 9.8,\n    "epss_score": 0.942,\n    "is_cisa_kev": true,\n    "ransomware_campaign": "LockBit 3.0"\n  }\n]'
+    },
+    {
+        id: "cisa",
+        name: "CISA Known Exploited Vulnerabilities",
+        method: "GET",
+        path: "/api/cisa",
+        description: "Curated catalog of actively exploited vulnerabilities compiled by CISA.",
+        auth_required: "Viewer / Optional",
+        params: [
+            { name: "limit", type: "integer", example: "50", desc: "Max records to return" }
+        ],
+        sample_response: '[\n  {\n    "cve_id": "CVE-2026-2291",\n    "vendor_project": "Microsoft",\n    "product": "Windows Kernel",\n    "date_added": "2026-08-10"\n  }\n]'
+    },
+    {
+        id: "threats",
+        name: "Threat Actor Indicators & IoCs",
+        method: "GET",
+        path: "/api/threats",
+        description: "Active malicious IPs, domains, and hashes tracked across global telemetry sources.",
+        auth_required: "Viewer / Optional",
+        params: [
+            { name: "limit", type: "integer", example: "50", desc: "Max records to return" },
+            { name: "type", type: "string", example: "ip", desc: "ip, url, domain, hash" }
+        ],
+        sample_response: '[\n  {\n    "indicator_type": "ip",\n    "indicator_value": "198.51.100.44",\n    "threat_type": "Command and Control",\n    "source": "Abuse.ch"\n  }\n]'
+    },
+    {
+        id: "investigate",
+        name: "IOC Threat Investigation & Enrichment",
+        method: "POST",
+        path: "/api/investigate",
+        description: "Correlates submitted IP addresses, domains, and file hashes against threat intelligence databases and Mitre ATT&CK.",
+        auth_required: "Viewer / Analyst",
+        params: [
+            { name: "ioc", type: "string (JSON body)", example: '{"ioc": "198.51.100.44"}', desc: "Target indicator string" }
+        ],
+        sample_response: '{\n  "ioc": "198.51.100.44",\n  "type": "ipv4",\n  "verdict": "MALICIOUS",\n  "threat_score": 92,\n  "associated_actors": ["APT29", "Cozy Bear"],\n  "matched_rules": ["Sigma-C2-Beaconing"]\n}'
+    },
+    {
+        id: "rules",
+        name: "Detection Rules Repository",
+        method: "GET",
+        path: "/api/rules",
+        description: "Enterprise Sigma and YARA rules mapped to MITRE ATT&CK techniques with SIEM deployment guidelines.",
+        auth_required: "Viewer / Analyst",
+        params: [
+            { name: "rule_type", type: "string", example: "SIGMA", desc: "SIGMA or YARA" },
+            { name: "severity", type: "string", example: "CRITICAL", desc: "CRITICAL, HIGH, MEDIUM" }
+        ],
+        sample_response: '[\n  {\n    "id": 1,\n    "title": "PsExec Lateral Movement Detection",\n    "rule_type": "SIGMA",\n    "severity": "HIGH",\n    "mitre_id": "T1021.002"\n  }\n]'
+    },
+    {
+        id: "audit_logs",
+        name: "Cryptographic Audit Ledger",
+        method: "GET",
+        path: "/api/audit-logs",
+        description: "Cryptographically chained audit trail verifying governance integrity, authentication events, and administrative changes.",
+        auth_required: "Analyst / Admin",
+        params: [
+            { name: "action", type: "string", example: "USER_ROLE_UPDATED", desc: "Action filter" },
+            { name: "search", type: "string", example: "admin", desc: "Search keyword" }
+        ],
+        sample_response: '[\n  {\n    "id": 114,\n    "username": "admin",\n    "role": "admin",\n    "action": "API_TOKEN_CREATED",\n    "status": "SUCCESS",\n    "integrity_hash": "a8f3b29..."\n  }\n]'
+    }
+];
+
+function getEndpointsCatalog() {
+    var endpointsElem = document.getElementById('endpoints-data');
+    if (endpointsElem && endpointsElem.textContent) {
+        try {
+            var parsed = JSON.parse(endpointsElem.textContent.trim());
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed;
+            }
+        } catch (e) {
+            console.warn('Could not parse embedded endpoints catalog JSON, using defaults:', e);
+        }
+    }
+    return DEFAULT_ENDPOINTS_CATALOG;
+}
+
 function copyApiBaseUrl() {
     var origin = window.location.origin;
     var fullBaseUrl = origin + '/api';
@@ -1114,97 +1289,227 @@ function initApiExplorer() {
     if (baseUrlInput) {
         baseUrlInput.value = origin + '/api';
     }
-    handleEndpointSelection();
-}
 
-function handleEndpointSelection() {
-    var select = document.getElementById('api-endpoint-select');
-    if (!select) return;
-
-    var endpointId = select.value;
-    var endpointsElem = document.getElementById('endpoints-data');
-    var catalog = [];
-    if (endpointsElem) {
-        try {
-            catalog = JSON.parse(endpointsElem.textContent);
-        } catch (e) {
-            catalog = [];
-        }
+    var catalog = getEndpointsCatalog();
+    var select = document.getElementById('explorer-endpoint-select');
+    if (select) {
+        select.innerHTML = '';
+        catalog.forEach(function(ep) {
+            var opt = document.createElement('option');
+            opt.value = ep.id;
+            opt.textContent = '[' + ep.method + '] ' + ep.path + ' — ' + ep.name;
+            select.appendChild(opt);
+        });
     }
 
-    var ep = catalog.find(function(item) { return item.id === endpointId; });
+    handleExplorerEndpointChange();
+    renderEndpointsCatalogTable();
+}
+
+function handleExplorerEndpointChange() {
+    var select = document.getElementById('explorer-endpoint-select');
+    if (!select) return;
+
+    var catalog = getEndpointsCatalog();
+    var ep = catalog.find(function(item) { return item.id === select.value; }) || catalog[0];
     if (!ep) return;
 
-    var methodBadge = document.getElementById('endpoint-method-badge');
-    var pathText = document.getElementById('endpoint-path-text');
-    var descText = document.getElementById('endpoint-desc-text');
-    var authText = document.getElementById('endpoint-auth-text');
-    var samplePreview = document.getElementById('sample-response-preview');
-
+    // Update Method Badge
+    var methodBadge = document.getElementById('explorer-method-badge');
     if (methodBadge) {
         methodBadge.textContent = ep.method;
-        methodBadge.style.background = ep.method === 'POST' ? '#10b981' : (ep.method === 'DELETE' ? '#ef4444' : '#0284c7');
-    }
-    if (pathText) pathText.textContent = ep.path;
-    if (descText) descText.textContent = ep.description;
-    if (authText) authText.textContent = ep.auth_required;
-    if (samplePreview) samplePreview.textContent = ep.sample_response || '{}';
-
-    updateCurlPreview();
-}
-
-function updateCurlPreview() {
-    var select = document.getElementById('api-endpoint-select');
-    if (!select) return;
-
-    var endpointsElem = document.getElementById('endpoints-data');
-    var catalog = [];
-    if (endpointsElem) {
-        try {
-            catalog = JSON.parse(endpointsElem.textContent);
-        } catch (e) {
-            catalog = [];
+        if (ep.method === 'POST') {
+            methodBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+            methodBadge.style.color = '#34d399';
+            methodBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        } else if (ep.method === 'DELETE') {
+            methodBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+            methodBadge.style.color = '#f87171';
+            methodBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        } else {
+            methodBadge.style.background = 'rgba(34, 211, 238, 0.15)';
+            methodBadge.style.color = '#22d3ee';
+            methodBadge.style.borderColor = 'rgba(34, 211, 238, 0.3)';
         }
     }
 
-    var ep = catalog.find(function(item) { return item.id === select.value; });
-    if (!ep) return;
+    // Update Params / Body Container
+    var paramsContainer = document.getElementById('explorer-params-container');
+    var paramsInput = document.getElementById('explorer-params-input');
+    var paramsLabel = document.getElementById('explorer-params-label');
 
-    var tokenInput = document.getElementById('curl-api-token-input');
-    var tokenVal = (tokenInput && tokenInput.value.trim()) ? tokenInput.value.trim() : 'cd_live_YOUR_API_TOKEN';
-
-    var origin = window.location.origin;
-    var curlCmd = '';
-
-    if (ep.method === 'POST') {
-        var sampleBody = ep.id === 'investigate' ? '{"ioc": "198.51.100.44"}' : '{}';
-        curlCmd = 'curl -X POST "' + origin + ep.path + '" \\\n'
-                + '  -H "X-API-Key: ' + tokenVal + '" \\\n'
-                + '  -H "Content-Type: application/json" \\\n'
-                + "  -d '" + sampleBody + "'";
-    } else {
-        curlCmd = 'curl -X GET "' + origin + ep.path + '" \\\n'
-                + '  -H "X-API-Key: ' + tokenVal + '"';
+    if (paramsContainer && paramsInput) {
+        if (ep.method === 'POST') {
+            paramsContainer.style.display = 'block';
+            if (paramsLabel) paramsLabel.textContent = 'JSON Request Body (application/json):';
+            paramsInput.placeholder = '{"ioc": "198.51.100.44"}';
+            paramsInput.value = '{"ioc": "198.51.100.44"}';
+        } else if (ep.params && ep.params.length > 0) {
+            paramsContainer.style.display = 'block';
+            if (paramsLabel) paramsLabel.textContent = 'Optional URL Query Parameters (e.g. key=value&key2=value2):';
+            var firstParam = ep.params[0];
+            paramsInput.placeholder = 'e.g. ' + firstParam.name + '=' + firstParam.example;
+            paramsInput.value = '';
+        } else {
+            paramsContainer.style.display = 'none';
+            paramsInput.value = '';
+        }
     }
 
-    var curlPreview = document.getElementById('curl-command-preview');
-    if (curlPreview) {
-        curlPreview.textContent = curlCmd;
+    // Reset status and show sample response
+    var statusBadge = document.getElementById('explorer-status-badge');
+    if (statusBadge) {
+        statusBadge.textContent = 'Ready (Sample Preview)';
+        statusBadge.style.color = '#94a3b8';
+    }
+
+    var responseBody = document.getElementById('explorer-response-body');
+    if (responseBody) {
+        responseBody.textContent = ep.sample_response || '// Click "Send Request" to execute live query...';
     }
 }
 
-function copyCurlCommand() {
-    var curlPreview = document.getElementById('curl-command-preview');
-    if (!curlPreview) return;
-    var cmd = curlPreview.textContent;
+async function handleSendExplorerRequest() {
+    var select = document.getElementById('explorer-endpoint-select');
+    if (!select) return;
 
+    var catalog = getEndpointsCatalog();
+    var ep = catalog.find(function(item) { return item.id === select.value; }) || catalog[0];
+    if (!ep) return;
+
+    var statusBadge = document.getElementById('explorer-status-badge');
+    var responseBody = document.getElementById('explorer-response-body');
+    var paramsInput = document.getElementById('explorer-params-input');
+    var sendBtn = document.getElementById('explorer-send-btn');
+
+    if (statusBadge) {
+        statusBadge.textContent = '⏳ Fetching live telemetry...';
+        statusBadge.style.color = '#38bdf8';
+    }
+    if (responseBody) {
+        responseBody.textContent = 'Executing query to ' + ep.path + '...';
+    }
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = '⏳ Sending...';
+    }
+
+    var url = ep.path;
+    var fetchOptions = {
+        method: ep.method,
+        headers: {
+            'Accept': 'application/json'
+        }
+    };
+
+    if (ep.method === 'GET' && paramsInput && paramsInput.value.trim()) {
+        var q = paramsInput.value.trim();
+        url += (url.includes('?') ? '&' : '?') + q;
+    } else if (ep.method === 'POST') {
+        var bodyStr = (paramsInput && paramsInput.value.trim()) ? paramsInput.value.trim() : '{}';
+        fetchOptions.headers['Content-Type'] = 'application/json';
+        fetchOptions.body = bodyStr;
+    }
+
+    var startTime = performance.now();
+
+    try {
+        var res = await fetch(url, fetchOptions);
+        var endTime = performance.now();
+        var latency = Math.round(endTime - startTime);
+
+        var contentType = res.headers.get('content-type') || '';
+        var formatted = '';
+
+        if (contentType.includes('application/json')) {
+            var data = await res.json();
+            formatted = JSON.stringify(data, null, 2);
+        } else {
+            formatted = await res.text();
+        }
+
+        if (responseBody) {
+            responseBody.textContent = formatted;
+        }
+
+        if (statusBadge) {
+            statusBadge.textContent = res.status + ' ' + (res.statusText || 'OK') + ' (' + latency + 'ms)';
+            statusBadge.style.color = res.ok ? '#34d399' : '#f87171';
+        }
+    } catch (err) {
+        if (responseBody) {
+            responseBody.textContent = 'Network or Execution Error: ' + err.message;
+        }
+        if (statusBadge) {
+            statusBadge.textContent = 'Request Failed';
+            statusBadge.style.color = '#f87171';
+        }
+    } finally {
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.textContent = '🚀 Send Request';
+        }
+    }
+}
+
+function copyExplorerResponse() {
+    var responseBody = document.getElementById('explorer-response-body');
+    if (!responseBody) return;
+
+    var text = responseBody.textContent;
     if (navigator.clipboard) {
-        navigator.clipboard.writeText(cmd).then(function() {
-            showToast('Copied cURL command to clipboard!', 'success');
+        navigator.clipboard.writeText(text).then(function() {
+            showToast('Copied API response JSON to clipboard!', 'success');
         });
     } else {
-        showToast('cURL copied!', 'success');
+        showToast('Response copied!', 'success');
     }
+}
+
+function renderEndpointsCatalogTable() {
+    var tbody = document.getElementById('endpoints-table-body');
+    if (!tbody) return;
+
+    var catalog = getEndpointsCatalog();
+    tbody.innerHTML = '';
+    var fragment = document.createDocumentFragment();
+
+    catalog.forEach(function(ep) {
+        var tr = document.createElement('tr');
+
+        var methodBadgeStyle = ep.method === 'POST'
+            ? 'background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);'
+            : (ep.method === 'DELETE'
+                ? 'background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);'
+                : 'background: rgba(34, 211, 238, 0.15); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.3);');
+
+        var rolePill = '<span class="role-pill role-pill-viewer">Viewer</span>';
+        if (ep.auth_required && ep.auth_required.includes('Admin')) {
+            rolePill = '<span class="role-pill role-pill-admin">Admin</span>';
+        } else if (ep.auth_required && ep.auth_required.includes('Analyst')) {
+            rolePill = '<span class="role-pill role-pill-analyst">Analyst</span>';
+        }
+
+        var paramsHtml = '';
+        if (ep.params && ep.params.length > 0) {
+            paramsHtml = '<div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">' +
+                ep.params.map(function(p) {
+                    return '<span class="badge" style="font-size: 0.7rem; background: rgba(255,255,255,0.05); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1); font-family: var(--font-mono);">' +
+                        escapeHtml(p.name) + ' (' + escapeHtml(p.type) + ')' +
+                    '</span>';
+                }).join('') +
+            '</div>';
+        }
+
+        tr.innerHTML = '<td><span class="badge" style="font-family: var(--font-mono); font-weight: bold; ' + methodBadgeStyle + '">' + escapeHtml(ep.method) + '</span></td>'
+                     + '<td><code style="color: #38bdf8; font-weight: 600; font-size: 0.85rem;">' + escapeHtml(ep.path) + '</code><div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">' + escapeHtml(ep.name) + '</div></td>'
+                     + '<td>' + rolePill + '</td>'
+                     + '<td style="color: #e2e8f0; font-size: 0.8rem;">' + escapeHtml(ep.description) + paramsHtml + '</td>';
+
+        fragment.appendChild(tr);
+    });
+
+    tbody.appendChild(fragment);
 }
 
 function openCreateTokenModal() {
