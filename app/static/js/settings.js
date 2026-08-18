@@ -486,13 +486,21 @@ async function handleTestWebhook(webhookId, btnElem) {
     /**
      * Send a test notification to the specified webhook.
      */
+    if (!webhookId) return;
+
     var button = btnElem || document.querySelector(
         '.webhook-test-btn[data-id="' + webhookId + '"], .btn-test[data-id="' + webhookId + '"]'
     );
-    var origText = button ? button.innerHTML : '🔔 Test Alert';
+
+    // Prevent double clicking / concurrent calls
+    if (button && (button.disabled || button.dataset.loading === 'true')) {
+        return;
+    }
+
     if (button) {
-        button.innerHTML = '⏳ Testing...';
+        button.dataset.loading = 'true';
         button.disabled = true;
+        button.innerHTML = '⏳ Testing...';
     }
 
     try {
@@ -511,8 +519,9 @@ async function handleTestWebhook(webhookId, btnElem) {
         showToast('Network error: ' + error.message, 'error');
     } finally {
         if (button) {
-            button.innerHTML = origText;
+            button.dataset.loading = 'false';
             button.disabled = false;
+            button.innerHTML = '🔔 Test Alert';
         }
     }
 }

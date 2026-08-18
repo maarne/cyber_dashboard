@@ -172,7 +172,6 @@
                             <label class="toggle-switch" title="Toggle active status">
                                 <input type="checkbox" class="toggle-input webhook-toggle-status"
                                        data-id="{{ wh.id }}"
-                                       onchange="handleToggleWebhook('{{ wh.id }}')"
                                        {% if wh.is_active %}checked{% endif %}
                                        {% if not is_admin %}disabled{% endif %}>
                                 <span class="toggle-slider"></span>
@@ -203,7 +202,6 @@
                 <div class="webhook-card-footer" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                     <button type="button" class="btn btn-secondary btn-sm webhook-test-btn"
                             data-id="{{ wh.id }}"
-                            onclick="handleTestWebhook('{{ wh.id }}', this)"
                             {% if not is_analyst %}disabled title="Analyst or Admin role required"{% endif %}>
                         🔔 Test Alert
                     </button>
@@ -217,14 +215,12 @@
                                 data-critical="{{ 1 if wh.notify_critical_cves else 0 }}"
                                 data-high="{{ 1 if wh.notify_high_cves else 0 }}"
                                 data-cisa="{{ 1 if wh.notify_cisa_exploits else 0 }}"
-                                onclick="handleEditWebhook(this)"
                                 {% if not is_admin %}disabled{% endif %}>
                             ✏️ Edit
                         </button>
                         <button type="button" class="btn btn-danger btn-sm webhook-delete-btn"
                                 data-id="{{ wh.id }}"
                                 data-name="{{ wh.name }}"
-                                onclick="showDeleteModal('{{ wh.id }}', '{{ wh.name }}')"
                                 {% if not is_admin %}disabled{% endif %}>
                             🗑️ Delete
                         </button>
@@ -353,7 +349,6 @@
                         <label class="toggle-switch" title="Toggle active status">
                             <input type="checkbox" class="toggle-input feed-toggle-status"
                                    data-id="{{ feed.id }}"
-                                   onchange="handleToggleFeed('{{ feed.id }}')"
                                    {% if feed.is_active %}checked{% endif %}
                                    {% if not is_admin %}disabled{% endif %}>
                             <span class="toggle-slider"></span>
@@ -363,7 +358,6 @@
                     <div class="feed-card-footer" style="display: flex; justify-content: flex-end;">
                         <button type="button" class="btn btn-danger btn-sm feed-delete-btn"
                                 data-id="{{ feed.id }}" data-name="{{ feed.name }}"
-                                onclick="handleDeleteFeed('{{ feed.id }}', '{{ feed.name }}')"
                                 {% if not is_admin %}disabled title="Admin privileges required to remove feeds"{% endif %}>
                             🗑️ Remove Feed
                         </button>
