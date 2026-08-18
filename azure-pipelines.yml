@@ -154,11 +154,15 @@ stages:
                   --container-registry-user cyberdashregistry \
                   --container-registry-password "$ACR_PASS"
 
-                echo "Setting application environment variables..."
+                echo "Setting application environment variables (Enabling Persistent Storage)..."
                 az webapp config appsettings set \
                   --name $(webAppName) \
                   --resource-group "$RG_NAME" \
-                  --settings WEBSITES_PORT=8000 DATABASE_PATH="/app/data/cyber_dashboard.db" WEBSITES_CONTAINER_START_TIME_LIMIT=1800
+                  --settings \
+                    WEBSITES_PORT=8000 \
+                    WEBSITES_ENABLE_APP_SERVICE_STORAGE=true \
+                    DATABASE_PATH="/home/data/cyber_dashboard.db" \
+                    WEBSITES_CONTAINER_START_TIME_LIMIT=1800
 
                 echo "Restarting Web App $(webAppName)..."
                 az webapp restart --name $(webAppName) --resource-group "$RG_NAME"
