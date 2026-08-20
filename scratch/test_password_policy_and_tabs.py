@@ -77,7 +77,7 @@ def test_password_policy_and_tabs():
     # Case B: Missing special character
     res = admin_s.post(f"{BASE_URL}/api/users", json={
         "username": "policy_test_user",
-        "password": "Password1234",
+        "password": "AlphaNumericOnly99",
         "role": "analyst",
     })
     assert res.status_code == 400, "Should reject missing special character"

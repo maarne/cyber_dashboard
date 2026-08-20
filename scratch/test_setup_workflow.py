@@ -59,7 +59,7 @@ def test_setup_workflow():
     assert "characters in length" in res.json()["error"]
 
     # Missing special character test
-    res = s.post(f"{BASE_URL}/api/setup", json={"username": "admin", "password": "Password12345"})
+    res = s.post(f"{BASE_URL}/api/setup", json={"username": "admin", "password": "AlphaNumericOnly99"})
     assert res.status_code == 400
     assert "special character" in res.json()["error"]
     print("✅ 3. Password complexity policy enforcement verified on /api/setup.")

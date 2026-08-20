@@ -1,9 +1,13 @@
 # ============================================================
 # CyberDash — Docker Container Pipeline for Azure Web App
 # ============================================================
-# Builds and pushes a hardened Docker container to Azure Container Registry (ACR),
-# runs SAST & Container Vulnerability Scans, deploys to Azure Web App for Containers,
-# and verifies security with OWASP ZAP DAST testing.
+# 5-Stage DevSecOps Pipeline:
+# 1. Critical Functional & Integration Testing
+# 2. Build & Push Hardened Docker Container to ACR
+# 3. SAST (Semgrep) & Container Vulnerability Scanning (Trivy)
+# 4. Deploy to Azure Web App for Containers (Persistent Storage)
+# 5. DAST (OWASP ZAP) Security Verification Scan
+# ============================================================
 
 trigger:
 - main
@@ -27,10 +31,38 @@ variables:
 
 stages:
 # ============================================================
-# STAGE 1: BUILD & PUSH DOCKER CONTAINER
+# STAGE 1: CRITICAL FUNCTIONAL & INTEGRATION TESTS
+# ============================================================
+- stage: Test
+  displayName: 'Run Critical Function Tests'
+  jobs:
+  - job: CriticalTestsJob
+    displayName: 'Execute Critical App Test Suite'
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: UsePythonVersion@0
+      displayName: 'Set Python 3.11 Environment'
+      inputs:
+        versionSpec: '3.11'
+        addToPath: true
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+      displayName: 'Install Dependencies'
+
+    - script: |
+        PYTHONPATH=. python scratch/test_critical_suite.py
+      displayName: 'Run Critical Function & Integration Test Suite'
+
+# ============================================================
+# STAGE 2: BUILD & PUSH DOCKER CONTAINER
 # ============================================================
 - stage: BuildAndPush
   displayName: 'Build & Push Container'
+  dependsOn: Test
+  condition: succeeded()
   jobs:
   - job: DockerBuildJob
     displayName: 'Build & Push to ACR'
@@ -49,7 +81,7 @@ stages:
           latest
 
 # ============================================================
-# STAGE 2: SECURITY SCANS (SAST & CONTAINER VULNERABILITY SCAN)
+# STAGE 3: SECURITY SCANS (SAST & CONTAINER VULNERABILITY SCAN)
 # ============================================================
 - stage: SecurityScans
   displayName: 'Security Scans (SAST & Container Image)'
@@ -116,7 +148,7 @@ stages:
         publishLocation: 'Container'
 
 # ============================================================
-# STAGE 3: DEPLOY CONTAINER TO AZURE WEB APP
+# STAGE 4: DEPLOY CONTAINER TO AZURE WEB APP
 # ============================================================
 - stage: Deploy
   displayName: 'Deploy Container to Azure'
@@ -168,7 +200,7 @@ stages:
                 az webapp restart --name $(webAppName) --resource-group "$RG_NAME"
 
 # ============================================================
-# STAGE 4: DAST (DYNAMIC APPLICATION SECURITY TESTING)
+# STAGE 5: DAST (DYNAMIC APPLICATION SECURITY TESTING)
 # ============================================================
 - stage: DAST
   displayName: 'DAST Security Scan (OWASP ZAP)'

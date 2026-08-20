@@ -105,10 +105,11 @@ def test_rbac_and_audit():
 
         # C. Admin Governance
         # Create new user
+        from app.services.auth_service import generate_secure_random_password
         test_new_user = "soc_intern"
         res = admin_s.post(f"{BASE_URL}/api/users", json={
             "username": test_new_user,
-            "password": "Password123!",
+            "password": generate_secure_random_password(14),
             "role": "viewer"
         })
         assert res.status_code in (201, 409)
