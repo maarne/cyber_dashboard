@@ -74,6 +74,8 @@ stages:
           sonar.python.version=3.11
           sonar.python.coverage.reportPaths=$(System.DefaultWorkingDirectory)/coverage.xml
           sonar.exclusions=scratch/**,infra/**,images/**,static/vendor/**
+          sonar.branch.name=$(Build.SourceBranchName)
+          
     - task: UsePythonVersion@0
       displayName: 'Set Python 3.11 Environment'
       inputs:
