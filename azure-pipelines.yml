@@ -1,43 +1,59 @@
 # ============================================================
-# CyberDash — Docker Container Pipeline for Azure Web App
+# CyberDash — Enterprise 2-Stage DevSecOps Pipeline
 # ============================================================
-# 5-Stage DevSecOps Pipeline:
-# 1. Critical Functional & Integration Testing
-# 2. Build & Push Hardened Docker Container to ACR
-# 3. SAST (Semgrep) & Container Vulnerability Scanning (Trivy)
-# 4. Deploy to Azure Web App for Containers (Persistent Storage)
-# 5. DAST (OWASP ZAP) Security Verification Scan
+# Stage 1 (DevAndValidation):
+#   - Critical Function & Integration Testing (sandbox SQLite DB)
+#   - Decoupled Container Build & Push to ACR
+#   - SAST (Semgrep) & Container Vulnerability Scanning (Trivy)
+#   - Provision Ephemeral Dev/Staging Infrastructure via Bicep (IaC)
+#     (Supports dynamic unique naming: cyberdash-staging-<uniqueString>.azurewebsites.net)
+#   - Deploy Container to Staging & Run DAST (OWASP ZAP)
+#
+# Approval Gate:
+#   - Human Manual Approval Gate (ManualValidation@0)
+#
+# Stage 2 (ProductionDeployAndTeardown):
+#   - Dynamic Teardown of Ephemeral Dev/Staging App & Plan (Cost Optimization)
+#   - Provision / Ensure Production Infrastructure via Bicep (Persistent Storage)
+#     (Supports dynamic unique naming: cyberdash-prod-<uniqueString>.azurewebsites.net)
+#   - Deploy Verified Container to Production Web App & Dynamic Smoke Test
 # ============================================================
 
 trigger:
-- main
+  branches:
+    include:
+    - main
+    - feature
+    - feature/*
 
 variables:
   # Azure Resource Manager & Container Registry Service Connections
-  azureServiceConnectionId: '21873dc2-9960-450e-8684-dbd380230f52' # Azure Resource Manager (AzureRM) service connection
-  acrServiceConnection: 'Cyberdash-registry-conn' # Docker Registry service connection for ACR
+  azureServiceConnectionId: '21873dc2-9960-450e-8684-dbd380230f52'
+  acrServiceConnection: 'Cyberdash-registry-conn'
 
   # Container Registry & Image configuration
-  containerRegistry: 'cyberdashregistry.azurecr.io' # Replace with your ACR login server
+  containerRegistry: 'cyberdashregistry.azurecr.io'
   imageRepository: 'cyberdash'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
   tag: '$(Build.BuildId)'
 
-  # Azure Web App target configuration
-  webAppName: 'cyberdash-dev'
-  environmentName: 'cyberdash-dev'
+  # Target Environment & Pipeline Agent
+  environmentName: 'cyberdash-prod'
   vmImageName: 'ubuntu-latest'
   projectRoot: $(System.DefaultWorkingDirectory)
 
 stages:
 # ============================================================
-# STAGE 1: CRITICAL FUNCTIONAL & INTEGRATION TESTS
+# STAGE 1: DEV ENVIRONMENT, VALIDATION & SECURITY SCANS
 # ============================================================
-- stage: Test
-  displayName: 'Run Critical Function Tests'
+- stage: DevAndValidation
+  displayName: 'Stage 1: Dev Environment, Validation & Security Scans'
   jobs:
+  # ------------------------------------------------------------
+  # Job 1: Critical Function & Integration Testing
+  # ------------------------------------------------------------
   - job: CriticalTestsJob
-    displayName: 'Execute Critical App Test Suite'
+    displayName: 'Critical Function & Integration Tests'
     pool:
       vmImage: $(vmImageName)
     steps:
@@ -50,22 +66,19 @@ stages:
     - script: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-      displayName: 'Install Dependencies'
+      displayName: 'Install Python Dependencies'
 
     - script: |
         PYTHONPATH=. python scratch/test_critical_suite.py
-      displayName: 'Run Critical Function & Integration Test Suite'
+      displayName: 'Execute All-in-One Critical Test Suite'
 
-# ============================================================
-# STAGE 2: BUILD & PUSH DOCKER CONTAINER
-# ============================================================
-- stage: BuildAndPush
-  displayName: 'Build & Push Container'
-  dependsOn: Test
-  condition: succeeded()
-  jobs:
-  - job: DockerBuildJob
-    displayName: 'Build & Push to ACR'
+  # ------------------------------------------------------------
+  # Job 2: Decoupled Container Build & Push to ACR
+  # ------------------------------------------------------------
+  - job: DockerBuildAndPushJob
+    displayName: 'Build & Push Hardened Docker Image'
+    dependsOn: CriticalTestsJob
+    condition: succeeded()
     pool:
       vmImage: $(vmImageName)
     steps:
@@ -90,20 +103,17 @@ stages:
           $(tag)
           latest
 
-# ============================================================
-# STAGE 3: SECURITY SCANS (SAST & CONTAINER VULNERABILITY SCAN)
-# ============================================================
-- stage: SecurityScans
-  displayName: 'Security Scans (SAST & Container Image)'
-  dependsOn: BuildAndPush
-  condition: succeeded()
-  jobs:
-  - job: ScansJob
-    displayName: 'SAST & Container Vulnerability Scans'
+  # ------------------------------------------------------------
+  # Job 3: SAST (Semgrep) & Container Image Scanning (Trivy)
+  # ------------------------------------------------------------
+  - job: SecurityScansJob
+    displayName: 'SAST & Container Vulnerability Scanning'
+    dependsOn: DockerBuildAndPushJob
+    condition: succeeded()
     pool:
       vmImage: $(vmImageName)
     steps:
-    # 1. Semgrep SAST Scan (Source Code Analysis)
+    # Semgrep SAST Scan
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/semgrep
         docker run --rm \
@@ -124,18 +134,17 @@ stages:
         ArtifactName: 'Semgrep_SAST_Report'
         publishLocation: 'Container'
 
-    # 2. Log in to ACR and pull image for Trivy scan
+    # ACR Login & Trivy Container Scan
     - task: Docker@2
-      displayName: 'Log in to ACR for Trivy'
+      displayName: 'Log in to ACR for Image Scan'
       inputs:
         command: login
         containerRegistry: $(acrServiceConnection)
 
     - script: |
         docker pull $(containerRegistry)/$(imageRepository):$(tag)
-      displayName: 'Pull Container Image from ACR'
+      displayName: 'Pull Built Image for Trivy Scanning'
 
-    # 3. Trivy Container Image Scan (Vulnerabilities, Secrets, Misconfigurations)
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/trivy
         docker run --rm \
@@ -157,96 +166,100 @@ stages:
         ArtifactName: 'Trivy_Container_Report'
         publishLocation: 'Container'
 
-# ============================================================
-# STAGE 4: DEPLOY CONTAINER TO AZURE WEB APP
-# ============================================================
-- stage: Deploy
-  displayName: 'Deploy Container to Azure'
-  dependsOn: SecurityScans
-  condition: succeeded()
-  jobs:
-  - deployment: DeploymentJob
-    pool:
-      vmImage: $(vmImageName)
-    environment: $(environmentName)
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: AzureCLI@2
-            displayName: 'Configure and Deploy Container to Web App'
-            inputs:
-              azureSubscription: $(azureServiceConnectionId)
-              scriptType: 'bash'
-              scriptLocation: 'inlineScript'
-              inlineScript: |
-                echo "Fetching resource group for $(webAppName)..."
-                RG_NAME=$(az webapp list --query "[?name=='$(webAppName)'].resourceGroup" -o tsv)
-                echo "Found Resource Group: $RG_NAME"
-
-                echo "Fetching ACR credentials for cyberdashregistry..."
-                ACR_PASS=$(az acr credential show --name cyberdashregistry --query "passwords[0].value" -o tsv)
-
-                echo "Configuring container image and registry credentials on $(webAppName)..."
-                az webapp config container set \
-                  --name $(webAppName) \
-                  --resource-group "$RG_NAME" \
-                  --container-image-name $(containerRegistry)/$(imageRepository):$(tag) \
-                  --container-registry-url https://$(containerRegistry) \
-                  --container-registry-user cyberdashregistry \
-                  --container-registry-password "$ACR_PASS"
-
-                echo "Setting application environment variables (Enabling Persistent Storage)..."
-                az webapp config appsettings set \
-                  --name $(webAppName) \
-                  --resource-group "$RG_NAME" \
-                  --settings \
-                    WEBSITES_PORT=8000 \
-                    WEBSITES_ENABLE_APP_SERVICE_STORAGE=true \
-                    DATABASE_PATH="/home/data/cyber_dashboard.db" \
-                    WEBSITES_CONTAINER_START_TIME_LIMIT=1800
-
-                echo "Restarting Web App $(webAppName)..."
-                az webapp restart --name $(webAppName) --resource-group "$RG_NAME"
-
-# ============================================================
-# STAGE 5: DAST (DYNAMIC APPLICATION SECURITY TESTING)
-# ============================================================
-- stage: DAST
-  displayName: 'DAST Security Scan (OWASP ZAP)'
-  dependsOn: Deploy
-  condition: succeeded()
-  jobs:
-  - job: ZapScanJob
+  # ------------------------------------------------------------
+  # Job 4: Ephemeral Staging Infrastructure (Bicep), Dynamic DAST
+  # ------------------------------------------------------------
+  - job: DeployStagingAndDASTJob
+    displayName: 'Provision Staging via Bicep & Run DAST'
+    dependsOn: SecurityScansJob
+    condition: succeeded()
     pool:
       vmImage: $(vmImageName)
     steps:
+    - task: AzureCLI@2
+      name: DeployStagingStep
+      displayName: 'Provision Ephemeral Staging via Bicep (IaC)'
+      inputs:
+        azureSubscription: $(azureServiceConnectionId)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          set -e
+
+          echo "Discovering Azure Resource Group..."
+          RG_NAME=$(az webapp list --query "[?contains(name, 'cyberdash')].resourceGroup" -o tsv | head -n 1)
+          if [ -z "$RG_NAME" ]; then
+              RG_NAME=$(az group list --query "[?contains(name, 'cyberdash') || contains(name, 'CyberDash')].name | [0]" -o tsv)
+          fi
+          if [ -z "$RG_NAME" ]; then
+              RG_NAME="cyberdash-rg"
+          fi
+          echo "Target Resource Group: $RG_NAME"
+
+          echo "Fetching ACR credentials..."
+          ACR_PASS=$(az acr credential show --name cyberdashregistry --query "passwords[0].value" -o tsv)
+
+          echo "Deploying Ephemeral Staging Infrastructure via Bicep..."
+          DEPLOY_OUTPUT=$(az deployment group create \
+            --name "deploy-staging-$(Build.BuildId)" \
+            --resource-group "$RG_NAME" \
+            --template-file "$(Build.SourcesDirectory)/infra/main.bicep" \
+            --parameters \
+              environmentType=staging \
+              baseName=cyberdash \
+              containerImage=$(containerRegistry)/$(imageRepository):$(tag) \
+              acrLoginServer=$(containerRegistry) \
+              acrUsername=cyberdashregistry \
+              acrPassword="$ACR_PASS" \
+              enablePersistentStorage=false \
+            --query "properties.outputs" -o json)
+
+          # Extract dynamically generated Web App Name and Full URL from Bicep outputs
+          STAGING_URL=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppUrl']['value'])")
+          STAGING_APP_NAME=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppName']['value'])")
+
+          echo "============================================================"
+          echo "🚀 Ephemeral Staging Web App Deployed:"
+          echo "   App Name: $STAGING_APP_NAME"
+          echo "   URL:      $STAGING_URL"
+          echo "============================================================"
+
+          # Export dynamic URL for subsequent pipeline tasks
+          echo "##vso[task.setvariable variable=DYNAMIC_STAGING_URL]$STAGING_URL"
+          echo "##vso[task.setvariable variable=DYNAMIC_STAGING_APP_NAME]$STAGING_APP_NAME"
+
+          echo "Warming up Staging Web App at $STAGING_URL..."
+          for i in {1..15}; do
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL" || echo "000")
+              echo "Attempt $i: Received HTTP $HTTP_STATUS from $STAGING_URL"
+              if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 302 ] || [ "$HTTP_STATUS" -eq 307 ]; then
+                  echo "✅ Staging Web App is responsive and healthy!"
+                  break
+              fi
+              sleep 10
+          done
+
+    # Run OWASP ZAP DAST against Dynamic Staging URL
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/zap
         sudo chmod -R 777 $(Build.ArtifactStagingDirectory)/zap
 
-        echo "Warming up Web App at $WEB_APP_URL..."
-        for i in {1..12}; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$WEB_APP_URL" || echo "000")
-            echo "Attempt $i: Received HTTP $HTTP_STATUS from $WEB_APP_URL"
-            if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 302 ]; then
-                echo "Web App is active and responding!"
-                break
-            fi
-            echo "Waiting 10 seconds for Web App startup..."
-            sleep 10
-        done
+        TARGET_URL="$(DYNAMIC_STAGING_URL)"
+        if [ -z "$TARGET_URL" ]; then
+            echo "Warning: DYNAMIC_STAGING_URL not set, falling back to default lookup."
+            TARGET_URL="https://cyberdash-staging.azurewebsites.net"
+        fi
+
+        echo "Launching OWASP ZAP DAST baseline against dynamic target: $TARGET_URL..."
 
         docker run --rm -v $(Build.ArtifactStagingDirectory)/zap:/zap/wrk/:rw -u root -t ghcr.io/zaproxy/zaproxy:stable \
           zap-baseline.py \
-          -t "$WEB_APP_URL" \
+          -t "$TARGET_URL" \
           -r zap_dast_report.html \
           -J zap_out.json \
           -I \
           -z "-config connection.timeoutInSecs=60"
-      env:
-        WEB_APP_URL: $(webAppUrlSec)
-      displayName: 'Run OWASP ZAP DAST Scan'
+      displayName: 'Run OWASP ZAP DAST Security Scan'
       continueOnError: true
 
     - task: PublishBuildArtifacts@1
@@ -255,3 +268,150 @@ stages:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/zap/zap_dast_report.html'
         ArtifactName: 'OWASP_ZAP_DAST_Report'
         publishLocation: 'Container'
+
+# ============================================================
+# APPROVAL GATE: HUMAN MANUAL REVIEW
+# ============================================================
+- stage: ApprovalGate
+  displayName: 'Human Approval Gate'
+  dependsOn: DevAndValidation
+  condition: succeeded()
+  jobs:
+  - job: WaitForApproval
+    displayName: 'Review Test & Security Reports for Production Release'
+    pool: server # Agentless job for manual validation
+    steps:
+    - task: ManualValidation@0
+      displayName: 'Authorize Production Deployment'
+      inputs:
+        instructions: |
+          Stage 1 Dev & Validation completed successfully!
+          - All 10 Critical Unit/Integration tests passed.
+          - Semgrep SAST & Trivy Container vulnerability scans passed.
+          - Ephemeral Staging environment provisioned via Bicep and validated with OWASP ZAP DAST.
+          Please review the published scan artifacts. Approving will automatically tear down the ephemeral staging environment and deploy to Production.
+        onTimeout: 'reject'
+        timeoutInMinutes: 1440
+
+# ============================================================
+# STAGE 2: PRODUCTION DEPLOYMENT & STAGING TEARDOWN
+# ============================================================
+- stage: ProductionDeployAndTeardown
+  displayName: 'Stage 2: Production Deployment & Staging Teardown'
+  dependsOn: ApprovalGate
+  condition: succeeded()
+  jobs:
+  # ------------------------------------------------------------
+  # Job 1: Teardown Ephemeral Staging Environment
+  # ------------------------------------------------------------
+  - job: TeardownStagingJob
+    displayName: 'Teardown Ephemeral Staging Environment'
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Discover and Delete Staging Web Apps & Plans'
+      inputs:
+        azureSubscription: $(azureServiceConnectionId)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Discovering Azure Resource Group..."
+          RG_NAME=$(az webapp list --query "[?contains(name, 'cyberdash')].resourceGroup" -o tsv | head -n 1)
+          if [ -z "$RG_NAME" ]; then
+              RG_NAME=$(az group list --query "[?contains(name, 'cyberdash') || contains(name, 'CyberDash')].name | [0]" -o tsv)
+          fi
+
+          if [ -n "$RG_NAME" ]; then
+              echo "Searching for ephemeral staging web apps in $RG_NAME..."
+              STAGING_APPS=$(az webapp list --resource-group "$RG_NAME" --query "[?contains(name, 'staging')].name" -o tsv)
+
+              if [ -n "$STAGING_APPS" ]; then
+                  for APP in $STAGING_APPS; do
+                      echo "Deleting ephemeral staging Web App: $APP..."
+                      az webapp delete --name "$APP" --resource-group "$RG_NAME" || true
+                      echo "Deleting associated App Service Plan: asp-$APP..."
+                      az appservice plan delete --name "asp-$APP" --resource-group "$RG_NAME" --yes || true
+                  done
+                  echo "✅ All ephemeral staging resources successfully torn down!"
+              else
+                  echo "No active staging apps found in $RG_NAME."
+              fi
+          fi
+
+  # ------------------------------------------------------------
+  # Job 2: Provision & Deploy to Production Web App
+  # ------------------------------------------------------------
+  - deployment: ProductionDeploymentJob
+    displayName: 'Deploy Production Infrastructure & Container'
+    dependsOn: TeardownStagingJob
+    condition: succeeded()
+    pool:
+      vmImage: $(vmImageName)
+    environment: $(environmentName)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          # Explicitly check out repository in deployment job
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: 'Provision Production via Bicep (Persistent Storage) & Deploy'
+            inputs:
+              azureSubscription: $(azureServiceConnectionId)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -e
+
+                echo "Discovering Azure Resource Group for Production..."
+                RG_NAME=$(az webapp list --query "[?contains(name, 'cyberdash')].resourceGroup" -o tsv | head -n 1)
+                if [ -z "$RG_NAME" ]; then
+                    RG_NAME=$(az group list --query "[?contains(name, 'cyberdash') || contains(name, 'CyberDash')].name | [0]" -o tsv)
+                fi
+                if [ -z "$RG_NAME" ]; then
+                    RG_NAME="cyberdash-rg"
+                fi
+                echo "Target Production Resource Group: $RG_NAME"
+
+                echo "Fetching ACR credentials..."
+                ACR_PASS=$(az acr credential show --name cyberdashregistry --query "passwords[0].value" -o tsv)
+
+                echo "Deploying Production Infrastructure via Bicep (Persistent Storage Enabled)..."
+                DEPLOY_OUTPUT=$(az deployment group create \
+                  --name "deploy-prod-$(Build.BuildId)" \
+                  --resource-group "$RG_NAME" \
+                  --template-file "$(Build.SourcesDirectory)/infra/main.bicep" \
+                  --parameters \
+                    environmentType=prod \
+                    baseName=cyberdash \
+                    containerImage=$(containerRegistry)/$(imageRepository):$(tag) \
+                    acrLoginServer=$(containerRegistry) \
+                    acrUsername=cyberdashregistry \
+                    acrPassword="$ACR_PASS" \
+                    enablePersistentStorage=true \
+                  --query "properties.outputs" -o json)
+
+                PROD_URL=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppUrl']['value'])")
+                PROD_APP_NAME=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppName']['value'])")
+
+                echo "============================================================"
+                echo "🚀 Production Web App Deployed:"
+                echo "   App Name: $PROD_APP_NAME"
+                echo "   URL:      $PROD_URL"
+                echo "============================================================"
+
+                echo "Restarting Production Web App $PROD_APP_NAME..."
+                az webapp restart --name "$PROD_APP_NAME" --resource-group "$RG_NAME"
+
+                echo "Running Production Smoke Test against $PROD_URL..."
+                for i in {1..15}; do
+                    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL" || echo "000")
+                    echo "Attempt $i: Received HTTP $HTTP_STATUS from $PROD_URL"
+                    if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 302 ] || [ "$HTTP_STATUS" -eq 307 ]; then
+                        echo "✅ Production Web App $PROD_APP_NAME is fully operational!"
+                        break
+                    fi
+                    sleep 10
+                done

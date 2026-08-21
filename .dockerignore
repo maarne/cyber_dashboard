@@ -1,16 +1,50 @@
+# Git & Repository Metadata
 .git
 .gitignore
+.gitattributes
+
+# Infrastructure as Code (Bicep / Terraform)
+infra/
+azure-pipelines.yml
+
+# Test Scripts, Harnesses & Documentation
+scratch/
+images/
+projectinfo.md
+*.md
+
+# Virtual Environments & Caches
 .venv
-__pycache__
+venv/
+ENV/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-.pytest_cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local SQLite Databases (provisioned at runtime)
 *.db
-scratch/
-images/
+*.sqlite
+*.sqlite3
+
+# Git Helper Scripts & Utilities
+git-*.sh
+
+# IDE & Editor Configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Agent & System Metadata
 .system_generated
 .agents
-azure-pipelines.yml
+
+# Docker Build Files
 Dockerfile
 .dockerignore
