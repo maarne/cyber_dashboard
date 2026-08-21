@@ -184,6 +184,8 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
+          set -e
+
           echo "Discovering Azure Resource Group..."
           RG_NAME=$(az webapp list --query "[?contains(name, 'cyberdash')].resourceGroup" -o tsv | head -n 1)
           if [ -z "$RG_NAME" ]; then
@@ -201,7 +203,7 @@ stages:
           DEPLOY_OUTPUT=$(az deployment group create \
             --name "deploy-staging-$(Build.BuildId)" \
             --resource-group "$RG_NAME" \
-            --template-file infra/main.bicep \
+            --template-file "$(Build.SourcesDirectory)/infra/main.bicep" \
             --parameters \
               environmentType=staging \
               baseName=cyberdash \
@@ -351,6 +353,9 @@ stages:
       runOnce:
         deploy:
           steps:
+          # Explicitly check out repository in deployment job
+          - checkout: self
+
           - task: AzureCLI@2
             displayName: 'Provision Production via Bicep (Persistent Storage) & Deploy'
             inputs:
@@ -358,6 +363,8 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
+                set -e
+
                 echo "Discovering Azure Resource Group for Production..."
                 RG_NAME=$(az webapp list --query "[?contains(name, 'cyberdash')].resourceGroup" -o tsv | head -n 1)
                 if [ -z "$RG_NAME" ]; then
@@ -375,7 +382,7 @@ stages:
                 DEPLOY_OUTPUT=$(az deployment group create \
                   --name "deploy-prod-$(Build.BuildId)" \
                   --resource-group "$RG_NAME" \
-                  --template-file infra/main.bicep \
+                  --template-file "$(Build.SourcesDirectory)/infra/main.bicep" \
                   --parameters \
                     environmentType=prod \
                     baseName=cyberdash \
