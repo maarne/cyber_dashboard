@@ -57,6 +57,23 @@ stages:
     pool:
       vmImage: $(vmImageName)
     steps:
+    - checkout: self
+      fetchDepth: 0
+  # 1. Prepare SonarQube Analysis
+    - task: SonarCloudPrepare@4
+      displayName: 'Prepare SonarQube Analysis'
+      inputs:
+        SonarQube: 'sonarqubecloud'
+        organization: 'maarne'
+        scannerMode: 'cli'
+        configMode: 'manual'
+        cliProjectKey: 'maarne_LearningDevOps'
+        cliProjectName: 'LearningDevOps'
+        cliSources: 'app'
+        extraProperties: |
+          sonar.python.version=3.11
+          sonar.python.coverage.reportPaths=$(System.DefaultWorkingDirectory)/coverage.xml
+          sonar.exclusions=scratch/**,infra/**,images/**,static/vendor/**
     - task: UsePythonVersion@0
       displayName: 'Set Python 3.11 Environment'
       inputs:
@@ -71,6 +88,15 @@ stages:
     - script: |
         PYTHONPATH=. python scratch/test_critical_suite.py
       displayName: 'Execute All-in-One Critical Test Suite'
+
+    # 4. Run Code Analysis (MUST be after your test/build step)
+    - task: SonarCloudAnalyze@4
+      displayName: 'Run SonarQube Code Analysis'
+    # 5. Publish Quality Gate
+    - task: SonarCloudPublish@4
+      displayName: 'Publish SonarQube Quality Gate'
+      inputs:
+        pollingTimeoutSec: '300'
 
   # ------------------------------------------------------------
   # Job 2: Decoupled Container Build & Push to ACR
@@ -355,7 +381,6 @@ stages:
           steps:
           # Explicitly check out repository in deployment job
           - checkout: self
-
           - task: AzureCLI@2
             displayName: 'Provision Production via Bicep (Persistent Storage) & Deploy'
             inputs:
