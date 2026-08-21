@@ -85,11 +85,13 @@ stages:
     - script: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-      displayName: 'Install Python Dependencies'
+        pip install coverage
+      displayName: 'Install Python Dependencies & Coverage Tools'
 
     - script: |
-        PYTHONPATH=. python scratch/test_critical_suite.py
-      displayName: 'Execute All-in-One Critical Test Suite'
+        PYTHONPATH=. python -m coverage run --source=app scratch/test_critical_suite.py
+        python -m coverage xml -o $(System.DefaultWorkingDirectory)/coverage.xml
+      displayName: 'Execute All-in-One Critical Test Suite with Coverage'
 
     # 4. Run Code Analysis (MUST be after your test/build step)
     - task: SonarCloudAnalyze@4

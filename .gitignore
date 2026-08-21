@@ -7,6 +7,9 @@ ENV/
 __pycache__/
 *.pyc
 *.pyo
+.coverage
+coverage.xml
+htmlcov/
 
 # SQLite database (regenerated at runtime)
 *.db
