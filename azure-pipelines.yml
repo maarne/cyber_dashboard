@@ -196,6 +196,27 @@ stages:
         ArtifactName: 'Trivy_Container_Report'
         publishLocation: 'Container'
 
+    - task: SnykSecurityScan@1
+      inputs:
+        serviceConnectionEndpoint: 'snyk-conn'
+        testType: 'app'
+        targetFile: 'requirements.txt'
+        monitorWhen: 'always'
+        failOnIssues: false
+        projectName: 'LearningDevOps/LearningDevOps'
+        organization: 'maarne'
+
+    - task: SnykSecurityScan@1
+      inputs:
+        serviceConnectionEndpoint: 'snyk-conn'
+        testType: 'container'
+        dockerImageName: '$(containerRegistry)/$(imageRepository):$(tag)'
+        dockerfilePath: 'Dockerfile'
+        monitorWhen: 'always'
+        failOnIssues: false
+        projectName: 'LearningDevOps/LearningDevOps'
+        organization: 'maarne'
+
   # ------------------------------------------------------------
   # Job 4: Ephemeral Staging Infrastructure (Bicep), Dynamic DAST
   # ------------------------------------------------------------
