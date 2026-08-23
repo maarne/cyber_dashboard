@@ -93,6 +93,19 @@ stages:
         python -m coverage xml -o $(System.DefaultWorkingDirectory)/coverage.xml
       displayName: 'Execute All-in-One Critical Test Suite with Coverage'
 
+    # Snyk Open Source Dependency Scan (SCA)
+    - task: SnykSecurityScan@1
+      displayName: 'Snyk Open Source Dependency Scan'
+      inputs:
+        serviceConnectionEndpoint: 'snyk-conn'
+        testType: 'app'
+        targetFile: 'requirements.txt'
+        monitorWhen: 'always'
+        failOnIssues: false
+        projectName: 'LearningDevOps/LearningDevOps'
+        organization: 'maarne'
+        additionalArguments: '--command=python3'
+
     # 4. Run Code Analysis (MUST be after your test/build step)
     - task: SonarCloudAnalyze@4
       displayName: 'Run SonarQube Code Analysis'
@@ -197,16 +210,7 @@ stages:
         publishLocation: 'Container'
 
     - task: SnykSecurityScan@1
-      inputs:
-        serviceConnectionEndpoint: 'snyk-conn'
-        testType: 'app'
-        targetFile: 'requirements.txt'
-        monitorWhen: 'always'
-        failOnIssues: false
-        projectName: 'LearningDevOps/LearningDevOps'
-        organization: 'maarne'
-
-    - task: SnykSecurityScan@1
+      displayName: 'Snyk Container Image Security Scan'
       inputs:
         serviceConnectionEndpoint: 'snyk-conn'
         testType: 'container'
