@@ -14,8 +14,10 @@ param appServicePlanName string
 @description('The name of the Web App.')
 param webAppName string
 
-@description('App Service Plan pricing tier SKU (e.g. B1, P1v3).')
+@description('App Service Plan pricing tier SKU (e.g. F1, B1, P1v3).')
 @allowed([
+  'F1'
+  'D1'
   'B1'
   'B2'
   'B3'
@@ -23,26 +25,26 @@ param webAppName string
   'P1v3'
   'P2v3'
 ])
-param skuName string = 'B1'
+param skuName string = 'F1'
 
 @description('The environment name (e.g. staging, prod).')
-param environmentType string = 'staging'
+param environmentType string = 'prod'
 
 @description('Enable persistent storage mounted at /home (/home/data/cyber_dashboard.db).')
-param enablePersistentStorage bool = false
+param enablePersistentStorage bool = true
 
-@description('The full container image reference (e.g. cyberdashregistry.azurecr.io/cyberdash:latest).')
+@description('The full container image reference (e.g. maarne/cyberdash:latest or index.docker.io/maarne/cyberdash:latest).')
 param containerImage string
 
-@description('The ACR login server URL (e.g. cyberdashregistry.azurecr.io).')
-param acrLoginServer string = 'cyberdashregistry.azurecr.io'
+@description('The container registry server URL (defaults to Docker Hub https://index.docker.io/v1).')
+param dockerRegistryServerUrl string = 'https://index.docker.io/v1'
 
-@description('The ACR username (optional if using Managed Identity).')
-param acrUsername string = ''
+@description('The container registry username (optional for public Docker Hub images).')
+param dockerRegistryUsername string = ''
 
-@description('The ACR password (optional if using Managed Identity).')
+@description('The container registry password or PAT (optional for public Docker Hub images).')
 @secure()
-param acrPassword string = ''
+param dockerRegistryPassword string = ''
 
 @description('Standard resource tags.')
 param tags object = {
@@ -64,7 +66,7 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   }
   sku: {
     name: skuName
-    tier: skuName == 'B1' || skuName == 'B2' || skuName == 'B3' ? 'Basic' : 'PremiumV3'
+    tier: skuName == 'F1' ? 'Free' : skuName == 'D1' ? 'Shared' : (skuName == 'B1' || skuName == 'B2' || skuName == 'B3') ? 'Basic' : 'PremiumV3'
   }
 }
 
@@ -108,15 +110,15 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'DOCKER_REGISTRY_SERVER_URL'
-          value: 'https://${acrLoginServer}'
+          value: dockerRegistryServerUrl
         }
         {
           name: 'DOCKER_REGISTRY_SERVER_USERNAME'
-          value: acrUsername
+          value: dockerRegistryUsername
         }
         {
           name: 'DOCKER_REGISTRY_SERVER_PASSWORD'
-          value: acrPassword
+          value: dockerRegistryPassword
         }
       ]
     }

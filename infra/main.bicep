@@ -17,7 +17,7 @@ targetScope = 'resourceGroup'
   'staging'
   'prod'
 ])
-param environmentType string = 'staging'
+param environmentType string = 'prod'
 
 @description('Azure region for all resources. Defaults to the Resource Group location.')
 param location string = resourceGroup().location
@@ -30,6 +30,8 @@ param baseName string = 'cyberdash'
 
 @description('App Service Plan pricing tier SKU.')
 @allowed([
+  'F1'
+  'D1'
   'B1'
   'B2'
   'B3'
@@ -37,23 +39,23 @@ param baseName string = 'cyberdash'
   'P1v3'
   'P2v3'
 ])
-param skuName string = 'B1'
+param skuName string = 'F1'
 
 @description('Enable persistent SQLite storage mounted at /home.')
-param enablePersistentStorage bool = (environmentType == 'prod')
+param enablePersistentStorage bool = true
 
-@description('Full container image reference (e.g. cyberdashregistry.azurecr.io/cyberdash:latest).')
-param containerImage string
+@description('Full container image reference (e.g. maarne/cyberdash:latest).')
+param containerImage string = 'maarne/cyberdash:latest'
 
-@description('ACR login server URL.')
-param acrLoginServer string = 'cyberdashregistry.azurecr.io'
+@description('Container registry server URL.')
+param dockerRegistryServerUrl string = 'https://index.docker.io/v1'
 
-@description('ACR username for container registry authentication.')
-param acrUsername string = ''
+@description('Registry username for container registry authentication.')
+param dockerRegistryUsername string = ''
 
-@description('ACR password for container registry authentication.')
+@description('Registry password for container registry authentication.')
 @secure()
-param acrPassword string = ''
+param dockerRegistryPassword string = ''
 
 // Compute globally unique, collision-resistant Web App name
 var effectiveWebAppName = !empty(webAppName) ? webAppName : '${baseName}-${environmentType}-${uniqueString(resourceGroup().id)}'
@@ -81,9 +83,9 @@ module appServiceModule './modules/appservice.bicep' = {
     environmentType: environmentType
     enablePersistentStorage: enablePersistentStorage
     containerImage: containerImage
-    acrLoginServer: acrLoginServer
-    acrUsername: acrUsername
-    acrPassword: acrPassword
+    dockerRegistryServerUrl: dockerRegistryServerUrl
+    dockerRegistryUsername: dockerRegistryUsername
+    dockerRegistryPassword: dockerRegistryPassword
     tags: standardTags
   }
 }

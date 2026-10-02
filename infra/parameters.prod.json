@@ -9,16 +9,16 @@
       "value": "cyberdash"
     },
     "skuName": {
-      "value": "B1"
+      "value": "F1"
     },
     "enablePersistentStorage": {
       "value": true
     },
     "containerImage": {
-      "value": "cyberdashregistry.azurecr.io/cyberdash:latest"
+      "value": "maarne/cyberdash:latest"
     },
-    "acrLoginServer": {
-      "value": "cyberdashregistry.azurecr.io"
+    "dockerRegistryServerUrl": {
+      "value": "https://index.docker.io/v1"
     }
   }
 }
