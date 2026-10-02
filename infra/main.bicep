@@ -42,7 +42,7 @@ param baseName string = 'cyberdash'
 param skuName string = 'F1'
 
 @description('Enable persistent SQLite storage mounted at /home.')
-param enablePersistentStorage bool = true
+param enablePersistentStorage bool = (skuName != 'F1' && skuName != 'D1')
 
 @description('Full container image reference (e.g. maarne/cyberdash:latest).')
 param containerImage string = 'maarne/cyberdash:latest'

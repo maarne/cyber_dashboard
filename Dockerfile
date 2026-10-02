@@ -25,11 +25,12 @@ RUN pip install --no-cache-dir --upgrade pip "setuptools>=83.0.0" "wheel>=0.46.2
 # Copy application source code
 COPY app ./app
 
-# Create a non-root user and persistent data folder for security
+# Create a non-root user and persistent data folders for security
 RUN groupadd -g 10001 cyberdash && \
     useradd -u 10001 -g cyberdash -s /bin/bash -m cyberdash && \
-    mkdir -p /app/data && \
-    chown -R cyberdash:cyberdash /app
+    mkdir -p /app/data /home/data /home/cyberdash/data && \
+    chown -R cyberdash:cyberdash /app /home/data /home/cyberdash && \
+    chmod -R 777 /app/data /home/data /home/cyberdash/data
 
 USER cyberdash
 

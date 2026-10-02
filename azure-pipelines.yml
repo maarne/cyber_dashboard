@@ -314,7 +314,7 @@ stages:
                     skuName=F1 \
                     containerImage=$(imageRepository):$(tag) \
                     dockerRegistryServerUrl="https://index.docker.io/v1" \
-                    enablePersistentStorage=true \
+                    enablePersistentStorage=false \
                   --query "properties.outputs" -o json)
 
                 PROD_URL=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppUrl']['value'])")
@@ -326,11 +326,18 @@ stages:
                 echo "   URL:      $PROD_URL"
                 echo "============================================================"
 
-                echo "Configuring Web App to pull $(imageRepository):$(tag) from Docker Hub..."
+                echo "Configuring Web App container image and registry settings..."
                 az webapp config container set \
                   --name "$PROD_APP_NAME" \
                   --resource-group "$RG_NAME" \
-                  --docker-custom-image-name "$(imageRepository):$(tag)"
+                  --docker-custom-image-name "$(imageRepository):$(tag)" \
+                  --docker-registry-server-url "https://index.docker.io"
+
+                echo "Applying Free Tier container settings (disabling SMB storage)..."
+                az webapp config appsettings set \
+                  --name "$PROD_APP_NAME" \
+                  --resource-group "$RG_NAME" \
+                  --settings WEBSITES_ENABLE_APP_SERVICE_STORAGE=false DATABASE_PATH="/app/data/cyber_dashboard.db" WEBSITES_PORT=8000
 
                 echo "Restarting Production Web App $PROD_APP_NAME..."
                 az webapp restart --name "$PROD_APP_NAME" --resource-group "$RG_NAME"

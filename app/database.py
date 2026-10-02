@@ -36,6 +36,7 @@
 # Import the built-in sqlite3 module. This comes with Python —
 # no "pip install" required!
 import sqlite3
+from pathlib import Path
 
 # Import our config to get the DATABASE_PATH constant.
 from app.config import DATABASE_PATH
@@ -62,21 +63,30 @@ def get_connection():
     Returns:
         sqlite3.Connection: An open connection to the database.
     """
-    # Ensure the parent directory exists (e.g. /home/data on Azure App Service)
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    global DATABASE_PATH
+    try:
+        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(DATABASE_PATH))
+    except (PermissionError, OSError):
+        # Fallback to /app/data or /tmp if target directory is restricted for non-root user
+        fallback = Path("/app/data/cyber_dashboard.db")
+        if fallback != DATABASE_PATH:
+            try:
+                fallback.parent.mkdir(parents=True, exist_ok=True)
+                DATABASE_PATH = fallback
+                conn = sqlite3.connect(str(DATABASE_PATH))
+            except Exception:
+                fallback = Path("/tmp/cyber_dashboard.db")
+                fallback.parent.mkdir(parents=True, exist_ok=True)
+                DATABASE_PATH = fallback
+                conn = sqlite3.connect(str(DATABASE_PATH))
+        else:
+            fallback = Path("/tmp/cyber_dashboard.db")
+            fallback.parent.mkdir(parents=True, exist_ok=True)
+            DATABASE_PATH = fallback
+            conn = sqlite3.connect(str(DATABASE_PATH))
 
-    # sqlite3.connect() opens the database file. If the file
-    # does not exist yet, SQLite creates it automatically!
-    # str(DATABASE_PATH) converts our Path object to a string
-    # because sqlite3.connect() expects a string.
-    conn = sqlite3.connect(str(DATABASE_PATH))
-
-    # row_factory controls how query results are returned.
-    # sqlite3.Row makes each row act like a dictionary, so
-    # we can access columns by name: row["cve_id"]
-    # Without this, we would have to use numeric indexes: row[0]
     conn.row_factory = sqlite3.Row
-
     return conn
 
 

@@ -98,11 +98,11 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE'
-          value: string(enablePersistentStorage)
+          value: string(enablePersistentStorage && skuName != 'F1' && skuName != 'D1')
         }
         {
           name: 'DATABASE_PATH'
-          value: enablePersistentStorage ? '/home/data/cyber_dashboard.db' : '/app/data/cyber_dashboard.db'
+          value: (enablePersistentStorage && skuName != 'F1' && skuName != 'D1') ? '/home/data/cyber_dashboard.db' : '/app/data/cyber_dashboard.db'
         }
         {
           name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'

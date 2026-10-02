@@ -12,7 +12,7 @@
       "value": "F1"
     },
     "enablePersistentStorage": {
-      "value": true
+      "value": false
     },
     "containerImage": {
       "value": "maarne/cyberdash:latest"
