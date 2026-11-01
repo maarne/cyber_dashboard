@@ -27,10 +27,12 @@ def fetch_json(url, *, params=None, headers=None):
 
 def record_fetch(source, count, status="success"):
     with get_connection() as conn:
-        conn.execute("""INSERT INTO fetch_log(source_name, last_fetch, status, record_count)
-            VALUES (?, datetime('now'), ?, ?) ON CONFLICT(source_name) DO UPDATE SET
-            last_fetch=excluded.last_fetch, status=excluded.status, record_count=excluded.record_count""",
-                     (source, status, count))
+        conn.execute("""INSERT INTO fetch_log(source_name, last_fetch, status, record_count, last_success)
+            VALUES (?, datetime('now'), ?, ?, CASE WHEN ?='success' THEN datetime('now') END)
+            ON CONFLICT(source_name) DO UPDATE SET last_fetch=excluded.last_fetch,
+            status=excluded.status, record_count=excluded.record_count,
+            last_success=COALESCE(excluded.last_success,fetch_log.last_success)""",
+                     (source, status, count, status))
 
 
 def fetch_and_store_cves():
@@ -109,7 +111,7 @@ def fetch_epss_scores():
                     score = float(entry["epss"])
                     if not 0 <= score <= 1:
                         raise ValueError("Invalid EPSS score.")
-                    updated += conn.execute("UPDATE cves SET epss_score=? WHERE cve_id=?", (score, entry["cve"])).rowcount
+                    updated += conn.execute("UPDATE cves SET epss_score=?, epss_fetched_at=datetime('now') WHERE cve_id=?", (score, entry["cve"])).rowcount
         record_fetch("epss", updated)
         return updated
     except Exception:

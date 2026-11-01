@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<meta name="asset-csrf-token" content="{{ asset_csrf_token }}">
+<link rel="stylesheet" href="/static/css/assets.css">
+{% endblock %}
+{% block content %}
+<main class="asset-workspace" data-analyst="{{ 'true' if is_analyst else 'false' }}" data-admin="{{ 'true' if is_admin else 'false' }}">
+  <nav aria-label="Inventory navigation"><a href="/assets">Inventory</a> · <a href="/priorities">Priority queue</a></nav>
+  <p id="asset-message" role="status" aria-live="polite"></p>
+  {% block asset_content %}{% endblock %}
+</main>
+{% endblock %}
+{% block extra_scripts %}<script src="/static/js/assets.js" defer></script>{% endblock %}

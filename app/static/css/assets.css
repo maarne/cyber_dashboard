@@ -1,0 +1,22 @@
+.asset-workspace { max-width: 1440px; margin: 2rem auto; padding: 0 1.25rem; color: var(--color-text-primary); }
+.asset-workspace [hidden] { display: none !important; }
+.asset-workspace h1, .asset-workspace h2 { margin: 1rem 0; }
+.asset-workspace p { margin: .75rem 0; }
+.asset-workspace a { color: var(--color-accent); }
+.asset-panel { border: 1px solid var(--color-border); border-radius: 8px; margin: 1.5rem 0; padding: 1rem; }
+.asset-panel summary { cursor: pointer; font-weight: 600; }
+.asset-form, .asset-toolbar { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; align-items: end; }
+.asset-form label, .asset-toolbar label { display: flex; flex-direction: column; gap: .35rem; }
+.asset-form label { flex: 1 1 260px; }
+.asset-workspace input:not([type=checkbox]), .asset-workspace select, .asset-workspace textarea { padding: .6rem; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg-input); color: var(--color-text-primary); max-width: 100%; }
+.asset-workspace textarea { min-height: 90px; }
+.asset-workspace table { width: 100%; border-collapse: collapse; margin: .75rem 0; }
+.asset-workspace th, .asset-workspace td { padding: .75rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.asset-scroll { overflow-x: auto; }
+.asset-workspace pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 380px; overflow-y: auto; }
+.asset-workspace dialog { width: min(800px, 95vw); max-height: 90vh; overflow: auto; margin: auto; padding: 1.5rem; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg-primary); color: var(--color-text-primary); }
+.asset-workspace dialog::backdrop { background: #0009; }
+.asset-warning, .asset-error { color: var(--color-amber); font-weight: 600; }
+.asset-muted { opacity: .8; font-size: .9rem; }
+.asset-pager { display: flex; gap: 1rem; align-items: center; margin: 1rem 0; }
+.asset-workspace td button { margin: .2rem; }

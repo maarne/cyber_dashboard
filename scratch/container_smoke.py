@@ -1,6 +1,6 @@
 """Smoke-test a built image with two workers and a disposable persistent volume.
 
-Usage: python -m scratch.container_smoke cyberdash:review-fixes
+Usage: python -m scratch.container_smoke cyberdash:asset-prioritization [--assets]
 Only the uniquely named test container/volume created here are removed.
 """
 
@@ -19,14 +19,14 @@ def docker(*args, env=None):
     return subprocess.check_output(["docker", *args], env=env, text=True).strip()
 
 
-def main(image):
+def main(image, assets=False):
     name = "cyberdash-smoke-" + uuid.uuid4().hex[:12]
     volume = name + "-data"
-    env = {**os.environ, "JWT_SECRET_KEY": secrets.token_hex(32)}
+    env = {**os.environ, "JWT_SECRET_KEY": secrets.token_hex(32), "FEATURE_ASSET_PRIORITIZATION": str(assets).lower()}
     docker("volume", "create", volume)
 
     def start():
-        docker("run", "-d", "--name", name, "-e", "JWT_SECRET_KEY", "-v", volume + ":/app/data",
+        docker("run", "-d", "--name", name, "-e", "JWT_SECRET_KEY", "-e", "FEATURE_ASSET_PRIORITIZATION", "-v", volume + ":/app/data",
                "-p", "127.0.0.1::8000", image, env=env)
         address = docker("port", name, "8000/tcp").splitlines()[0]
         url = "http://" + address
@@ -47,6 +47,23 @@ def main(image):
         password = secrets.token_urlsafe(20) + "Aa1!"
         session = requests.Session()
         assert session.post(url + "/api/setup", json={"username": "smoke_owner", "password": password}, timeout=10).status_code == 201
+        if assets:
+            csrf = session.get(url + "/api/assets/session", timeout=5).json()["csrf_token"]
+            asset_headers = {"Origin": url, "X-CSRF-Token": csrf}
+            assert session.post(url + "/api/assets", json={"external_id": "smoke", "name": "Smoke inventory"}, timeout=5).status_code == 403
+            response = session.post(url + "/api/assets", json={"external_id": "smoke", "name": "Smoke inventory"}, headers=asset_headers, timeout=5)
+            assert response.status_code == 201, response.text
+            asset_id = response.json()["id"]
+            response = session.post(url + f"/api/assets/{asset_id}/cves", json={"cve_id": "CVE-2026-10000", "evidence_note": "Synthetic smoke fixture"}, headers=asset_headers, timeout=5)
+            assert response.status_code == 201, response.text
+            queue = session.get(url + "/api/priorities", timeout=5).json()
+            assert queue["total"] == 1 and queue["items"][0]["score"] is None
+            def edit_inventory(number):
+                return session.patch(url + f"/api/assets/{asset_id}", json={"expected_version": 1, "name": f"Concurrent {number}"}, headers=asset_headers, timeout=10).status_code
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                assert sorted(executor.map(edit_inventory, range(2))) == [200, 409]
+        else:
+            assert session.get(url + "/api/assets", timeout=5).status_code == 404
         for _ in range(10):
             assert session.get(url + "/api/users", timeout=5).status_code == 200
         token = session.post(url + "/api/tokens", json={"name": "smoke", "rate_limit_per_min": 1}, timeout=5).json()["token"]
@@ -67,7 +84,11 @@ def main(image):
         docker("rm", "-f", name)
         url = start()
         assert not requests.get(url + "/api/ready", timeout=5).json()["setup_required"]
-        assert requests.post(url + "/api/auth/login", json={"username": "smoke_owner", "password": password}, timeout=10).status_code == 200
+        restored = requests.Session()
+        assert restored.post(url + "/api/auth/login", json={"username": "smoke_owner", "password": password}, timeout=10).status_code == 200
+        if assets:
+            assert restored.get(url + "/api/priorities", timeout=5).json()["total"] == 1
+            assert restored.get(url + "/api/audit-logs/verify", timeout=10).json()["is_valid"]
         print("Container smoke passed: non-root runtime, two workers, health, auth, rate limits, audit concurrency and persistence across replacement.")
     finally:
         subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -75,4 +96,4 @@ def main(image):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "cyberdash:review-fixes")
+    main(sys.argv[1] if len(sys.argv) > 1 else "cyberdash:asset-prioritization", "--assets" in sys.argv[2:])

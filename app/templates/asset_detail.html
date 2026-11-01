@@ -1,0 +1,21 @@
+{% extends "asset_layout.html" %}
+{% from "asset_forms.html" import asset_fields, software_fields, assessment_fields %}
+{% block title %}{{ asset.name }} — CyberDash inventory{% endblock %}
+{% block asset_content %}
+<script id="asset-data" type="application/json">{{ asset | tojson }}</script>
+<h1>{{ asset.name }}</h1><p>{{ asset.external_id }} · {{ asset.environment }} · {{ asset.owner_team }}</p>
+{% if asset.is_archived %}<p class="asset-warning">Archived: excluded from the default queue. Restore before editing.</p>{% endif %}
+{% if is_admin %}<button type="button" id="asset-archive" class="btn btn-secondary">{{ 'Restore' if asset.is_archived else 'Archive' }} asset</button>{% endif %}
+{% if is_analyst and not asset.is_archived %}
+<details class="asset-panel"><summary>Edit asset context</summary><form id="asset-edit" class="asset-form">{{ asset_fields() }}<button class="btn btn-primary">Save context</button></form></details>
+{% else %}<p>Criticality: {{ asset.criticality }}/4 · Exposure: {{ asset.exposure }} · Tags: {{ asset.tags | join(', ') }}</p>{% endif %}
+<section class="asset-panel"><h2>Installed software</h2><p>User-provided observations, not scanner-verified facts. Detach linked CVEs before deleting a record.</p><div id="software-list"></div>
+{% if is_analyst and not asset.is_archived %}<button type="button" id="software-add" class="btn btn-secondary">Add software</button>{% endif %}</section>
+<section class="asset-panel"><h2>CVE associations and assessments</h2><p>An explicit association is a source assertion, not proof from a scan. Scores are internal rankings, not compromise probabilities.</p><div id="assessment-list"></div>
+{% if is_analyst and not asset.is_archived %}<button type="button" id="assessment-add" class="btn btn-secondary">Associate CVE</button>{% endif %}</section>
+<section class="asset-panel"><h2>Assessment history</h2><div id="assessment-events"></div></section>
+{% if is_analyst and not asset.is_archived %}
+<dialog id="software-dialog" aria-labelledby="software-dialog-title"><h2 id="software-dialog-title">Software observation</h2><form id="software-form" class="asset-form">{{ software_fields() }}<div><button class="btn btn-primary">Save software</button> <button type="button" data-close="software-dialog" class="btn btn-secondary">Cancel</button></div></form></dialog>
+<dialog id="assessment-dialog" aria-labelledby="assessment-dialog-title"><h2 id="assessment-dialog-title">CVE association / assessment</h2><form id="assessment-form" class="asset-form">{{ assessment_fields() }}<div><button class="btn btn-primary">Save assessment</button> <button type="button" data-close="assessment-dialog" class="btn btn-secondary">Cancel</button></div></form></dialog>
+{% endif %}
+{% endblock %}

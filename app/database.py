@@ -491,6 +491,8 @@ def initialize_database():
         except Exception:
             pass
 
+        from app.migrations import apply_migrations
+        apply_migrations(conn)
         conn.commit()
 
     # When the "with" block ends here, the connection is

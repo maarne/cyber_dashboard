@@ -178,6 +178,10 @@
                 </a>
 
                 <!-- Detection Rules link -->
+                {% if is_authenticated and feature_asset_prioritization %}
+                <a href="/assets" class="btn btn-secondary">Inventory</a>
+                <a href="/priorities" class="btn btn-secondary">Priorities</a>
+                {% endif %}
                 <a href="/rules" class="btn btn-secondary" id="rules-link">
                     🧬 Detection Rules
                 </a>

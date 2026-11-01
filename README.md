@@ -152,3 +152,19 @@ deletion or rewriting relative to that checkpoint.
 existing browser sessions to be invalidated. Migrations run at startup; this
 change does not rewrite existing audit history or automatically clean up legacy
 intelligence records. Rotate secrets and review data imported by older releases.
+
+## Asset-aware prioritization
+
+Feature 1 adds private inventory, software observations, explicit CVE assessments,
+CSV preview/commit, exports, and an explainable priority queue. It is **disabled
+by default**. Set `FEATURE_ASSET_PRIORITIZATION=true` and restart to enable it.
+See [operation, permissions, scoring, and recovery](docs/asset-prioritization.md).
+No scanning, paid infrastructure, or cloud deployment is introduced.
+
+## Feature roadmap
+
+Detailed plans for the five features are in
+[the feature-plan roadmap](docs/feature-plans/README.md). Features 2–5 remain
+proposals. Feature 1 is implemented behind its
+default-off flag. Features are implemented one at a time after approval,
+without changing the F1-only, zero-paid-infrastructure development constraint.

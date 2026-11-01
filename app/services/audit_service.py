@@ -33,6 +33,7 @@ import csv
 import io
 import hashlib
 import json
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from app.database import get_connection
 
@@ -88,6 +89,7 @@ def log_audit_event(
     status: str = "SUCCESS",
     details: str | None = None,
     ip_address: str = "127.0.0.1",
+    connection=None,
 ) -> int:
     """
     Record a new security event to the tamper-evident audit ledger.
@@ -108,9 +110,10 @@ def log_audit_event(
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        with get_connection() as conn:
+        with (get_connection() if connection is None else nullcontext(connection)) as conn:
             # Lock before reading the head, not merely before INSERT.
-            conn.execute("BEGIN IMMEDIATE")
+            if connection is None:
+                conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
             
             # Fetch the previous record's integrity hash
@@ -153,9 +156,13 @@ def log_audit_event(
                     integrity_hash,
                 ),
             )
-            conn.commit()
+            if connection is None:
+                conn.commit()
             return cursor.lastrowid
     except Exception as e:
+        if connection is not None:
+            # The caller owns rollback: never commit a domain mutation without its audit event.
+            raise
         print(f"⚠️ Failed to log audit event ({action}): {e}")
         return -1
 

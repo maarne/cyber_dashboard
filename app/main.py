@@ -379,8 +379,9 @@ async def internal_server_error_handler(request: Request, exc: Exception):
         return JSONResponse(
             status_code=500,
             content={"error": "An internal server error occurred. Please contact the administrator."},
+            headers={"Cache-Control": "no-store"},
         )
-    return PlainTextResponse(status_code=500, content="Internal Server Error")
+    return PlainTextResponse(status_code=500, content="Internal Server Error", headers={"Cache-Control": "no-store"})
 
 
 @app.exception_handler(Exception)
@@ -390,8 +391,9 @@ async def generic_exception_handler(request: Request, exc: Exception):
         return JSONResponse(
             status_code=500,
             content={"error": "An internal server error occurred. Please contact the administrator."},
+            headers={"Cache-Control": "no-store"},
         )
-    return PlainTextResponse(status_code=500, content="Internal Server Error")
+    return PlainTextResponse(status_code=500, content="Internal Server Error", headers={"Cache-Control": "no-store"})
 
 
 
@@ -429,6 +431,8 @@ def get_current_user_and_role(request: Request) -> dict | None:
                 else verify_access_token(token) if token else None)
     except ApiRateLimitExceeded as exc:
         raise HTTPException(429, "API token rate limit exceeded.", headers={"Retry-After": str(exc.retry_after)})
+    if info:
+        info = {**info, "auth_method": "api_key" if api_key else "bearer" if auth_header else "cookie"}
     request.state.auth_info = info
     return info
 
@@ -456,6 +460,7 @@ def get_template_auth_context(request: Request) -> dict:
     role = info.get("role", "viewer")
     return {
         "is_authenticated": True,
+        "feature_asset_prioritization": FEATURE_ASSET_PRIORITIZATION,
         "current_user": info.get("username", ""),
         "user_role": role,
         "is_admin": role == "admin",
@@ -511,6 +516,15 @@ app.mount(
 templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 templates.env.globals["get_mitre_ttp"] = get_mitre_ttp_details
 templates.env.globals["get_cve_details"] = get_cve_details
+
+from app.config import FEATURE_ASSET_PRIORITIZATION
+from app.asset_security import AssetTransportMiddleware
+from app.asset_routes import register_asset_routes
+
+app.add_middleware(AssetTransportMiddleware)
+if FEATURE_ASSET_PRIORITIZATION:
+    register_asset_routes(app, templates, get_template_auth_context, require_authenticated_user,
+                          require_analyst_or_admin, require_admin)
 
 
 # ============================================================

@@ -56,6 +56,11 @@ if len(JWT_SECRET_KEY.encode("utf-8")) < 32 or JWT_SECRET_KEY == "cyberdash-secr
     raise RuntimeError("Set JWT_SECRET_KEY to a unique, randomly generated secret of at least 32 bytes before starting CyberDash.")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+FEATURE_ASSET_PRIORITIZATION = os.getenv("FEATURE_ASSET_PRIORITIZATION", "false").lower() in ("1", "true", "yes")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+ASSET_INTEL_STALE_HOURS = int(os.getenv("ASSET_INTEL_STALE_HOURS", "48"))
+if ASSET_INTEL_STALE_HOURS < 1:
+    raise RuntimeError("ASSET_INTEL_STALE_HOURS must be positive.")
 
 DEFAULT_ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 

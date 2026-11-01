@@ -263,6 +263,7 @@ def verify_access_token(token: str) -> dict | None:
                 return None
         return {
             "username": user["username"],
+            "user_id": user["id"],
             "role": user["role"],
             "jti": payload["jti"],
             "expires_at": payload["exp"],

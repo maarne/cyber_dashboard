@@ -1,0 +1,29 @@
+{% extends "asset_layout.html" %}
+{% from "asset_forms.html" import asset_fields %}
+{% block title %}Private inventory — CyberDash{% endblock %}
+{% block asset_content %}
+<h1>Asset inventory</h1>
+<p>Private, manually maintained context. CyberDash does not scan systems or automatically verify software applicability.</p>
+<p class="asset-muted">Limits: 500 active assets, 5,000 software records, 10,000 CVE associations. F1 storage is ephemeral; export and back up work you need to retain.</p>
+<form id="inventory-filters" class="asset-toolbar">
+ <label>Search <input name="search" maxlength="200" placeholder="Name, external ID, team"></label>
+ <label>Environment <input name="environment" maxlength="40"></label>
+ <label>Tag <input name="tag" maxlength="32"></label>
+ <label>Show <select name="archived"><option value="false">Active</option><option value="true">Archived</option></select></label>
+ <button class="btn btn-secondary">Filter</button>
+</form>
+<div id="inventory-list"></div>
+{% if is_analyst %}
+<details class="asset-panel"><summary>Add asset</summary>
+<form id="asset-create" class="asset-form">{{ asset_fields() }}<button class="btn btn-primary">Create asset</button></form>
+</details>
+{% endif %}
+{% if is_admin %}
+<section class="asset-panel"><h2>Import / export</h2>
+<p><a href="/api/assets/import/template">Download CSV import template</a> · <a href="/api/assets/export?format=json">Export JSON (includes states/evidence)</a> · <a href="/api/assets/export?format=csv">Export CSV summary</a></p>
+<p>Imports merge by normalized external ID, update asset fields, and add missing software/CVEs. Existing assessment evidence and states are preserved. CSV exports are summaries, not import templates or full backups.</p>
+<form id="import-form"><label>CSV file (1 MiB / 1,000 data rows) <input name="file" type="file" accept=".csv,text/csv" required></label><button class="btn btn-secondary">Validate and preview</button></form>
+<pre id="import-preview" tabindex="0"></pre><button id="import-commit" type="button" class="btn btn-primary" hidden>Confirm exact preview and commit</button>
+</section>
+{% endif %}
+{% endblock %}

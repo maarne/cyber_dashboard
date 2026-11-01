@@ -1,0 +1,27 @@
+{% macro asset_fields() %}
+<label>External ID <input name="external_id" required maxlength="100" placeholder="server-01"></label>
+<label>Name <input name="name" required maxlength="200"></label>
+<label>Environment <input name="environment" required maxlength="40" value="development"></label>
+<label>Owner / team <input name="owner_team" maxlength="100"></label>
+<label>Business criticality <select name="criticality"><option value="1">1 — Low</option><option value="2" selected>2 — Normal</option><option value="3">3 — High</option><option value="4">4 — Critical</option></select></label>
+<label>Exposure <select name="exposure"><option value="unknown">Unknown</option><option value="internal">Internal</option><option value="internet">Internet-facing</option></select></label>
+<label>Tags (semicolon-separated, max 10) <input name="tags" maxlength="329"></label>
+{% endmacro %}
+{% macro software_fields() %}
+<label>Vendor <input name="vendor" required maxlength="100"></label>
+<label>Product <input name="product" required maxlength="200"></label>
+<label>Version <input name="version" required maxlength="100"></label>
+<label>CPE (optional, user-provided) <input name="cpe" maxlength="256" placeholder="cpe:2.3:a:…"></label>
+<label>Source <input name="source" required maxlength="100" value="manual"></label>
+<label>Observed at (UTC, optional) <input name="observed_at" type="datetime-local"></label>
+{% endmacro %}
+{% macro assessment_fields() %}
+<label>CVE ID <input name="cve_id" required maxlength="32" pattern="[Cc][Vv][Ee]-[0-9]{4}-[0-9]{4,}" placeholder="CVE-2026-10000"></label>
+<label>Software record ID (optional; see software table) <input name="software_id" type="number" min="1" step="1"></label>
+<label>Association source <input name="source" required maxlength="100" value="manual"></label>
+<label>Confidence <select name="confidence"><option value="suspected">Suspected</option><option value="confirmed">Confirmed by source</option></select></label>
+<label>Applicability evidence <textarea name="evidence_note" required maxlength="4000"></textarea></label>
+<label>Assessment state <select name="status"><option value="open">Open</option><option value="in_progress">In progress</option><option value="remediated">Remediated</option><option value="not_affected">Not affected</option><option value="accepted_risk">Accepted risk</option></select></label>
+<label>Reason (required for closed / accepted states) <textarea name="reason" maxlength="4000"></textarea></label>
+<label>Risk acceptance expiry (UTC; future time required for accepted risk) <input name="accepted_risk_expires_at" type="datetime-local"></label>
+{% endmacro %}
