@@ -1,3 +1,4 @@
+from scratch import legacy_support
 from app.services.webhook_service import get_all_webhooks, save_webhook, update_webhook, get_webhook_by_id, mask_webhook_url
 
 def test_masking():

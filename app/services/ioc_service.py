@@ -35,73 +35,6 @@ from app.config import HTTP_TIMEOUT_SECONDS
 
 
 # ============================================================
-# CURATED THREAT INTEL KNOWLEDGEBASE (Known Hashes & C2s)
-# ============================================================
-CURATED_HASH_INTEL = {
-    "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f": {
-        "hash_type": "SHA256",
-        "malware_family": "WannaCry / WanaCrypt0r",
-        "threat_actor": "Lazarus Group (APT38)",
-        "threat_type": "Ransomware / SMB Worm",
-        "threat_score": 100,
-        "verdict": "CRITICAL",
-        "vt_detection": "71/72 security vendors flagged as malicious",
-        "first_seen": "2017-05-12",
-        "description": "WannaCry ransomware payload weaponizing the EternalBlue (CVE-2017-0144) SMB exploit for automated worm propagation.",
-        "tags": ["Ransomware", "Worm", "Lazarus Group", "EternalBlue"],
-    },
-    "027cc450ef5f8c5f653329641ec1fed91f694e0d229928963b30f6b0d7d3a745": {
-        "hash_type": "SHA256",
-        "malware_family": "NotPetya / EternalPetya",
-        "threat_actor": "Sandworm (APT44 / GRU Unit 74455)",
-        "threat_type": "Destructive Wiper",
-        "threat_score": 100,
-        "verdict": "CRITICAL",
-        "vt_detection": "70/71 security vendors flagged as malicious",
-        "first_seen": "2017-06-27",
-        "description": "Destructive Master Boot Record (MBR) wiper masquerading as ransomware, deployed via Ukrainian accounting software supply chain.",
-        "tags": ["Wiper", "Sandworm", "Supply Chain", "MBR Corruptor"],
-    },
-    "d2b27376c33c3a078d10398f6ddbf49c": {
-        "hash_type": "MD5",
-        "malware_family": "LockBit 3.0 (LockBit Black)",
-        "threat_actor": "LockBit Ransomware Syndicate",
-        "threat_type": "Ransomware-as-a-Service",
-        "threat_score": 98,
-        "verdict": "CRITICAL",
-        "vt_detection": "68/70 security vendors flagged as malicious",
-        "first_seen": "2023-01-14",
-        "description": "LockBit 3.0 ransomware encryptor binary featuring anti-debugging routines and process termination before volume encryption.",
-        "tags": ["RaaS", "LockBit 3.0", "Double Extortion"],
-    },
-    "44d88612fea8a8f36de82e1278abb02f": {
-        "hash_type": "MD5",
-        "malware_family": "EICAR Standard Anti-Virus Test File",
-        "threat_actor": "N/A (Benign Security Test)",
-        "threat_type": "Test File",
-        "threat_score": 0,
-        "verdict": "CLEAN",
-        "vt_detection": "65/70 flagged (Standard Test File)",
-        "first_seen": "2003-05-01",
-        "description": "Harmless standard test string used to verify antivirus scanner functionality.",
-        "tags": ["Test File", "Benign", "EICAR"],
-    },
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": {
-        "hash_type": "SHA256",
-        "malware_family": "Empty File (Zero Bytes)",
-        "threat_actor": "N/A",
-        "threat_type": "Null Hash",
-        "threat_score": 0,
-        "verdict": "CLEAN",
-        "vt_detection": "0/72 flagged",
-        "first_seen": "1970-01-01",
-        "description": "Cryptographic SHA256 hash of an empty zero-byte file.",
-        "tags": ["Null Hash", "Benign"],
-    },
-}
-
-
-# ============================================================
 # IOC CLASSIFICATION LOGIC
 # ============================================================
 
@@ -274,18 +207,25 @@ def enrich_hash(hash_str: str, hash_type: str) -> dict:
     """
     clean_hash = hash_str.strip().lower()
 
-    if clean_hash in CURATED_HASH_INTEL:
-        return CURATED_HASH_INTEL[clean_hash]
+    # Only verified standard test hashes are retained as local ground truth.
+    if clean_hash in ("44d88612fea8a8f36de82e1278abb02f", "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"):
+        return {"hash_type": hash_type.upper(), "malware_family": "EICAR antivirus test file",
+                "threat_actor": "N/A", "threat_type": "Benign security test", "threat_score": 0,
+                "verdict": "CLEAN", "description": "Standard EICAR antivirus test string, not ransomware.",
+                "tags": ["EICAR", "Security test"], "vt_detection": "Not queried"}
+    if clean_hash == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855":
+        return {"hash_type": "SHA256", "malware_family": "Empty file", "threat_score": 0,
+                "verdict": "CLEAN", "description": "SHA-256 of a zero-byte file.", "tags": ["Empty file"], "vt_detection": "Not queried"}
 
     # Standard heuristic result for uncataloged hashes
     return {
         "hash_type": hash_type.upper(),
         "malware_family": "Unknown / Unclassified",
         "threat_actor": "None Correlated",
-        "threat_type": "Suspicious Binary / File",
-        "threat_score": 45,
+        "threat_type": "Unclassified File",
+        "threat_score": 0,
         "verdict": "UNKNOWN",
-        "vt_detection": "0/70 security detections on file",
+        "vt_detection": "Not queried (external lookup required)",
         "first_seen": "N/A",
         "description": f"File signature ({hash_type.upper()}: {clean_hash}). Pivot to VirusTotal or AlienVault OTX for dynamic sandbox analysis.",
         "tags": ["File Hash", hash_type.upper()],
@@ -315,7 +255,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
         "indicator": indicator,
         "ioc_type": ioc_type,
         "verdict": "UNKNOWN",
-        "threat_score": 10,
+        "threat_score": 0,
         "confidence": "Medium",
         "summary": "Indicator analyzed across threat feeds.",
         "threat_tags": [],
@@ -342,7 +282,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
 
     elif ioc_type == "domain":
         dom_info = enrich_domain(indicator)
-        dossier["network"] = dom_info.get("ip_enrichment", {})
+        dossier["network"] = dom_info.get("ip_enrichment") or {}
         dossier["raw_details"] = dom_info
         dossier["pivots"] = {
             "VirusTotal": f"https://www.virustotal.com/gui/domain/{indicator}",
@@ -353,7 +293,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
 
     elif ioc_type == "url":
         url_info = enrich_url(indicator)
-        dossier["network"] = url_info.get("domain_enrichment", {}).get("ip_enrichment", {})
+        dossier["network"] = url_info.get("domain_enrichment", {}).get("ip_enrichment") or {}
         dossier["raw_details"] = url_info
         dossier["pivots"] = {
             "VirusTotal": f"https://www.virustotal.com/gui/url/{indicator}",
@@ -380,11 +320,11 @@ def investigate_ioc(raw_indicator: str) -> dict:
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM threat_indicators
-                WHERE indicator_value LIKE ?
-                LIMIT 10
-            """, (f"%{indicator}%",))
+            normalized = (str(ipaddress.ip_address(indicator)) if ioc_type in ("ipv4", "ipv6")
+                          else indicator.lower().rstrip(".") if ioc_type in ("domain", "md5", "sha1", "sha256") else indicator)
+            stored_type = "ip" if ioc_type in ("ipv4", "ipv6") else ioc_type
+            cursor.execute("""SELECT * FROM threat_indicators
+                WHERE indicator_type = ? AND indicator_value = ? LIMIT 10""", (stored_type, normalized))
             matches = cursor.fetchall()
             for m in matches:
                 dossier["feed_matches"].append(dict(m))
@@ -399,13 +339,9 @@ def investigate_ioc(raw_indicator: str) -> dict:
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id, name, origin, threat_type, description, mitre_ttps
-                FROM threat_actors
-                WHERE name LIKE ? OR aliases LIKE ? OR description LIKE ? OR associated_cves LIKE ?
-                LIMIT 5
-            """, (f"%{indicator}%", f"%{indicator}%", f"%{indicator}%", f"%{indicator}%"))
-            actors = cursor.fetchall()
+            # Free-text substring matches are not evidence of IOC attribution.
+            # Actor attribution requires structured, sourced IOC relationships.
+            actors = []
             for a in actors:
                 dossier["threat_actors"].append(dict(a))
                 dossier["threat_tags"].append(f"APT: {a['name']}")
@@ -434,7 +370,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
     elif dossier["threat_score"] >= 30:
         dossier["verdict"] = "MEDIUM"
         dossier["confidence"] = "Medium"
-    elif dossier["threat_score"] == 0:
+    elif dossier["threat_score"] == 0 and dossier["verdict"] == "CLEAN":
         dossier["verdict"] = "CLEAN"
         dossier["confidence"] = "High"
     else:

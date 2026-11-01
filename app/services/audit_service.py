@@ -6,7 +6,7 @@
 # ------------------
 # Provides enterprise audit logging with cryptographic hash chaining (SHA-256).
 # Every security-sensitive action (logins, user lifecycle, detection rules,
-# webhooks, and scheduler updates) is recorded in an immutable ledger.
+# webhooks, and scheduler updates) is recorded in a versioned hash chain.
 #
 # HOW DOES CRYPTOGRAPHIC HASH CHAINING WORK?
 # ------------------------------------------
@@ -18,8 +18,8 @@
 #   Entry[2] -> Hash_2 = SHA256(Hash_1       + Entry_2_Data)
 #
 # If an attacker or unauthorized database administrator attempts to modify,
-# delete, or inject an audit record in SQLite, the mathematical chain breaks,
-# and the integrity verification algorithm instantly flags the exact tampered record.
+# change an interior audit record, the chain breaks. Detecting full rewrites or
+# tail deletion additionally requires a checkpoint stored outside this database.
 #
 # PYTHON CONCEPTS COVERED:
 # - Cryptographic hashing with hashlib (SHA-256)
@@ -32,6 +32,7 @@
 import csv
 import io
 import hashlib
+import json
 from datetime import datetime, timezone
 from app.database import get_connection
 
@@ -48,10 +49,22 @@ def compute_entry_hash(
     resource_id: str | None,
     status: str,
     details: str | None,
+    ip_address: str | None = None,
+    hash_version: int = 1,
 ) -> str:
     """
     Calculate the SHA-256 integrity hash for an audit log entry.
     """
+    if hash_version == 2:
+        canonical_str = json.dumps({
+            "version": 2, "prev_hash": prev_hash, "timestamp": timestamp,
+            "username": username, "role": role, "action": action,
+            "resource_type": resource_type, "resource_id": resource_id,
+            "status": status, "details": details, "ip_address": ip_address,
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+    if hash_version != 1:
+        raise ValueError("Unsupported audit hash version.")
     canonical_str = (
         f"{prev_hash}|"
         f"{timestamp}|"
@@ -96,6 +109,8 @@ def log_audit_event(
 
     try:
         with get_connection() as conn:
+            # Lock before reading the head, not merely before INSERT.
+            conn.execute("BEGIN IMMEDIATE")
             cursor = conn.cursor()
             
             # Fetch the previous record's integrity hash
@@ -114,13 +129,15 @@ def log_audit_event(
                 resource_id=resource_id,
                 status=status,
                 details=details,
+                ip_address=ip_address,
+                hash_version=2,
             )
 
             cursor.execute(
                 """
                 INSERT INTO audit_logs
-                (timestamp, username, role, action, resource_type, resource_id, status, ip_address, details, prev_hash, integrity_hash)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (timestamp, username, role, action, resource_type, resource_id, status, ip_address, details, prev_hash, integrity_hash, hash_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)
                 """,
                 (
                     now_iso,
@@ -177,7 +194,7 @@ def get_audit_logs(
         return []
 
 
-def verify_audit_log_integrity() -> dict:
+def verify_audit_log_integrity(checkpoint: dict | None = None) -> dict:
     """
     Perform a complete cryptographic integrity verification of the audit log chain.
     
@@ -198,6 +215,11 @@ def verify_audit_log_integrity() -> dict:
             cursor.execute("SELECT * FROM audit_logs ORDER BY id ASC")
             records = [dict(r) for r in cursor.fetchall()]
 
+        if checkpoint:
+            anchor = next((r for r in records if r["id"] == checkpoint["id"]), None)
+            if not anchor or anchor["integrity_hash"] != checkpoint["integrity_hash"]:
+                return {"is_valid": False, "total_records": len(records),
+                        "tampered_record_id": checkpoint["id"], "message": "External checkpoint mismatch or ledger truncation detected."}
         if not records:
             return {
                 "is_valid": True,
@@ -229,6 +251,8 @@ def verify_audit_log_integrity() -> dict:
                 resource_id=rec["resource_id"],
                 status=rec["status"],
                 details=rec["details"],
+                ip_address=rec["ip_address"],
+                hash_version=rec["hash_version"],
             )
 
             if rec["integrity_hash"] != calc_hash:
@@ -246,6 +270,9 @@ def verify_audit_log_integrity() -> dict:
             "total_records": len(records),
             "message": f"All {len(records)} audit records cryptographically verified. Hash chain is unbroken.",
             "tampered_record_id": None,
+            "legacy_records": sum(r["hash_version"] == 1 for r in records),
+            "checkpoint": {"id": records[-1]["id"], "integrity_hash": records[-1]["integrity_hash"]},
+            "checkpoint_verified": checkpoint is not None,
         }
 
     except Exception as e:
@@ -280,11 +307,13 @@ def export_audit_logs_csv() -> str:
         "details",
         "prev_hash",
         "integrity_hash",
+        "hash_version",
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for row in rows:
-        writer.writerow(row)
+        writer.writerow({key: ("'" + value if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")) else value)
+                         for key, value in row.items()})
 
     return output.getvalue()
 

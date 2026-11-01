@@ -1,7 +1,5 @@
 import sys
-sys.path.insert(0, "/home/maarne/apps/antigravity/cyber_dashboard")
-
-import requests
+from scratch.legacy_support import requests
 from app.database import get_connection
 from app.services.auth_service import seed_default_admin_user, get_user_by_username
 from app.services.audit_service import verify_audit_log_integrity
@@ -170,4 +168,3 @@ def test_rbac_and_audit():
 
 if __name__ == "__main__":
     test_rbac_and_audit()
-

@@ -44,6 +44,7 @@ import html
 
 from app.config import RSS_FEEDS
 from app.database import get_connection
+from app.services.outbound_service import safe_request
 
 
 # ============================================================
@@ -255,7 +256,9 @@ def fetch_and_store_rss():
             # feedparser.parse() downloads and parses the RSS feed.
             # It returns a special object with an "entries" attribute
             # containing a list of articles.
-            parsed_feed = feedparser.parse(feed_url)
+            response = safe_request("GET", feed_url, allow_redirects=True)
+            response.raise_for_status()
+            parsed_feed = feedparser.parse(response.content)
 
             # Check if the feed was parsed successfully.
             # "bozo" is feedparser's quirky name for "error flag".
@@ -290,6 +293,9 @@ def fetch_and_store_rss():
                 # Skip articles without a link (our UNIQUE constraint
                 # requires a link to prevent duplicates)
                 if not link:
+                    continue
+                from urllib.parse import urlsplit
+                if urlsplit(link).scheme not in ("http", "https"):
                     continue
 
                 # Extract the publish date.

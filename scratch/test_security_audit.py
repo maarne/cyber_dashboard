@@ -1,8 +1,8 @@
 import sys
 from pathlib import Path
-sys.path.insert(0, "/home/maarne/apps/antigravity/cyber_dashboard")
-
-import requests
+from scratch.legacy_support import requests
+from unittest.mock import patch
+import httpx
 from app.services.webhook_service import is_safe_external_url
 from app.services.threat_service import fetch_and_store_urlhaus
 
@@ -34,17 +34,19 @@ def test_ssrf_validator():
         "https://krebsonsecurity.com/feed/",
         "https://www.cisa.gov/cybersecurity-advisories/all.xml",
     ]
-    for good_url in allowed_urls:
-        is_safe, err = is_safe_external_url(good_url)
-        print(f"   Allowed: {good_url[:40]}... -> Safe: {is_safe}")
-        assert is_safe is True, f"Expected {good_url} to be allowed, but rejected: {err}"
+    with patch("app.services.outbound_service.socket.getaddrinfo", return_value=[(2, 1, 6, '', ('8.8.8.8', 443))]):
+        for good_url in allowed_urls:
+            is_safe, err = is_safe_external_url(good_url)
+            assert is_safe is True, f"Expected {good_url} to be allowed, but rejected: {err}"
 
     print("✅ SSRF Validation test passed!\n")
 
 
 def test_urlhaus_ingestion():
     print("2. Testing URLhaus public CSV threat intel ingestion...")
-    count = fetch_and_store_urlhaus()
+    response = httpx.Response(200, text='1,2026-01-01,http://example.invalid/payload,online,,malware_download', request=httpx.Request('GET', 'https://example.com'))
+    with patch("app.services.threat_service.httpx.get", return_value=response):
+        count = fetch_and_store_urlhaus()
     print(f"   URLhaus fetch result: {count} indicators saved.")
     assert count >= 0
     print("✅ URLhaus ingestion test passed!\n")

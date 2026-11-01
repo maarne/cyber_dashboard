@@ -26,7 +26,7 @@
 
 from contextlib import asynccontextmanager
 import os
-from fastapi import FastAPI, Request, Response, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Response, Depends, HTTPException, status, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse, Response, RedirectResponse, PlainTextResponse
@@ -50,6 +50,7 @@ from app.services.auth_service import (
     validate_password_against_policy,
     is_initial_setup_required,
     complete_initial_setup,
+    revoke_session,
 )
 
 # Import cryptographic audit logging service
@@ -111,6 +112,8 @@ from app.models.schemas import (
     PasswordPolicySchema,
     InitialSetupSchema,
     ApiTokenCreateSchema,
+    ScheduleSchema,
+    RssFeedCreateSchema,
 )
 
 # Import API Token service
@@ -122,6 +125,7 @@ from app.services.api_token_service import (
     revoke_api_token,
     delete_api_token,
     get_api_endpoints_catalog,
+    ApiRateLimitExceeded,
 )
 
 # Import the background scheduler service
@@ -131,6 +135,7 @@ from app.services.scheduler_service import (
     get_scheduler_status,
     get_schedule_settings,
     save_schedule_settings,
+    stop_scheduler,
 )
 
 # Import threat actor intelligence service
@@ -188,6 +193,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    stop_scheduler()
     print("🛑 CyberDash shutting down gracefully...")
 
 
@@ -229,6 +235,10 @@ def custom_openapi():
         {"APIKeyHeader": []},
         {"HTTPBearer": []},
     ]
+    for path in ("/api/setup", "/api/auth/login", "/api/auth/logout", "/api/health", "/api/ready", "/api/security/password-policy", "/api/security/generate-password"):
+        for operation in openapi_schema.get("paths", {}).get(path, {}).values():
+            if isinstance(operation, dict):
+                operation["security"] = []
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
@@ -311,6 +321,12 @@ async def security_headers_middleware(request: Request, call_next):
 
     # 7. Sanitize / Override Server Header
     response.headers["Server"] = "CyberDash-Core"
+    auth_info = getattr(request.state, "auth_info", None)
+    if auth_info and auth_info.get("is_api_token"):
+        response.headers["X-RateLimit-Limit"] = str(auth_info["rate_limit_per_min"])
+        response.headers["X-RateLimit-Remaining"] = str(auth_info["rate_limit_remaining"])
+    if path_lower.startswith("/api/auth") or path_lower.startswith("/api/tokens") or path_lower == "/settings":
+        response.headers["Cache-Control"] = "no-store"
 
     return response
 
@@ -326,12 +342,14 @@ async def setup_redirection_middleware(request: Request, call_next):
     API callers receive structured JSON error codes rather than HTML page redirects.
     """
     path = request.url.path
+    if path in ("/api/health", "/api/ready"):
+        return await call_next(request)
     accept_header = request.headers.get("accept", "").lower()
     is_api_request = path.startswith("/api") or "application/json" in accept_header
 
     if is_initial_setup_required():
         allowed_prefixes = ("/static", "/favicon.ico")
-        allowed_paths = ("/setup", "/api/setup", "/api/security/password-policy", "/api/security/generate-password", "/docs", "/redoc", "/redocs", "/openapi.json")
+        allowed_paths = ("/setup", "/api/setup", "/api/health", "/api/ready", "/api/security/password-policy", "/api/security/generate-password", "/docs", "/redoc", "/redocs", "/openapi.json")
         if not (any(path.startswith(p) for p in allowed_prefixes) or path in allowed_paths):
             if is_api_request:
                 return JSONResponse(
@@ -398,26 +416,21 @@ def get_current_user_and_role(request: Request) -> dict | None:
     3. Cookie: access_token (JWT session)
     Returns: {"username": str, "role": str, ...} if authenticated, else None.
     """
-    # 1. Check X-API-Key header
+    if hasattr(request.state, "auth_info"):
+        return request.state.auth_info
+    # Explicit credentials take precedence; invalid headers never fall back to cookies.
     api_key = request.headers.get("X-API-Key")
-    if api_key:
-        api_auth = verify_api_token(api_key)
-        if api_auth:
-            return api_auth
-
-    # 2. Check Cookie or Authorization header
-    token = request.cookies.get("access_token")
-    if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-
-    if token:
-        if token.startswith("cd_live_"):
-            return verify_api_token(token)
-        return verify_access_token(token)
-
-    return None
+    auth_header = request.headers.get("Authorization")
+    token = api_key or (auth_header[7:].strip() if auth_header and auth_header.startswith("Bearer ") else None)
+    if not api_key and not auth_header:
+        token = request.cookies.get("access_token")
+    try:
+        info = (verify_api_token(token) if api_key or (token and token.startswith("cd_live_"))
+                else verify_access_token(token) if token else None)
+    except ApiRateLimitExceeded as exc:
+        raise HTTPException(429, "API token rate limit exceeded.", headers={"Retry-After": str(exc.retry_after)})
+    request.state.auth_info = info
+    return info
 
 
 def get_current_user_optional(request: Request) -> str | None:
@@ -610,13 +623,14 @@ def detection_rules_page(request: Request, rule_type: str = "ALL", search: str =
 # ============================================================
 
 @app.get("/investigate", include_in_schema=False)
-def ioc_investigator_page(request: Request, ioc: str = ""):
+def ioc_investigator_page(request: Request, ioc: str = Query("", max_length=2048), user: dict = Depends(require_authenticated_user)):
     """Render the Threat Intelligence & IOC Investigator triage console."""
     auth_ctx = get_template_auth_context(request)
     recent_history = get_recent_investigations(limit=10)
     
     dossier = None
     if ioc.strip():
+        require_analyst_or_admin(request)
         dossier = investigate_ioc(ioc.strip())
 
     return templates.TemplateResponse(
@@ -659,7 +673,7 @@ def settings_page(request: Request):
 
     # Fetch API tokens (Admin only) & Endpoints Catalog (Admin only)
     api_tokens_list = list_api_tokens() if auth_ctx["is_admin"] else []
-    endpoints_catalog = get_api_endpoints_catalog() if auth_ctx["is_admin"] else []
+    endpoints_catalog = get_api_endpoints_catalog() if auth_ctx["is_authenticated"] else []
 
     return templates.TemplateResponse(
         request=request,
@@ -717,7 +731,7 @@ def api_initial_setup(payload: InitialSetupSchema, request: Request):
         ip_address=client_ip,
     )
 
-    is_https = request.url.scheme == "https"
+    is_https = request.url.scheme == "https" or os.getenv("ENV") == "production"
     res = JSONResponse(
         status_code=status.HTTP_201_CREATED,
         content={
@@ -806,6 +820,7 @@ def api_logout(request: Request):
     user_info = get_current_user_and_role(request)
     
     if user_info:
+        revoke_session(user_info)
         log_audit_event(
             username=user_info["username"],
             role=user_info["role"],
@@ -863,14 +878,14 @@ def api_change_password(
         )
 
     # Validate new password against active password security policy
-    is_valid, err_msg = validate_password_against_policy(req.new_password.strip())
+    is_valid, err_msg = validate_password_against_policy(req.new_password)
     if not is_valid:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"error": err_msg},
         )
 
-    update_user_password(username, req.new_password.strip())
+    update_user_password(username, req.new_password)
 
     log_audit_event(
         username=username,
@@ -882,7 +897,9 @@ def api_change_password(
         details="User password updated successfully.",
         ip_address=client_ip,
     )
-    return JSONResponse(content={"message": "Password updated successfully."})
+    response = JSONResponse(content={"message": "Password updated successfully. Please sign in again."})
+    response.delete_cookie("access_token")
+    return response
 
 
 # ============================================================
@@ -988,10 +1005,10 @@ def api_update_password_policy(
 
 
 @app.get("/api/security/generate-password")
-def api_generate_compliant_password(length: int = 10):
+def api_generate_compliant_password(length: int = Query(10, ge=10, le=64)):
     """Generate a cryptographically random compliant password."""
     pwd = generate_secure_random_password(length)
-    return {"password": pwd}
+    return JSONResponse({"password": pwd}, headers={"Cache-Control": "no-store"})
 
 
 
@@ -1063,7 +1080,7 @@ def api_delete_user(
 
 @app.get("/api/audit-logs")
 def api_get_audit_logs(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=500),
     action: str = None,
     search: str = None,
     user: dict = Depends(require_analyst_or_admin),
@@ -1073,9 +1090,16 @@ def api_get_audit_logs(
 
 
 @app.get("/api/audit-logs/verify")
-def api_verify_audit_logs(user: dict = Depends(require_analyst_or_admin)):
+def api_verify_audit_logs(
+    checkpoint_id: int = Query(None, ge=1),
+    checkpoint_hash: str = Query(None, pattern=r"^[a-f0-9]{64}$"),
+    user: dict = Depends(require_analyst_or_admin),
+):
     """Verify cryptographic SHA-256 integrity hash chain."""
-    return verify_audit_log_integrity()
+    if (checkpoint_id is None) != (checkpoint_hash is None):
+        raise HTTPException(400, "Provide both checkpoint_id and checkpoint_hash.")
+    checkpoint = {"id": checkpoint_id, "integrity_hash": checkpoint_hash} if checkpoint_id else None
+    return verify_audit_log_integrity(checkpoint)
 
 
 @app.get("/api/audit-logs/export")
@@ -1227,7 +1251,8 @@ def api_get_endpoints_meta(admin: dict = Depends(require_admin)):
     return get_api_endpoints_catalog()
 
 
-@app.api_route("/api", methods=["GET", "HEAD"])
+@app.get("/api")
+@app.head("/api", include_in_schema=False)
 def api_root_index(user: dict = Depends(require_authenticated_user)):
     """
     CyberDash REST API Root Directory.
@@ -1257,7 +1282,7 @@ def api_root_index(user: dict = Depends(require_authenticated_user)):
             "threats": "/api/threats",
             "news": "/api/news",
             "investigate": "/api/investigate",
-            "rules": "/api/rules",
+            "rules": "/api/detection-rules",
             "tokens": "/api/tokens",
             "audit_logs": "/api/audit-logs"
         }
@@ -1270,6 +1295,24 @@ def redocs_redirect():
     return RedirectResponse(url="/redoc", status_code=status.HTTP_301_MOVED_PERMANENTLY)
 
 
+@app.get("/api/health", tags=["Health"])
+def api_health():
+    """Public liveness probe, including before administrator setup."""
+    return {"status": "ok"}
+
+
+@app.get("/api/ready", tags=["Health"])
+def api_ready():
+    """Readiness checks database access without exposing configuration or secrets."""
+    from app.database import get_connection
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT COUNT(*) FROM users").fetchone()
+        return {"status": "ready", "setup_required": is_initial_setup_required()}
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "unavailable"})
+
+
 # ============================================================
 # API ROUTE: Refresh All Feeds (POST /api/refresh) — Analyst/Admin
 # ============================================================
@@ -1279,88 +1322,19 @@ def refresh_all_feeds(
     request: Request,
     user: dict = Depends(require_analyst_or_admin),
 ):
-    """Fetch fresh data from all external sources and notify webhooks."""
+    """Run the same coordinated refresh used by the scheduler."""
+    from app.services.refresh_service import run_feed_refresh
     client_ip = get_client_ip(request)
-    print("\n" + "=" * 50)
-    print("🔄 Refreshing all feeds...")
-    print("=" * 50)
-
-    before_summary = get_dashboard_summary()
-    before_critical = before_summary.get("critical_cves", 0) if isinstance(before_summary, dict) else getattr(before_summary, "critical_cves", 0)
-    before_high = before_summary.get("high_cves", 0) if isinstance(before_summary, dict) else getattr(before_summary, "high_cves", 0)
-    before_cisa = before_summary.get("active_exploits", 0) if isinstance(before_summary, dict) else getattr(before_summary, "active_exploits", 0)
-
-    results = {}
-
-    try:
-        results["cves_saved"] = fetch_and_store_cves()
-    except Exception as e:
-        print(f"❌ CVE fetch failed: {e}")
-        results["cves_saved"] = 0
-
-    try:
-        results["epss_updated"] = fetch_epss_scores()
-    except Exception as e:
-        print(f"❌ EPSS fetch failed: {e}")
-        results["epss_updated"] = 0
-
-    try:
-        results["cisa_saved"] = fetch_and_store_cisa_kev()
-    except Exception as e:
-        print(f"❌ CISA fetch failed: {e}")
-        results["cisa_saved"] = 0
-
-    try:
-        results["articles_saved"] = fetch_and_store_rss()
-    except Exception as e:
-        print(f"❌ RSS fetch failed: {e}")
-        results["articles_saved"] = 0
-
-    try:
-        results["threats_saved"] = fetch_all_threat_intel()
-    except Exception as e:
-        print(f"❌ Threat intel fetch failed: {e}")
-        results["threats_saved"] = 0
-
-    after_summary = get_dashboard_summary()
-    after_critical = after_summary.get("critical_cves", 0) if isinstance(after_summary, dict) else getattr(after_summary, "critical_cves", 0)
-    after_high = after_summary.get("high_cves", 0) if isinstance(after_summary, dict) else getattr(after_summary, "high_cves", 0)
-    after_cisa = after_summary.get("active_exploits", 0) if isinstance(after_summary, dict) else getattr(after_summary, "active_exploits", 0)
-
-    new_critical_count = max(0, after_critical - before_critical)
-    new_high_count = max(0, after_high - before_high)
-    new_cisa_count = max(0, after_cisa - before_cisa)
-
-    try:
-        new_critical_cves = []
-        new_high_cves = []
-        new_cisa_exploits = []
-
-        if new_critical_count > 0:
-            new_critical_cves = get_recent_cves(limit=new_critical_count, severity_filter="CRITICAL")
-        if new_high_count > 0:
-            new_high_cves = get_recent_cves(limit=new_high_count, severity_filter="HIGH")
-        if new_cisa_count > 0:
-            new_cisa_exploits = get_cisa_exploits(limit=new_cisa_count)
-
-        notification_results = notify_all_webhooks(
-            new_critical_cves=new_critical_cves,
-            new_high_cves=new_high_cves,
-            new_cisa_exploits=new_cisa_exploits,
-        )
-        results["notifications"] = notification_results
-    except Exception as e:
-        print(f"❌ Webhook notifications failed: {e}")
-        results["notifications"] = {"error": str(e)}
-
-    results["status"] = "complete"
+    results = run_feed_refresh()
+    if results["status"] == "busy":
+        return JSONResponse(status_code=409, content=results)
 
     log_audit_event(
         username=user["username"],
         role=user["role"],
         action="FEED_REFRESH_TRIGGERED",
         resource_type="FEED",
-        status="SUCCESS",
+        status="SUCCESS" if results["status"] == "complete" else "FAILED",
         details=f"Manual refresh completed: CVEs={results.get('cves_saved', 0)}, CISA={results.get('cisa_saved', 0)}, News={results.get('articles_saved', 0)}, Threats={results.get('threats_saved', 0)}",
         ip_address=client_ip,
     )
@@ -1374,18 +1348,19 @@ def refresh_all_feeds(
 
 @app.get("/api/cves")
 def api_get_cves(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=200),
     severity: str = None,
     start_date: str = None,
     end_date: str = None,
+    search: str = Query(None, max_length=300),
     user: dict = Depends(require_authenticated_user),
 ):
-    return get_recent_cves(limit=limit, severity_filter=severity, start_date=start_date, end_date=end_date)
+    return get_recent_cves(limit=limit, severity_filter=severity, start_date=start_date, end_date=end_date, search_query=search)
 
 
 @app.get("/api/cisa")
 def api_get_cisa_exploits(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=200),
     start_date: str = None,
     end_date: str = None,
     user: dict = Depends(require_authenticated_user),
@@ -1395,7 +1370,7 @@ def api_get_cisa_exploits(
 
 @app.get("/api/news")
 def api_get_news(
-    limit: int = 30,
+    limit: int = Query(30, ge=1, le=200),
     source: str = None,
     start_date: str = None,
     end_date: str = None,
@@ -1406,7 +1381,7 @@ def api_get_news(
 
 @app.get("/api/threats")
 def api_get_threats(
-    limit: int = 30,
+    limit: int = Query(30, ge=1, le=200),
     indicator_type: str = None,
     start_date: str = None,
     end_date: str = None,
@@ -1462,8 +1437,8 @@ def api_get_cve_intel_info(
 
 @app.get("/api/investigate")
 def api_investigate_ioc(
-    ioc: str = "",
-    user: dict = Depends(require_authenticated_user),
+    ioc: str = Query("", max_length=2048),
+    user: dict = Depends(require_analyst_or_admin),
 ):
     if not ioc.strip():
         return JSONResponse(status_code=400, content={"error": "IOC parameter is required."})
@@ -1472,7 +1447,7 @@ def api_investigate_ioc(
 
 @app.get("/api/investigate/history")
 def api_get_investigate_history(
-    limit: int = 15,
+    limit: int = Query(15, ge=1, le=200),
     user: dict = Depends(require_authenticated_user),
 ):
     return get_recent_investigations(limit=limit)
@@ -1562,7 +1537,11 @@ def api_update_detection_rule(
     user: dict = Depends(require_analyst_or_admin),
 ):
     client_ip = get_client_ip(request)
-    success = update_detection_rule(rule_id, rule.model_dump())
+    import sqlite3
+    try:
+        success = update_detection_rule(rule_id, rule.model_dump())
+    except sqlite3.IntegrityError:
+        return JSONResponse(status_code=409, content={"error": "A detection rule with that title already exists."})
     if success:
         log_audit_event(
             username=user["username"],
@@ -1772,13 +1751,13 @@ def api_get_schedule(user: dict = Depends(require_authenticated_user)):
 
 @app.post("/api/schedule")
 def api_update_schedule(
-    request_data: dict,
+    request_data: ScheduleSchema,
     request: Request,
     admin: dict = Depends(require_admin),
 ):
     client_ip = get_client_ip(request)
-    enabled = request_data.get("enabled", False)
-    interval_hours = request_data.get("interval_hours", 24)
+    enabled = request_data.enabled
+    interval_hours = request_data.interval_hours
 
     from app.services.scheduler_service import VALID_INTERVALS
     if interval_hours not in VALID_INTERVALS:
@@ -1811,13 +1790,13 @@ def api_list_rss_feeds(user: dict = Depends(require_authenticated_user)):
 
 @app.post("/api/rss-feeds")
 def api_add_rss_feed(
-    feed_data: dict,
+    feed_data: RssFeedCreateSchema,
     request: Request,
     admin: dict = Depends(require_admin),
 ):
     client_ip = get_client_ip(request)
-    name = feed_data.get("name", "").strip()
-    url = feed_data.get("url", "").strip()
+    name = feed_data.name.strip()
+    url = feed_data.url.strip()
 
     if not name or not url:
         return JSONResponse(status_code=400, content={"error": "Both 'name' and 'url' are required."})

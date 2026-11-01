@@ -161,7 +161,7 @@
                                 <button type="button" class="btn btn-sm btn-secondary copy-rule-btn" onclick="copyRuleToClipboard('rule-code-{{ rule.id }}', this)" title="Copy rule text to clipboard">
                                     📋 Copy Rule
                                 </button>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="downloadRuleFile('rule-code-{{ rule.id }}', '{{ rule.title }}', '{{ rule.rule_type }}')" title="Download rule file">
+                                <button type="button" class="btn btn-sm btn-secondary" data-code-id="rule-code-{{ rule.id }}" data-rule-title="{{ rule.title }}" data-rule-type="{{ rule.rule_type }}" onclick="downloadRuleFile(this.dataset.codeId, this.dataset.ruleTitle, this.dataset.ruleType)" title="Download rule file">
                                     💾 Download
                                 </button>
                             </div>

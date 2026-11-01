@@ -42,51 +42,23 @@ from pathlib import Path
 from app.config import DATABASE_PATH
 
 
+class ManagedConnection(sqlite3.Connection):
+    """Commit/rollback AND close when leaving a connection context."""
+
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
+
 def get_connection():
-    """
-    Create and return a connection to our SQLite database.
-
-    WHAT IS A DATABASE CONNECTION?
-    ------------------------------
-    A "connection" is like opening a phone call to the database.
-    You need an open connection to send SQL commands. When you
-    are done, you should close it (like hanging up the phone).
-
-    HOW THIS FUNCTION WORKS:
-    ------------------------
-    1. sqlite3.connect(path) opens (or creates) the database file.
-    2. conn.row_factory = sqlite3.Row makes query results behave
-       like dictionaries, so you can write row["cve_id"] instead
-       of row[0]. This is much more readable!
-    3. We return the connection object so other code can use it.
-
-    Returns:
-        sqlite3.Connection: An open connection to the database.
-    """
-    global DATABASE_PATH
-    try:
-        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(DATABASE_PATH))
-    except (PermissionError, OSError):
-        # Fallback to /app/data or /tmp if target directory is restricted for non-root user
-        fallback = Path("/app/data/cyber_dashboard.db")
-        if fallback != DATABASE_PATH:
-            try:
-                fallback.parent.mkdir(parents=True, exist_ok=True)
-                DATABASE_PATH = fallback
-                conn = sqlite3.connect(str(DATABASE_PATH))
-            except Exception:
-                fallback = Path("/tmp/cyber_dashboard.db")
-                fallback.parent.mkdir(parents=True, exist_ok=True)
-                DATABASE_PATH = fallback
-                conn = sqlite3.connect(str(DATABASE_PATH))
-        else:
-            fallback = Path("/tmp/cyber_dashboard.db")
-            fallback.parent.mkdir(parents=True, exist_ok=True)
-            DATABASE_PATH = fallback
-            conn = sqlite3.connect(str(DATABASE_PATH))
-
+    """Open the configured database; never silently fall back to ephemeral storage."""
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DATABASE_PATH), timeout=30, factory=ManagedConnection)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 
@@ -129,7 +101,9 @@ def initialize_database():
     #
     # The "with" version is shorter and safer!
     with get_connection() as conn:
-
+        # Multiple Gunicorn workers may initialize together. Lock before reading
+        # migration metadata so a column cannot be added twice concurrently.
+        conn.execute("BEGIN IMMEDIATE")
         # A "cursor" is an object that lets us execute SQL
         # commands on the database. Think of it as the "pen"
         # we use to write SQL statements.
@@ -326,11 +300,18 @@ def initialize_database():
         except Exception:
             pass
 
-        # Ensure admin user has role='admin'
-        try:
-            cursor.execute("UPDATE users SET role = 'admin' WHERE username = 'admin' AND (role IS NULL OR role = 'viewer')")
-        except Exception:
-            pass
+        # Versioned authentication state invalidates old JWTs after account changes.
+        columns = {row["name"] for row in cursor.execute("PRAGMA table_info(users)")}
+        if "session_version" not in columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0")
+        if "is_primary" not in columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0")
+            # Preserve the earliest existing administrator, regardless of its name.
+            cursor.execute("UPDATE users SET is_primary = 1 WHERE id = (SELECT MIN(id) FROM users WHERE role = 'admin')")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_primary_user ON users(is_primary) WHERE is_primary = 1")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS revoked_sessions (
+            jti TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
+        )""")
 
         # --------------------------------------------------
         # TABLE 9: threat_actors
@@ -411,6 +392,9 @@ def initialize_database():
                 integrity_hash  TEXT NOT NULL
             )
         """)
+        audit_columns = {row["name"] for row in cursor.execute("PRAGMA table_info(audit_logs)")}
+        if "hash_version" not in audit_columns:
+            cursor.execute("ALTER TABLE audit_logs ADD COLUMN hash_version INTEGER NOT NULL DEFAULT 1")
 
         try:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(timestamp)")
@@ -490,6 +474,16 @@ def initialize_database():
                 is_active          INTEGER DEFAULT 1
             )
         """)
+        cursor.execute("""CREATE TABLE IF NOT EXISTS api_rate_windows (
+            token_id INTEGER PRIMARY KEY REFERENCES api_tokens(id) ON DELETE CASCADE,
+            window_start INTEGER NOT NULL, request_count INTEGER NOT NULL
+        )""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY, value TEXT
+        )""")
+        cursor.execute("""CREATE TABLE IF NOT EXISTS job_leases (
+            name TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at REAL NOT NULL
+        )""")
 
         try:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens(token_hash)")
@@ -556,4 +550,3 @@ def seed_default_rss_feeds():
 
         conn.commit()
         print(f"   📡 Seeded {len(RSS_FEEDS)} default RSS feeds.")
-

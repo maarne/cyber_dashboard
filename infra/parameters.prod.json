@@ -14,9 +14,6 @@
     "enablePersistentStorage": {
       "value": false
     },
-    "containerImage": {
-      "value": "maarne/cyberdash:latest"
-    },
     "dockerRegistryServerUrl": {
       "value": "https://index.docker.io/v1"
     }

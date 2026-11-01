@@ -14,6 +14,7 @@
 # ============================================================
 
 import os
+from scratch import test_support
 import sys
 import tempfile
 import unittest
@@ -25,9 +26,7 @@ if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
 # Safety Enforcement: Strictly configure ephemeral temporary database in /tmp
-_temp_test_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-os.environ["DATABASE_PATH"] = _temp_test_db.name
-_temp_test_db.close()
+test_support.assert_test_database()
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -403,7 +402,7 @@ class TestCyberDashCriticalSuite(unittest.TestCase):
         mock_response.is_success = True
         mock_response.status_code = 200
 
-        with patch("httpx.post", return_value=mock_response):
+        with patch("app.services.webhook_service.safe_request", return_value=mock_response):
             res = self.client.post(f"/api/webhooks/{wh_id}/test", cookies=admin_cookies)
             self.assertEqual(res.status_code, 200)
             self.assertIn("message", res.json())

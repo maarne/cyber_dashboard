@@ -1,7 +1,8 @@
 import re
+from scratch.test_support import ROOT
 
 def test_modal_styles():
-    with open("/home/maarne/apps/antigravity/cyber_dashboard/app/static/css/style.css") as f:
+    with open(ROOT / "app/static/css/style.css") as f:
         css = f.read()
 
     assert ".modal-overlay" in css
@@ -14,7 +15,7 @@ def test_modal_styles():
     assert "overflow-y: auto" in css
     assert ".modal-card > form" in css
 
-    with open("/home/maarne/apps/antigravity/cyber_dashboard/app/templates/rules.html") as f:
+    with open(ROOT / "app/templates/rules.html") as f:
         html = f.read()
 
     assert "modal-card modal-card-lg" in html

@@ -28,6 +28,11 @@ TOKEN_PREFIX = "cd_live_"
 VALID_ROLES = {"admin", "analyst", "viewer"}
 
 
+class ApiRateLimitExceeded(Exception):
+    def __init__(self, retry_after: int):
+        self.retry_after = retry_after
+
+
 def hash_token(raw_token: str) -> str:
     """Compute SHA-256 digest of a raw API token string."""
     return hashlib.sha256(raw_token.strip().encode("utf-8")).hexdigest()
@@ -53,6 +58,10 @@ def generate_api_token(
     cleaned_name = name.strip()
     if not cleaned_name:
         raise ValueError("API token name cannot be empty.")
+    if rate_limit is None or not 1 <= rate_limit <= 10000:
+        raise ValueError("Rate limit must be between 1 and 10000 requests per minute.")
+    if expires_in_days is not None and not 1 <= expires_in_days <= 3650:
+        raise ValueError("Expiry must be between 1 and 3650 days, or null.")
 
     # Generate 48-char random hex string prefixed with cd_live_
     random_secret = secrets.token_hex(24)
@@ -82,7 +91,7 @@ def generate_api_token(
                 cleaned_role,
                 created_by,
                 expires_at_str,
-                rate_limit or 60,
+                rate_limit,
             ),
         )
         token_id = cursor.lastrowid
@@ -107,6 +116,7 @@ def verify_api_token(raw_token: str) -> dict | None:
     digest = hash_token(raw_token)
 
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -129,8 +139,22 @@ def verify_api_token(raw_token: str) -> dict | None:
                 now_utc = datetime.now(timezone.utc)
                 if now_utc > expiry_dt:
                     return None
-            except Exception:
-                pass
+            except (TypeError, ValueError):
+                return None
+
+        # A database-backed fixed window is shared by all processes/workers.
+        now = int(datetime.now(timezone.utc).timestamp())
+        window = now - now % 60
+        rate_limit = token["rate_limit_per_min"]
+        if not isinstance(rate_limit, int) or rate_limit < 1:
+            return None
+        cursor.execute("""INSERT INTO api_rate_windows(token_id, window_start, request_count)
+            VALUES (?, ?, 1) ON CONFLICT(token_id) DO UPDATE SET
+            request_count = CASE WHEN window_start = excluded.window_start THEN request_count + 1 ELSE 1 END,
+            window_start = excluded.window_start""", (token["id"], window))
+        count = cursor.execute("SELECT request_count FROM api_rate_windows WHERE token_id = ?", (token["id"],)).fetchone()[0]
+        if count > rate_limit:
+            raise ApiRateLimitExceeded(window + 60 - now)
 
         # Update last_used_at asynchronously
         try:
@@ -149,6 +173,7 @@ def verify_api_token(raw_token: str) -> dict | None:
         "token_id": token["id"],
         "token_name": token["name"],
         "rate_limit_per_min": token.get("rate_limit_per_min", 60),
+        "rate_limit_remaining": max(0, rate_limit - count),
     }
 
 
@@ -214,98 +239,25 @@ def delete_api_token(token_id: int) -> bool:
 
 
 def get_api_endpoints_catalog() -> list[dict]:
-    """
-    Structured directory of CyberDash API endpoints for the interactive explorer.
-    """
-    return [
-        {
-            "id": "summary",
-            "name": "Dashboard Summary Metrics",
-            "method": "GET",
-            "path": "/api/summary",
-            "description": "Real-time vulnerability counts, active CISA zero-days, RSS articles, and threat indicators.",
-            "auth_required": "Viewer / Optional",
-            "params": [
-                {"name": "start_date", "type": "string", "example": "2026-01-01", "desc": "Filter by start date (YYYY-MM-DD)"},
-                {"name": "end_date", "type": "string", "example": "2026-08-14", "desc": "Filter by end date (YYYY-MM-DD)"},
-            ],
-            "sample_response": '{\n  "total_cves": 142,\n  "critical_cves": 28,\n  "high_cves": 54,\n  "active_exploits": 19,\n  "total_articles": 85,\n  "total_threats": 42\n}',
-        },
-        {
-            "id": "cves",
-            "name": "Vulnerability Intelligence Feed",
-            "method": "GET",
-            "path": "/api/cves",
-            "description": "Paginated CVE disclosures with EPSS scores, CVSS v3.1 vectors, Ransomware Campaign tags, and CISA flags.",
-            "auth_required": "Viewer / Optional",
-            "params": [
-                {"name": "limit", "type": "integer", "example": "25", "desc": "Max records to return (1-200)"},
-                {"name": "severity", "type": "string", "example": "CRITICAL", "desc": "CRITICAL, HIGH, MEDIUM, LOW"},
-                {"name": "search", "type": "string", "example": "Fortinet", "desc": "Keyword or CVE ID search"},
-            ],
-            "sample_response": '[\n  {\n    "cve_id": "CVE-2026-1135",\n    "severity": "CRITICAL",\n    "cvss_score": 9.8,\n    "epss_score": 0.942,\n    "is_cisa_kev": true,\n    "ransomware_campaign": "LockBit 3.0"\n  }\n]',
-        },
-        {
-            "id": "cisa",
-            "name": "CISA Known Exploited Vulnerabilities",
-            "method": "GET",
-            "path": "/api/cisa",
-            "description": "Curated catalog of actively exploited vulnerabilities compiled by the Cybersecurity & Infrastructure Security Agency.",
-            "auth_required": "Viewer / Optional",
-            "params": [
-                {"name": "limit", "type": "integer", "example": "50", "desc": "Max records to return"},
-            ],
-            "sample_response": '[\n  {\n    "cve_id": "CVE-2026-2291",\n    "vendor_project": "Microsoft",\n    "product": "Windows Kernel",\n    "date_added": "2026-08-10"\n  }\n]',
-        },
-        {
-            "id": "threats",
-            "name": "Threat Actor Indicators & IoCs",
-            "method": "GET",
-            "path": "/api/threats",
-            "description": "Active malicious IPs, domains, and hashes tracked across global telemetry sources.",
-            "auth_required": "Viewer / Optional",
-            "params": [
-                {"name": "limit", "type": "integer", "example": "50", "desc": "Max records to return"},
-                {"name": "type", "type": "string", "example": "ip", "desc": "ip, url, domain, hash"},
-            ],
-            "sample_response": '[\n  {\n    "indicator_type": "ip",\n    "indicator_value": "198.51.100.44",\n    "threat_type": "Command and Control",\n    "source": "Abuse.ch"\n  }\n]',
-        },
-        {
-            "id": "investigate",
-            "name": "IOC Threat Investigation & Enrichment",
-            "method": "POST",
-            "path": "/api/investigate",
-            "description": "Correlates submitted IP addresses, domains, and file hashes against threat intelligence databases and Mitre ATT&CK.",
-            "auth_required": "Viewer / Analyst",
-            "params": [
-                {"name": "ioc", "type": "string (JSON body)", "example": '{"ioc": "198.51.100.44"}', "desc": "Target indicator string"},
-            ],
-            "sample_response": '{\n  "ioc": "198.51.100.44",\n  "type": "ipv4",\n  "verdict": "MALICIOUS",\n  "threat_score": 92,\n  "associated_actors": ["APT29", "Cozy Bear"],\n  "matched_rules": ["Sigma-C2-Beaconing"]\n}',
-        },
-        {
-            "id": "rules",
-            "name": "Detection Rules Repository",
-            "method": "GET",
-            "path": "/api/rules",
-            "description": "Enterprise Sigma and YARA rules mapped to MITRE ATT&CK techniques with SIEM deployment guidelines.",
-            "auth_required": "Viewer / Analyst",
-            "params": [
-                {"name": "rule_type", "type": "string", "example": "SIGMA", "desc": "SIGMA or YARA"},
-                {"name": "severity", "type": "string", "example": "CRITICAL", "desc": "CRITICAL, HIGH, MEDIUM"},
-            ],
-            "sample_response": '[\n  {\n    "id": 1,\n    "title": "PsExec Lateral Movement Detection",\n    "rule_type": "SIGMA",\n    "severity": "HIGH",\n    "mitre_id": "T1021.002"\n  }\n]',
-        },
-        {
-            "id": "audit_logs",
-            "name": "Cryptographic Audit Ledger",
-            "method": "GET",
-            "path": "/api/audit-logs",
-            "description": "Cryptographically chained audit trail verifying governance integrity, authentication events, and administrative changes.",
-            "auth_required": "Analyst / Admin",
-            "params": [
-                {"name": "action", "type": "string", "example": "USER_ROLE_UPDATED", "desc": "Action filter"},
-                {"name": "search", "type": "string", "example": "admin", "desc": "Search keyword"},
-            ],
-            "sample_response": '[\n  {\n    "id": 114,\n    "username": "admin",\n    "role": "admin",\n    "action": "API_TOKEN_CREATED",\n    "status": "SUCCESS",\n    "integrity_hash": "a8f3b29..."\n  }\n]',
-        },
-    ]
+    """Build explorer metadata from actual routes and dependency permissions."""
+    from app.main import app, require_admin, require_analyst_or_admin, require_authenticated_user
+    schema = app.openapi()
+    catalog = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api") or not hasattr(route, "dependant"):
+            continue
+        dependencies = {d.call for d in route.dependant.dependencies}
+        role = ("Admin" if require_admin in dependencies else "Analyst / Admin" if require_analyst_or_admin in dependencies
+                else "Viewer (authenticated)" if require_authenticated_user in dependencies else "Public")
+        for method in sorted(route.methods - {"HEAD", "OPTIONS"}):
+            operation = schema.get("paths", {}).get(path, {}).get(method.lower(), {})
+            endpoint_id = path.removeprefix("/api/").replace("-", "_") if method == "GET" else operation.get("operationId", path)
+            catalog.append({"id": endpoint_id, "name": operation.get("summary", path), "method": method,
+                            "path": path, "description": operation.get("description", ""), "auth_required": role,
+                            "params": [{"name": p["name"], "type": p.get("schema", {}).get("type", "string"),
+                                        "in": p["in"], "example": p.get("schema", {}).get("default", ""),
+                                        "desc": p.get("description", "")} for p in operation.get("parameters", [])],
+                            "has_body": "requestBody" in operation,
+                            "sample_response": "// Execute a request to see actual results; no synthetic intelligence is shown."})
+    return catalog

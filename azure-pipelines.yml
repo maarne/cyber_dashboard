@@ -1,5 +1,5 @@
 # ============================================================
-# CyberDash — Automated DevSecOps Pipeline (Docker Hub & Azure Free Tier)
+# CyberDash — Gated DevSecOps Pipeline (Docker Hub & Free Azure F1 Development)
 # ============================================================
 # Stage 1 (BuildTestAndSecurity):
 #   - Critical Function & Integration Testing (sandbox SQLite DB)
@@ -12,7 +12,7 @@
 #
 # Stage 2 (ProductionDeployment):
 #   - Automated Continuous Deployment (Triggered on all tests & scans passing)
-#   - Provision / Ensure Production Infrastructure via Bicep (Free Tier F1)
+#   - Request F1 Free development hosting only (no paid-tier fallback)
 #   - Deploy Verified Docker Hub Container Image to Azure Web App
 #   - Automated Cold-Start Health Probe & Dynamic Smoke Test
 # ============================================================
@@ -74,6 +74,7 @@ stages:
           sonar.python.coverage.reportPaths=$(System.DefaultWorkingDirectory)/coverage.xml
           sonar.exclusions=scratch/**,infra/**,images/**,static/vendor/**
           sonar.branch.name=$(Build.SourceBranchName)
+          sonar.qualitygate.wait=true
           
     - task: UsePythonVersion@0
       displayName: 'Set Python 3.11 Environment'
@@ -82,13 +83,16 @@ stages:
         addToPath: true
 
     - script: |
+        set -euo pipefail
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install coverage
       displayName: 'Install Python Dependencies & Coverage Tools'
 
     - script: |
-        PYTHONPATH=. python -m coverage run --source=app scratch/test_critical_suite.py
+        set -euo pipefail
+        CYBERDASH_COVERAGE=1 python -m scratch.run_tests
+        python -m coverage combine
         python -m coverage xml -o $(System.DefaultWorkingDirectory)/coverage.xml
       displayName: 'Execute All-in-One Critical Test Suite with Coverage'
 
@@ -100,7 +104,8 @@ stages:
         testType: 'app'
         targetFile: 'requirements.txt'
         monitorWhen: 'always'
-        failOnIssues: false
+        failOnIssues: true
+        severityThreshold: 'high'
         projectName: 'LearningDevOps/LearningDevOps'
         organization: 'maarne'
         additionalArguments: '--command=python3'
@@ -134,7 +139,6 @@ stages:
         dockerfile: $(dockerfilePath)
         tags: |
           $(tag)
-          latest
 
     - task: Docker@2
       displayName: 'Push Docker image to Docker Hub'
@@ -144,7 +148,6 @@ stages:
         repository: $(imageRepository)
         tags: |
           $(tag)
-          latest
 
   # ------------------------------------------------------------
   # Job 3: SAST, Container Scanning & Shift-Left In-Pipeline DAST
@@ -158,20 +161,22 @@ stages:
     steps:
     # Semgrep SAST Scan
     - script: |
+        set -euo pipefail
         mkdir -p $(Build.ArtifactStagingDirectory)/semgrep
         docker run --rm \
           -v $(projectRoot):/src \
           -v $(Build.ArtifactStagingDirectory)/semgrep:/output \
           semgrep/semgrep semgrep scan \
-          --config=auto \
+           --config=auto \
+           --error \
           --json \
           -o /output/semgrep-report.json \
-          /src
+           /src/app
       displayName: 'Run Semgrep SAST Scan'
-      continueOnError: true
 
     - task: PublishBuildArtifacts@1
       displayName: 'Publish Semgrep SAST Report'
+      condition: always()
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/semgrep/semgrep-report.json'
         ArtifactName: 'Semgrep_SAST_Report'
@@ -190,21 +195,22 @@ stages:
 
     # Trivy Container Image Scan
     - script: |
+        set -euo pipefail
         mkdir -p $(Build.ArtifactStagingDirectory)/trivy
         docker run --rm \
           -v /var/run/docker.sock:/var/run/docker.sock \
           -v $(Build.ArtifactStagingDirectory)/trivy:/output \
           aquasec/trivy:latest image \
           --scanners vuln,secret,config \
-          --ignore-unfixed \
+          --exit-code 1 --severity HIGH,CRITICAL \
           --format template --template "@contrib/html.tpl" \
           -o /output/trivy-image-report.html \
           $(imageRepository):$(tag)
       displayName: 'Run Trivy Container Image Scan'
-      continueOnError: true
 
     - task: PublishBuildArtifacts@1
       displayName: 'Publish Trivy Container Report'
+      condition: always()
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy/trivy-image-report.html'
         ArtifactName: 'Trivy_Container_Report'
@@ -219,18 +225,21 @@ stages:
         dockerImageName: '$(imageRepository):$(tag)'
         dockerfilePath: 'Dockerfile'
         monitorWhen: 'always'
-        failOnIssues: false
+        failOnIssues: true
+        severityThreshold: 'high'
         projectName: 'LearningDevOps/LearningDevOps'
         organization: 'maarne'
 
     # Shift-Left In-Pipeline Zero-Cost DAST (OWASP ZAP against local agent container)
     - script: |
+        set -euo pipefail
+        trap 'docker rm -f local-cyberdash >/dev/null 2>&1 || true' EXIT
         echo "Launching agent-local CyberDash container for DAST security analysis..."
-        docker run -d --name local-cyberdash -p 8000:8000 $(imageRepository):$(tag)
+        docker run -d --name local-cyberdash -e JWT_SECRET_KEY="$(openssl rand -hex 32)" -p 127.0.0.1:8000:8000 $(imageRepository):$(tag)
 
         echo "Waiting for local container to become healthy..."
         for i in {1..15}; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/health || echo "000")
+            HTTP_STATUS=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" http://localhost:8000/api/health || true)
             echo "Attempt $i: Received HTTP $HTTP_STATUS from local health probe"
             if [ "$HTTP_STATUS" -eq 200 ]; then
                 echo "✅ Local container is responsive and healthy!"
@@ -238,6 +247,18 @@ stages:
             fi
             sleep 2
         done
+        test "$HTTP_STATUS" = "200"
+
+        # Exercise authenticated pages rather than scanning only the setup wizard.
+        python - <<'PY'
+        import json, secrets, urllib.request
+        payload = json.dumps({'username': 'dast_admin', 'password': secrets.token_urlsafe(24) + 'Aa1!'}).encode()
+        response = urllib.request.urlopen(urllib.request.Request('http://localhost:8000/api/setup', data=payload, headers={'Content-Type': 'application/json'}))
+        cookie = response.headers['Set-Cookie'].split(';', 1)[0]
+        with open('$(Agent.TempDirectory)/zap-cookie', 'w') as handle:
+            handle.write(cookie)
+        print('##vso[task.setsecret]' + cookie)
+        PY
 
         mkdir -p $(Build.ArtifactStagingDirectory)/zap
         sudo chmod -R 777 $(Build.ArtifactStagingDirectory)/zap
@@ -251,31 +272,44 @@ stages:
           -r zap_dast_report.html \
           -J zap_out.json \
           -I \
-          -z "-config connection.timeoutInSecs=60" || true
+          -z "-config connection.timeoutInSecs=60 -config replacer.full_list(0).description=auth -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=Cookie -config replacer.full_list(0).replacement=$(cat '$(Agent.TempDirectory)/zap-cookie')"
+
+        # Baseline rules default to WARN. Gate high-risk alerts explicitly;
+        # -I alone must not turn a high-risk report into a successful release.
+        python - <<'PY'
+        import json
+        with open('$(Build.ArtifactStagingDirectory)/zap/zap_out.json') as handle:
+            report = json.load(handle)
+        alerts = [alert for site in report.get('site', []) for alert in site.get('alerts', [])]
+        if any(int(alert.get('riskcode', 0)) >= 3 for alert in alerts):
+            raise SystemExit('ZAP high-risk findings block production promotion.')
+        PY
 
         echo "Cleaning up local CyberDash container..."
         docker stop local-cyberdash || true
         docker rm local-cyberdash || true
       displayName: 'Execute Zero-Cost Shift-Left DAST (OWASP ZAP)'
-      continueOnError: true
 
     - task: PublishBuildArtifacts@1
       displayName: 'Publish OWASP ZAP DAST Report'
+      condition: always()
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/zap/zap_dast_report.html'
         ArtifactName: 'OWASP_ZAP_DAST_Report'
         publishLocation: 'Container'
 
 # ============================================================
-# STAGE 2: AUTOMATED PRODUCTION DEPLOYMENT (FREE TIER F1)
+# STAGE 2: MAIN-ONLY DEVELOPMENT DEPLOYMENT (FREE F1, EPHEMERAL DATA)
+# Legacy stage/environment/resource identifiers are retained to reuse existing
+# resources. Their historical "prod" labels do not imply production suitability.
 # ============================================================
 - stage: ProductionDeployment
-  displayName: 'Stage 2: Production Deployment (Free Tier F1)'
+  displayName: 'Stage 2: Development Deployment (Free F1)'
   dependsOn: BuildTestAndSecurity
-  condition: succeeded()
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   jobs:
   - deployment: ProductionDeploymentJob
-    displayName: 'Deploy to Azure App Service Free Tier (F1)'
+    displayName: 'Deploy to Azure App Service F1 (Free, Development Only)'
     pool:
       vmImage: $(vmImageName)
     environment: $(environmentName)
@@ -285,15 +319,16 @@ stages:
           steps:
           - checkout: self
           - task: AzureCLI@2
-            displayName: 'Deploy Bicep Infrastructure (F1) & Update Docker Hub Image'
+            displayName: 'Deploy Free F1 Bicep Infrastructure & Verified Image'
             inputs:
               azureSubscription: $(azureServiceConnectionId)
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
-                set -e
+                set -euo pipefail
+                : "${JWT_SECRET_KEY:?Configure the jwtSecretKey secret pipeline variable}"
 
-                echo "Discovering Azure Resource Group for Production..."
+                echo "Discovering Azure Resource Group for Free Development Hosting..."
                 RG_NAME=$(az webapp list --query "[?contains(name, 'cyberdash')].resourceGroup" -o tsv | head -n 1)
                 if [ -z "$RG_NAME" ]; then
                     RG_NAME=$(az group list --query "[?contains(name, 'cyberdash') || contains(name, 'CyberDash')].name | [0]" -o tsv)
@@ -301,9 +336,9 @@ stages:
                 if [ -z "$RG_NAME" ]; then
                     RG_NAME="cyberdash-rg"
                 fi
-                echo "Target Production Resource Group: $RG_NAME"
+                echo "Target Development Resource Group: $RG_NAME"
 
-                echo "Deploying / Verifying Production Infrastructure via Bicep (Free Tier F1)..."
+                echo "Deploying / Verifying Development Infrastructure via Bicep (Free F1 only)..."
                 DEPLOY_OUTPUT=$(az deployment group create \
                   --name "deploy-prod-$(Build.BuildId)" \
                   --resource-group "$RG_NAME" \
@@ -315,13 +350,14 @@ stages:
                     containerImage=$(imageRepository):$(tag) \
                     dockerRegistryServerUrl="https://index.docker.io/v1" \
                     enablePersistentStorage=false \
+                    jwtSecretKey="$JWT_SECRET_KEY" \
                   --query "properties.outputs" -o json)
 
                 PROD_URL=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppUrl']['value'])")
                 PROD_APP_NAME=$(echo "$DEPLOY_OUTPUT" | python3 -c "import sys, json; print(json.load(sys.stdin)['webAppName']['value'])")
 
                 echo "============================================================"
-                echo "🚀 Production Web App Deployed on Free Tier (F1):"
+                echo "🚀 Development Web App Deployed on Free F1 (ephemeral data):"
                 echo "   App Name: $PROD_APP_NAME"
                 echo "   URL:      $PROD_URL"
                 echo "============================================================"
@@ -333,22 +369,25 @@ stages:
                   --docker-custom-image-name "$(imageRepository):$(tag)" \
                   --docker-registry-server-url "https://index.docker.io"
 
-                echo "Applying Free Tier container settings (disabling SMB storage)..."
+                echo "Applying free-tier ephemeral storage settings..."
                 az webapp config appsettings set \
                   --name "$PROD_APP_NAME" \
                   --resource-group "$RG_NAME" \
-                  --settings WEBSITES_ENABLE_APP_SERVICE_STORAGE=false DATABASE_PATH="/app/data/cyber_dashboard.db" WEBSITES_PORT=8000
+                  --settings WEBSITES_ENABLE_APP_SERVICE_STORAGE=false DATABASE_PATH="/app/data/cyber_dashboard.db" WEBSITES_PORT=8000 ENV=production --output none
 
-                echo "Restarting Production Web App $PROD_APP_NAME..."
+                echo "Restarting Development Web App $PROD_APP_NAME..."
                 az webapp restart --name "$PROD_APP_NAME" --resource-group "$RG_NAME"
 
-                echo "Running Production Cold-Start Smoke Test against $PROD_URL..."
+                echo "Running Development Cold-Start Smoke Test against $PROD_URL..."
                 for i in {1..20}; do
-                    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL" || echo "000")
+                    HTTP_STATUS=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "$PROD_URL/api/ready" || true)
                     echo "Attempt $i: Received HTTP $HTTP_STATUS from $PROD_URL"
-                    if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 302 ] || [ "$HTTP_STATUS" -eq 307 ]; then
-                        echo "✅ Production Web App $PROD_APP_NAME is fully operational!"
+                    if [ "$HTTP_STATUS" = "200" ]; then
+                        echo "✅ Development Web App $PROD_APP_NAME is responsive!"
                         break
                     fi
                     sleep 10
                 done
+                test "$HTTP_STATUS" = "200"
+            env:
+              JWT_SECRET_KEY: $(jwtSecretKey)

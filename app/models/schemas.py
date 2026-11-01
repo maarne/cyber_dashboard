@@ -32,12 +32,12 @@
 # "from typing import Optional" imports the Optional type hint.
 # Optional[str] means "this value is either a string OR None".
 # None is Python's way of saying "no value" or "missing".
-from typing import Optional
+from typing import Optional, Literal
 
 # BaseModel is the foundation class from Pydantic.
 # All our schemas will "inherit" from it, which gives them
 # automatic data validation and type checking.
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ============================================================
@@ -240,13 +240,13 @@ class DetectionRuleSchema(BaseModel):
     Represents a Sigma or YARA detection rule.
     """
 
-    title: str
-    rule_type: str = "Sigma"
+    title: str = Field(min_length=1, max_length=300)
+    rule_type: Literal["Sigma", "SIGMA", "YARA"] = "Sigma"
     mitre_ttp: Optional[str] = None
     severity: Optional[str] = "HIGH"
     target_cve: Optional[str] = None
     description: Optional[str] = None
-    code_content: str
+    code_content: str = Field(min_length=1, max_length=200000)
     target_siem: Optional[str] = "Generic"
     deployment_guide: Optional[str] = None
 
@@ -257,31 +257,31 @@ class DetectionRuleSchema(BaseModel):
 
 class LoginRequest(BaseModel):
     """Payload for user authentication."""
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=256)
 
 
 class ChangePasswordRequest(BaseModel):
     """Payload for password update."""
-    current_password: str
-    new_password: str
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
 
 
 class UserCreateSchema(BaseModel):
     """Payload for administrative user creation."""
-    username: str
-    password: str
-    role: str = "viewer"
+    username: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.@-]+$")
+    password: str = Field(min_length=1, max_length=256)
+    role: Literal["admin", "analyst", "viewer"] = "viewer"
 
 
 class UserUpdateRoleSchema(BaseModel):
     """Payload for updating user RBAC role."""
-    role: str
+    role: Literal["admin", "analyst", "viewer"]
 
 
 class PasswordPolicySchema(BaseModel):
     """Payload for updating password security requirements."""
-    min_length: int = 10
+    min_length: int = Field(10, ge=10, le=64)
     require_uppercase: bool = True
     require_lowercase: bool = True
     require_numbers: bool = True
@@ -290,17 +290,26 @@ class PasswordPolicySchema(BaseModel):
 
 class InitialSetupSchema(BaseModel):
     """Payload for the first-time administrator initialization wizard."""
-    username: str = "admin"
-    password: str
+    username: str = Field("admin", min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.@-]+$")
+    password: str = Field(min_length=1, max_length=256)
 
 
 class ApiTokenCreateSchema(BaseModel):
     """Payload for generating developer API tokens."""
-    name: str
-    role: str = "viewer"
-    expires_in_days: Optional[int] = None
-    rate_limit_per_min: Optional[int] = 60
+    name: str = Field(min_length=1, max_length=100)
+    role: Literal["admin", "analyst", "viewer"] = "viewer"
+    expires_in_days: Optional[int] = Field(None, ge=1, le=3650)
+    rate_limit_per_min: int = Field(60, ge=1, le=10000)
 
+
+class ScheduleSchema(BaseModel):
+    enabled: bool
+    interval_hours: Literal[6, 12, 24, 48] = 24
+
+
+class RssFeedCreateSchema(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    url: str = Field(min_length=1, max_length=2048)
 
 
 

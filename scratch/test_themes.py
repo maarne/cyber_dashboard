@@ -3,17 +3,16 @@
 # ============================================================
 
 import os
+from scratch import test_support
 import sys
 import unittest
 import tempfile
 
 # Ensure workspace root is in sys.path
-sys.path.insert(0, "/home/maarne/apps/antigravity/cyber_dashboard")
+sys.path.insert(0, str(test_support.ROOT))
 
 # Use isolated temporary test database so live database is NEVER modified
-_temp_test_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-os.environ["DATABASE_PATH"] = _temp_test_db.name
-_temp_test_db.close()
+test_support.assert_test_database()
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -25,8 +24,6 @@ class TestMultiThemeEngine(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         initialize_database()
-        if not os.path.exists(_temp_test_db.name):
-            initialize_database()
         create_user("admin", "AdminPass1234!", "admin")
         cls.client = TestClient(app)
         cls.admin_token = create_access_token("admin", "admin")
@@ -35,14 +32,13 @@ class TestMultiThemeEngine(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         try:
-            if os.path.exists(_temp_test_db.name):
-                os.remove(_temp_test_db.name)
+            pass  # The shared sandbox fixture owns database cleanup.
         except Exception:
             pass
 
     def test_01_css_themes_defined(self):
         """Verify all 6 themes have CSS variables in style.css."""
-        css_path = "/home/maarne/apps/antigravity/cyber_dashboard/app/static/css/style.css"
+        css_path = test_support.ROOT / "app/static/css/style.css"
         self.assertTrue(os.path.exists(css_path))
         with open(css_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -68,7 +64,7 @@ class TestMultiThemeEngine(unittest.TestCase):
 
     def test_02_theme_js_controller(self):
         """Verify theme.js is structured with all 6 themes and exports."""
-        js_path = "/home/maarne/apps/antigravity/cyber_dashboard/app/static/js/theme.js"
+        js_path = test_support.ROOT / "app/static/js/theme.js"
         self.assertTrue(os.path.exists(js_path))
         with open(js_path, "r", encoding="utf-8") as f:
             content = f.read()

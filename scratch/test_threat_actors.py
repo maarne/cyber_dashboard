@@ -1,9 +1,9 @@
-import requests
+from scratch.legacy_support import authenticated_session
 
 BASE_URL = "http://127.0.0.1:8000"
 
 def test_threat_actors():
-    session = requests.Session()
+    session = authenticated_session()
 
     print("1. Testing GET /api/threat-actors (All actors)...")
     res = session.get(f"{BASE_URL}/api/threat-actors")

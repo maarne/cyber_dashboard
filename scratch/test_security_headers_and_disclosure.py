@@ -1,7 +1,5 @@
 import sys
-sys.path.insert(0, "/home/maarne/apps/antigravity/cyber_dashboard")
-
-import requests
+from scratch.legacy_support import requests
 import re
 from app.services.auth_service import seed_default_admin_user, update_user_password, get_user_by_username, create_user
 

@@ -35,8 +35,6 @@ from app.config import (
     JWT_SECRET_KEY,
     JWT_ALGORITHM,
     JWT_EXPIRATION_HOURS,
-    DEFAULT_ADMIN_USERNAME,
-    DEFAULT_ADMIN_PASSWORD,
 )
 from app.database import get_connection
 
@@ -58,7 +56,7 @@ def generate_secure_random_password(length: int = 10) -> str:
         - Numeric digits (0-9)
         - Special characters (!@#$%^&*()_+-=)
     """
-    length = max(6, length)
+    length = max(10, min(64, int(length)), get_password_policy()["min_length"])
     uppers = string.ascii_uppercase
     lowers = string.ascii_lowercase
     digits = string.digits
@@ -130,7 +128,7 @@ def update_password_policy(
     """
     Update the minimum password policy in the database.
     """
-    min_length = max(6, min(64, int(min_length)))
+    min_length = max(10, min(64, int(min_length)))
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -171,6 +169,8 @@ def validate_password_against_policy(password: str) -> tuple[bool, str]:
     """
     if not password:
         return False, "Password cannot be empty."
+    if len(password.encode("utf-8")) > 72:
+        return False, "Password must not exceed 72 UTF-8 bytes."
 
     policy = get_password_policy()
     min_len = policy["min_length"]
@@ -202,6 +202,8 @@ def hash_password(password: str) -> str:
     """
     Hash a password securely using bcrypt with a unique salt.
     """
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("Password must not exceed 72 UTF-8 bytes.")
     salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
@@ -212,6 +214,8 @@ def verify_password(password: str, password_hash: str) -> bool:
     Verify a plaintext password against a stored bcrypt hash.
     """
     try:
+        if len(password.encode("utf-8")) > 72:
+            return False
         return bcrypt.checkpw(
             password.encode("utf-8"), password_hash.encode("utf-8")
         )
@@ -224,9 +228,15 @@ def create_access_token(username: str, role: str = "viewer") -> str:
     Generate a signed JWT access token encoding the username and RBAC role.
     """
     expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+    user = get_user_by_username(username)
+    if not user:
+        raise ValueError("Cannot create a session for a nonexistent account.")
     payload = {
         "sub": username,
-        "role": role.lower() if role in VALID_ROLES else "viewer",
+        "uid": user["id"],
+        "role": user["role"],
+        "sv": user["session_version"],
+        "jti": secrets.token_hex(24),
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
@@ -240,14 +250,34 @@ def verify_access_token(token: str) -> dict | None:
     """
     try:
         payload = jwt.decode(
-            token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM]
+            token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM],
+            options={"require": ["sub", "uid", "sv", "jti", "exp", "iat"]},
         )
+        if not isinstance(payload["sub"], str) or not isinstance(payload["jti"], str):
+            return None
+        user = get_user_by_username(payload["sub"])
+        if not user or user["id"] != payload["uid"] or user["session_version"] != payload["sv"]:
+            return None
+        with get_connection() as conn:
+            if conn.execute("SELECT 1 FROM revoked_sessions WHERE jti = ?", (payload["jti"],)).fetchone():
+                return None
         return {
-            "username": payload.get("sub"),
-            "role": payload.get("role", "viewer"),
+            "username": user["username"],
+            "role": user["role"],
+            "jti": payload["jti"],
+            "expires_at": payload["exp"],
         }
     except jwt.PyJWTError:
         return None
+
+
+def revoke_session(user_info: dict) -> None:
+    """Revoke this JWT across workers, without logging out unrelated sessions."""
+    if "jti" not in user_info:
+        return
+    with get_connection() as conn:
+        conn.execute("DELETE FROM revoked_sessions WHERE expires_at < ?", (int(datetime.now(timezone.utc).timestamp()),))
+        conn.execute("INSERT OR IGNORE INTO revoked_sessions VALUES (?, ?)", (user_info["jti"], user_info["expires_at"]))
 
 
 # ============================================================
@@ -259,7 +289,7 @@ def get_user_by_username(username: str) -> dict | None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, username, password_hash, role, last_login, created_at, updated_at FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, role, session_version, is_primary, last_login, created_at, updated_at FROM users WHERE username = ?",
             (username,),
         )
         row = cursor.fetchone()
@@ -273,28 +303,30 @@ def list_all_users() -> list[dict]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, username, role, last_login, created_at, updated_at FROM users ORDER BY id ASC"
+            "SELECT id, username, role, is_primary, last_login, created_at, updated_at FROM users ORDER BY id ASC"
         )
         rows = cursor.fetchall()
         results = []
         for r in rows:
             u = dict(r)
             if not u.get("role"):
-                u["role"] = "admin" if u["username"] == DEFAULT_ADMIN_USERNAME else "viewer"
+                u["role"] = "viewer"
             results.append(u)
         return results
 
 
 def create_user(username: str, password: str, role: str = "viewer") -> dict:
     """Create a new user with a hashed password and assigned RBAC role."""
-    clean_role = role.lower() if role.lower() in VALID_ROLES else "viewer"
+    clean_role = role.lower()
+    if clean_role not in VALID_ROLES:
+        raise ValueError("Invalid role specified.")
     pwd_hash = hash_password(password)
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (username, pwd_hash, clean_role),
-        )
+        conn.execute("BEGIN IMMEDIATE")
+        primary = clean_role == "admin" and not conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone()
+        cursor.execute("INSERT INTO users (username, password_hash, role, is_primary) VALUES (?, ?, ?, ?)",
+                       (username, pwd_hash, clean_role, int(primary)))
         conn.commit()
         user_id = cursor.lastrowid
     return {"id": user_id, "username": username, "role": clean_role}
@@ -313,30 +345,26 @@ def update_user_role(username: str, new_role: str) -> tuple[bool, str]:
     """
     Update the RBAC role for a user.
     Enforces governance safeguards:
-    - Protects the primary 'admin' account from being demoted.
+    - Protects the primary account identity from being demoted.
     - Prevents demoting the last remaining active administrator in the system.
     """
     clean_role = new_role.lower()
     if clean_role not in VALID_ROLES:
         return False, "Invalid role specified."
 
-    target_user = get_user_by_username(username)
-    if not target_user:
-        return False, "User not found."
-
-    # Safeguard 1: Primary admin account must always remain admin
-    if username.lower() == DEFAULT_ADMIN_USERNAME.lower() and clean_role != "admin":
-        return False, f"The primary '{DEFAULT_ADMIN_USERNAME}' account cannot be demoted from Administrator."
-
-    # Safeguard 2: Ensure at least one administrator always remains
-    if target_user["role"] == "admin" and clean_role != "admin":
-        if count_active_admins() <= 1:
-            return False, "Cannot demote the only remaining Administrator. The system must have at least one active Admin."
-
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        target_user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not target_user:
+            return False, "User not found."
+        if target_user["is_primary"] and clean_role != "admin":
+            return False, "The primary administrator cannot be demoted."
+        if target_user["role"] == "admin" and clean_role != "admin":
+            if conn.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'").fetchone()[0] <= 1:
+                return False, "Cannot demote the only remaining Administrator."
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?",
+            "UPDATE users SET role = ?, session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP WHERE username = ?",
             (clean_role, username),
         )
         conn.commit()
@@ -347,11 +375,14 @@ def update_user_role(username: str, new_role: str) -> tuple[bool, str]:
 
 
 def delete_user_by_username(username: str) -> bool:
-    """Delete a user from the system. Prevents deleting the primary default admin account."""
-    if username.lower() == DEFAULT_ADMIN_USERNAME.lower():
-        return False
-
+    """Delete a user while protecting primary identity and the last administrator."""
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        if not user or user["is_primary"]:
+            return False
+        if user["role"] == "admin" and conn.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'").fetchone()[0] <= 1:
+            return False
         cursor = conn.cursor()
         cursor.execute("DELETE FROM users WHERE username = ?", (username,))
         conn.commit()
@@ -364,7 +395,7 @@ def update_user_password(username: str, new_password: str) -> bool:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE username = ?",
+            "UPDATE users SET password_hash = ?, session_version = session_version + 1, updated_at = CURRENT_TIMESTAMP WHERE username = ?",
             (pwd_hash, username),
         )
         conn.commit()
@@ -390,14 +421,8 @@ def is_initial_setup_required() -> bool:
     Check if the first-time initial administrator setup is required.
     Returns True if no admin account exists in the database.
     """
-    try:
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'admin'")
-            row = cursor.fetchone()
-            return (row["count"] == 0) if row else True
-    except Exception:
-        return True
+    with get_connection() as conn:
+        return conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone() is None
 
 
 def complete_initial_setup(username: str, password: str) -> dict:
@@ -414,9 +439,14 @@ def complete_initial_setup(username: str, password: str) -> dict:
 
     pwd_hash = hash_password(password)
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone():
+            raise ValueError("Initial setup has already been completed.")
+        if conn.execute("SELECT 1 FROM users WHERE username = ?", (clean_username,)).fetchone():
+            raise ValueError("That username already exists. Choose a different administrator username.")
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'admin')",
+            "INSERT INTO users (username, password_hash, role, is_primary) VALUES (?, ?, 'admin', 1)",
             (clean_username, pwd_hash),
         )
         conn.commit()
@@ -435,4 +465,3 @@ def seed_default_admin_user() -> None:
         print("   Navigate to http://127.0.0.1:8000/ to set your initial")
         print("   administrator credentials via the Setup Wizard.")
         print("=" * 60)
-

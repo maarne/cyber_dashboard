@@ -122,7 +122,7 @@
                            placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/services/..."
                            required autocomplete="off">
                     <span class="form-hint" id="webhook-url-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 0.35rem; display: block;">
-                        🔒 Webhook token credentials are encrypted and masked on the server.
+                        🔒 Webhook URLs are masked in responses. Restrict access to the database and encrypt backups.
                     </span>
                 </div>
 
@@ -422,14 +422,14 @@
                                 <strong style="color: #f3f4f6;">👤 {{ u.username }}</strong>
                             </td>
                             <td>
-                                {% if u.username == 'admin' %}
+                                {% if u.is_primary %}
                                     <span class="role-pill role-pill-admin" style="font-weight: 700; display: inline-flex; align-items: center; gap: 4px;" title="Primary Administrator role is locked">
                                         👑 Admin <span style="font-size: 0.7rem; color: #94a3b8; font-weight: normal;">(Locked)</span>
                                     </span>
                                 {% else %}
                                     <select class="form-input form-input-sm role-select"
                                             data-username="{{ u.username }}"
-                                            onchange="handleUpdateUserRole('{{ u.username }}', this.value)"
+                                            onchange="handleUpdateUserRole(this.dataset.username, this.value)"
                                             style="padding: 3px 8px; font-size: 0.8rem; width: 130px; font-weight: 600;">
                                         <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>👑 Admin</option>
                                         <option value="analyst" {% if u.role == 'analyst' %}selected{% endif %}>🕵️ Analyst</option>
@@ -453,10 +453,10 @@
                                 {{ u.created_at }}
                             </td>
                             <td>
-                                {% if u.username == 'admin' or u.username == current_user %}
+                                {% if u.is_primary or u.username == current_user %}
                                     <span style="font-size: 0.75rem; color: #64748b;">(Protected)</span>
                                 {% else %}
-                                    <button type="button" class="btn btn-sm btn-delete" onclick="openDeleteUserModal('{{ u.username }}')">
+                                    <button type="button" class="btn btn-sm btn-delete" data-username="{{ u.username }}" onclick="openDeleteUserModal(this.dataset.username)">
                                         🗑️ Delete
                                     </button>
                                 {% endif %}
@@ -496,7 +496,7 @@
                         <form id="password-policy-form" onsubmit="handleSavePasswordPolicy(event)">
                             <div class="form-group">
                                 <label for="policy-min-length">Minimum Password Length (Characters)</label>
-                                <input type="number" id="policy-min-length" class="form-input" min="8" max="64" value="{{ password_policy.min_length }}" required>
+                                <input type="number" id="policy-min-length" class="form-input" min="10" max="64" value="{{ password_policy.min_length }}" required>
                                 <span class="form-hint">Industry recommendation: 10+ characters for enterprise SOC analysts.</span>
                             </div>
 
@@ -577,7 +577,7 @@
                         <span class="webhook-count">{{ audit_logs | length }}</span>
                     </h2>
                     <p class="section-subtitle">
-                        Every security event, user modification, and threat rule change is hashed and chained with SHA-256 for cryptographic non-repudiation.
+                        Audit events are SHA-256 hash-chained. Save checkpoints outside this database to detect truncation or full rewrites; this is not an immutable or non-repudiable ledger.
                     </p>
                 </div>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -832,6 +832,8 @@
                         <!-- Options injected dynamically by settings.js -->
                     </select>
 
+                    <label for="explorer-path-input">Request path (replace any {placeholders}):</label>
+                    <input type="text" class="form-input" id="explorer-path-input" value="/api/summary">
                     <button type="button" id="explorer-send-btn" class="btn btn-primary" onclick="handleSendExplorerRequest()">
                         🚀 Send Request
                     </button>

@@ -338,8 +338,8 @@ async function submitChangePassword(event) {
     if (!currentPwdInput || !newPwdInput || !confirmPwdInput) return;
 
     var currentPwd = currentPwdInput.value;
-    var newPwd = newPwdInput.value.trim();
-    var confirmPwd = confirmPwdInput.value.trim();
+    var newPwd = newPwdInput.value;
+    var confirmPwd = confirmPwdInput.value;
 
     if (newPwd.length < 6) {
         if (errorMsg) {
@@ -374,8 +374,9 @@ async function submitChangePassword(event) {
 
         var data = await response.json();
         if (response.ok) {
-            showToast('Password updated successfully!', 'success');
+            showToast('Password updated. Please sign in again.', 'success');
             closeChangePasswordModal();
+            window.location.href = '/';
         } else {
             if (errorMsg) {
                 errorMsg.textContent = data.error || data.detail || 'Failed to update password.';

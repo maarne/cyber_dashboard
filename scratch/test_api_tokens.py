@@ -3,17 +3,16 @@
 # ============================================================
 
 import os
+from scratch import test_support
 import sys
 import tempfile
 import unittest
 
 # Ensure workspace root is in sys.path
-sys.path.insert(0, "/home/maarne/apps/antigravity/cyber_dashboard")
+sys.path.insert(0, str(test_support.ROOT))
 
 # Use isolated temporary test database so live database is NEVER modified
-_temp_test_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-os.environ["DATABASE_PATH"] = _temp_test_db.name
-_temp_test_db.close()
+test_support.assert_test_database()
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -60,8 +59,7 @@ class TestApiTokensAndDeveloperAccess(unittest.TestCase):
     def tearDownClass(cls):
         delete_user_by_username("test_viewer")
         try:
-            if os.path.exists(_temp_test_db.name):
-                os.remove(_temp_test_db.name)
+            pass  # The shared sandbox fixture owns database cleanup.
         except Exception:
             pass
 

@@ -51,12 +51,13 @@ DATABASE_PATH = Path(_db_env) if _db_env else BASE_DIR / "cyber_dashboard.db"
 # ============================================================
 # SECURITY & AUTHENTICATION CONFIGURATION
 # ============================================================
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "cyberdash-secret-key-change-in-production-2026")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+if len(JWT_SECRET_KEY.encode("utf-8")) < 32 or JWT_SECRET_KEY == "cyberdash-secret-key-change-in-production-2026":
+    raise RuntimeError("Set JWT_SECRET_KEY to a unique, randomly generated secret of at least 32 bytes before starting CyberDash.")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
 DEFAULT_ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "cyberdash123!")
 
 
 # ============================================================
@@ -164,4 +165,4 @@ HTTP_TIMEOUT_SECONDS = 15
 
 # How many recent CVEs to request from NVD per fetch.
 # The NVD API can return up to 2000 per request.
-NVD_RESULTS_PER_PAGE = 20
+NVD_RESULTS_PER_PAGE = 2000

@@ -224,11 +224,7 @@ def get_cve_details(cve_id: str) -> dict:
     if not clean_id.startswith("CVE-"):
         clean_id = "CVE-" + clean_id
 
-    # 1. Check curated CTI knowledgebase
-    if clean_id in CURATED_CVE_DATABASE:
-        return CURATED_CVE_DATABASE[clean_id]
-
-    # 2. Check local database tables
+    # Prefer live ingested facts. Curated descriptions are not live risk scores.
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
@@ -240,15 +236,16 @@ def get_cve_details(cve_id: str) -> dict:
             # Check cisa_exploits table
             cursor.execute("SELECT * FROM cisa_exploits WHERE cve_id = ?", (clean_id,))
             cisa_row = cursor.fetchone()
+            catalog_complete = cursor.execute("SELECT 1 FROM fetch_log WHERE source_name='cisa_kev' AND status='success'").fetchone() is not None
 
             if cve_row or cisa_row:
                 desc = (cve_row["description"] if cve_row and cve_row["description"] 
                         else (cisa_row["short_description"] if cisa_row else "Vulnerability details tracked in CyberDash."))
-                sev = (cve_row["severity"] if cve_row and cve_row["severity"] else ("CRITICAL" if cisa_row else "HIGH"))
-                cvss = (cve_row["cvss_score"] if cve_row and cve_row["cvss_score"] else 8.0)
-                epss = (cve_row["epss_score"] if cve_row and cve_row["epss_score"] else None)
+                sev = cve_row["severity"] if cve_row and cve_row["severity"] else "UNKNOWN"
+                cvss = cve_row["cvss_score"] if cve_row else None
+                epss = cve_row["epss_score"] if cve_row else None
                 pub = (cve_row["published_date"] if cve_row and cve_row["published_date"] 
-                       else (cisa_row["date_added"] if cisa_row else "N/A"))
+                       else "N/A")
                 prod = (f"{cisa_row['vendor_project']} {cisa_row['product']}" if cisa_row and cisa_row["product"] else "Enterprise Software")
 
                 return {
@@ -257,23 +254,26 @@ def get_cve_details(cve_id: str) -> dict:
                     "severity": sev,
                     "cvss_score": cvss,
                     "epss_score": epss,
-                    "is_cisa_kev": cisa_row is not None,
+                    "is_cisa_kev": True if cisa_row else False if catalog_complete else None,
                     "vendor_product": prod,
                     "description": desc,
                     "published_date": pub[:10] if pub else "N/A",
+                    "source": "NVD / CISA (local cache)",
                 }
     except Exception:
         pass
 
-    # 3. Standard fallback response
+    curated = CURATED_CVE_DATABASE.get(clean_id, {})
+    # Unknown means unknown: do not invent a CVSS/EPSS rating or KEV status.
     return {
         "cve_id": clean_id,
-        "name": f"Vulnerability {clean_id}",
-        "severity": "HIGH",
-        "cvss_score": 7.5,
+        "name": curated.get("name", f"Vulnerability {clean_id}"),
+        "severity": "UNKNOWN",
+        "cvss_score": None,
         "epss_score": None,
-        "is_cisa_kev": False,
-        "vendor_product": "Target Software",
-        "description": f"Security vulnerability tracked under {clean_id}. View NVD record for complete CVSS vectors and affected software versions.",
-        "published_date": "N/A",
+        "is_cisa_kev": None,
+        "vendor_product": curated.get("vendor_product", "Unknown"),
+        "description": curated.get("description", f"No locally verified intelligence for {clean_id}. Consult NVD for authoritative details."),
+        "published_date": curated.get("published_date", "N/A"),
+        "source": "Curated description only; live scores not available" if curated else "Not available",
     }

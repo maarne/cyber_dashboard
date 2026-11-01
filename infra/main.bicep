@@ -28,24 +28,23 @@ param webAppName string = ''
 @description('Base name prefix used when generating a unique Web App name.')
 param baseName string = 'cyberdash'
 
-@description('App Service Plan pricing tier SKU.')
+@description('Development hosting only. Restricted to the free F1 SKU to prevent paid-tier deployments.')
 @allowed([
   'F1'
-  'D1'
-  'B1'
-  'B2'
-  'B3'
-  'S1'
-  'P1v3'
-  'P2v3'
 ])
 param skuName string = 'F1'
 
-@description('Enable persistent SQLite storage mounted at /home.')
-param enablePersistentStorage bool = (skuName != 'F1' && skuName != 'D1')
+@description('Free-tier development uses ephemeral container storage; persistent storage is intentionally disabled.')
+@allowed([false])
+param enablePersistentStorage bool = false
+
+@description('Unique random JWT signing secret. Supply from a secret store; never commit it.')
+@secure()
+@minLength(32)
+param jwtSecretKey string
 
 @description('Full container image reference (e.g. maarne/cyberdash:latest).')
-param containerImage string = 'maarne/cyberdash:latest'
+param containerImage string
 
 @description('Container registry server URL.')
 param dockerRegistryServerUrl string = 'https://index.docker.io/v1'
@@ -82,6 +81,7 @@ module appServiceModule './modules/appservice.bicep' = {
     skuName: skuName
     environmentType: environmentType
     enablePersistentStorage: enablePersistentStorage
+    jwtSecretKey: jwtSecretKey
     containerImage: containerImage
     dockerRegistryServerUrl: dockerRegistryServerUrl
     dockerRegistryUsername: dockerRegistryUsername

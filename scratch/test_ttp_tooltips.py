@@ -1,9 +1,9 @@
-import requests
+from scratch.legacy_support import authenticated_session
 
 BASE_URL = "http://127.0.0.1:8000"
 
 def test_ttp_tooltips():
-    session = requests.Session()
+    session = authenticated_session()
 
     print("1. Testing GET /api/mitre-ttps/T1190...")
     res = session.get(f"{BASE_URL}/api/mitre-ttps/T1190")

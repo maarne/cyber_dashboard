@@ -425,10 +425,11 @@ async function handleConfirmDelete() {
 
         if (response.ok) {
             showToast('Webhook deleted!', 'success');
+            var deletedId = deletingWebhookId;
             hideDeleteModal();
 
             var card = document.querySelector(
-                '.webhook-card[data-id="' + deletingWebhookId + '"], .webhook-card[data-webhook-id="' + deletingWebhookId + '"]'
+                '.webhook-card[data-id="' + deletedId + '"], .webhook-card[data-webhook-id="' + deletedId + '"]'
             );
             if (card) {
                 card.style.opacity = '0';
@@ -702,8 +703,8 @@ async function handleToggleFeed(feedId) {
 
 function updateFeedCount() {
     /** Update feed count badge and empty state visibility. */
-    var rows = document.querySelectorAll('.feed-row');
-    var countEl = document.getElementById('feed-count');
+    var rows = document.querySelectorAll('.feed-row, .feed-card');
+    var countEl = document.getElementById('feed-count') || document.getElementById('feeds-count');
     if (countEl) {
         countEl.textContent = rows.length;
     }
@@ -712,6 +713,8 @@ function updateFeedCount() {
     if (emptyState) {
         emptyState.style.display = rows.length === 0 ? 'block' : 'none';
     }
+    var badge = document.getElementById('tab-badge-alerts');
+    if (badge) badge.textContent = rows.length + document.querySelectorAll('.webhook-card').length;
 }
 
 
@@ -847,6 +850,13 @@ async function handleVerifyAuditChain() {
     try {
         var res = await fetch('/api/audit-logs/verify');
         var data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Verification failed');
+        var result = document.getElementById('audit-verify-result');
+        if (result) {
+            result.textContent = data.message + (data.legacy_records ? ' Legacy records do not protect IP addresses.' : '');
+            result.className = data.is_valid ? 'alert alert-success-glass' : 'alert alert-danger-glass';
+            result.style.display = 'block';
+        }
         var banner = document.getElementById('audit-integrity-banner');
         var msgEl = document.getElementById('audit-integrity-msg');
 
@@ -1141,6 +1151,38 @@ async function handleGenerateCompliantPassword() {
     }
 }
 
+async function fetchNewRandomPassword() {
+    try {
+        var res = await fetch('/api/security/generate-password', { cache: 'no-store' });
+        var data = await res.json();
+        if (!res.ok) throw new Error('Password generation failed');
+        var display = document.getElementById('generated-password-display');
+        if (display) display.value = data.password;
+        showToast('Generated a password compliant with the saved policy.', 'success');
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function copyGeneratedPassword() {
+    var display = document.getElementById('generated-password-display');
+    if (!display || !display.value) return;
+    try {
+        if (navigator.clipboard) await navigator.clipboard.writeText(display.value);
+        else {
+            display.select();
+            if (!document.execCommand('copy')) throw new Error('Copy unavailable');
+        }
+        showToast('Password copied.', 'success');
+    } catch (error) {
+        showToast('Could not copy password; select and copy it manually.', 'error');
+    }
+}
+
+function verifyAuditLedgerIntegrity() {
+    return handleVerifyAuditChain();
+}
+
 async function generateUserModalPassword() {
     try {
         var res = await fetch('/api/security/generate-password');
@@ -1167,99 +1209,6 @@ async function generateUserModalPassword() {
 // API & DEVELOPER ACCESS MANAGEMENT
 // =============================================================
 
-var DEFAULT_ENDPOINTS_CATALOG = [
-    {
-        id: "summary",
-        name: "Dashboard Summary Metrics",
-        method: "GET",
-        path: "/api/summary",
-        description: "Real-time vulnerability counts, active CISA zero-days, RSS articles, and threat indicators.",
-        auth_required: "Viewer / Optional",
-        params: [
-            { name: "start_date", type: "string", example: "2026-01-01", desc: "Filter by start date (YYYY-MM-DD)" },
-            { name: "end_date", type: "string", example: "2026-08-14", desc: "Filter by end date (YYYY-MM-DD)" }
-        ],
-        sample_response: '{\n  "total_cves": 142,\n  "critical_cves": 28,\n  "high_cves": 54,\n  "active_exploits": 19,\n  "total_articles": 85,\n  "total_threats": 42\n}'
-    },
-    {
-        id: "cves",
-        name: "Vulnerability Intelligence Feed",
-        method: "GET",
-        path: "/api/cves",
-        description: "Paginated CVE disclosures with EPSS scores, CVSS v3.1 vectors, Ransomware Campaign tags, and CISA flags.",
-        auth_required: "Viewer / Optional",
-        params: [
-            { name: "limit", type: "integer", example: "25", desc: "Max records to return (1-200)" },
-            { name: "severity", type: "string", example: "CRITICAL", desc: "CRITICAL, HIGH, MEDIUM, LOW" },
-            { name: "search", type: "string", example: "Fortinet", desc: "Keyword or CVE ID search" }
-        ],
-        sample_response: '[\n  {\n    "cve_id": "CVE-2026-1135",\n    "severity": "CRITICAL",\n    "cvss_score": 9.8,\n    "epss_score": 0.942,\n    "is_cisa_kev": true,\n    "ransomware_campaign": "LockBit 3.0"\n  }\n]'
-    },
-    {
-        id: "cisa",
-        name: "CISA Known Exploited Vulnerabilities",
-        method: "GET",
-        path: "/api/cisa",
-        description: "Curated catalog of actively exploited vulnerabilities compiled by CISA.",
-        auth_required: "Viewer / Optional",
-        params: [
-            { name: "limit", type: "integer", example: "50", desc: "Max records to return" }
-        ],
-        sample_response: '[\n  {\n    "cve_id": "CVE-2026-2291",\n    "vendor_project": "Microsoft",\n    "product": "Windows Kernel",\n    "date_added": "2026-08-10"\n  }\n]'
-    },
-    {
-        id: "threats",
-        name: "Threat Actor Indicators & IoCs",
-        method: "GET",
-        path: "/api/threats",
-        description: "Active malicious IPs, domains, and hashes tracked across global telemetry sources.",
-        auth_required: "Viewer / Optional",
-        params: [
-            { name: "limit", type: "integer", example: "50", desc: "Max records to return" },
-            { name: "type", type: "string", example: "ip", desc: "ip, url, domain, hash" }
-        ],
-        sample_response: '[\n  {\n    "indicator_type": "ip",\n    "indicator_value": "198.51.100.44",\n    "threat_type": "Command and Control",\n    "source": "Abuse.ch"\n  }\n]'
-    },
-    {
-        id: "investigate",
-        name: "IOC Threat Investigation & Enrichment",
-        method: "POST",
-        path: "/api/investigate",
-        description: "Correlates submitted IP addresses, domains, and file hashes against threat intelligence databases and Mitre ATT&CK.",
-        auth_required: "Viewer / Analyst",
-        params: [
-            { name: "ioc", type: "string (JSON body)", example: '{"ioc": "198.51.100.44"}', desc: "Target indicator string" }
-        ],
-        sample_response: '{\n  "ioc": "198.51.100.44",\n  "type": "ipv4",\n  "verdict": "MALICIOUS",\n  "threat_score": 92,\n  "associated_actors": ["APT29", "Cozy Bear"],\n  "matched_rules": ["Sigma-C2-Beaconing"]\n}'
-    },
-    {
-        id: "rules",
-        name: "Detection Rules Repository",
-        method: "GET",
-        path: "/api/rules",
-        description: "Enterprise Sigma and YARA rules mapped to MITRE ATT&CK techniques with SIEM deployment guidelines.",
-        auth_required: "Viewer / Analyst",
-        params: [
-            { name: "rule_type", type: "string", example: "SIGMA", desc: "SIGMA or YARA" },
-            { name: "severity", type: "string", example: "CRITICAL", desc: "CRITICAL, HIGH, MEDIUM" }
-        ],
-        sample_response: '[\n  {\n    "id": 1,\n    "title": "PsExec Lateral Movement Detection",\n    "rule_type": "SIGMA",\n    "severity": "HIGH",\n    "mitre_id": "T1021.002"\n  }\n]'
-    },
-    {
-        id: "audit_logs",
-        name: "Cryptographic Audit Ledger",
-        method: "GET",
-        path: "/api/audit-logs",
-        description: "Cryptographically chained audit trail verifying governance integrity, authentication events, and administrative changes.",
-        auth_required: "Analyst / Admin",
-        params: [
-            { name: "action", type: "string", example: "USER_ROLE_UPDATED", desc: "Action filter" },
-            { name: "search", type: "string", example: "admin", desc: "Search keyword" }
-        ],
-        sample_response: '[\n  {\n    "id": 114,\n    "username": "admin",\n    "role": "admin",\n    "action": "API_TOKEN_CREATED",\n    "status": "SUCCESS",\n    "integrity_hash": "a8f3b29..."\n  }\n]'
-    }
-];
-
 function getEndpointsCatalog() {
     var endpointsElem = document.getElementById('endpoints-data');
     if (endpointsElem && endpointsElem.textContent) {
@@ -1269,10 +1218,10 @@ function getEndpointsCatalog() {
                 return parsed;
             }
         } catch (e) {
-            console.warn('Could not parse embedded endpoints catalog JSON, using defaults:', e);
+            console.warn('Could not parse the server-provided endpoints catalog:', e);
         }
     }
-    return DEFAULT_ENDPOINTS_CATALOG;
+    return [];
 }
 
 function copyApiBaseUrl() {
@@ -1346,13 +1295,15 @@ function handleExplorerEndpointChange() {
     var paramsContainer = document.getElementById('explorer-params-container');
     var paramsInput = document.getElementById('explorer-params-input');
     var paramsLabel = document.getElementById('explorer-params-label');
+    var pathInput = document.getElementById('explorer-path-input');
+    if (pathInput) pathInput.value = ep.path;
 
     if (paramsContainer && paramsInput) {
-        if (ep.method === 'POST') {
+        if (ep.has_body) {
             paramsContainer.style.display = 'block';
             if (paramsLabel) paramsLabel.textContent = 'JSON Request Body (application/json):';
-            paramsInput.placeholder = '{"ioc": "198.51.100.44"}';
-            paramsInput.value = '{"ioc": "198.51.100.44"}';
+            paramsInput.placeholder = '{}';
+            paramsInput.value = '{}';
         } else if (ep.params && ep.params.length > 0) {
             paramsContainer.style.display = 'block';
             if (paramsLabel) paramsLabel.textContent = 'Optional URL Query Parameters (e.g. key=value&key2=value2):';
@@ -1403,7 +1354,17 @@ async function handleSendExplorerRequest() {
         sendBtn.textContent = '⏳ Sending...';
     }
 
-    var url = ep.path;
+    var pathInput = document.getElementById('explorer-path-input');
+    var url = pathInput ? pathInput.value.trim() : ep.path;
+    if (!url.startsWith('/api') || new URL(url, location.origin).origin !== location.origin || /[{}]/.test(url)) {
+        if (statusBadge) statusBadge.textContent = 'Enter a same-origin API path and replace path placeholders.';
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '🚀 Send Request'; }
+        return;
+    }
+    if (!['GET', 'HEAD'].includes(ep.method) && !confirm('Execute ' + ep.method + ' ' + url + '? This may change application data.')) {
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '🚀 Send Request'; }
+        return;
+    }
     var fetchOptions = {
         method: ep.method,
         headers: {
@@ -1411,10 +1372,10 @@ async function handleSendExplorerRequest() {
         }
     };
 
-    if (ep.method === 'GET' && paramsInput && paramsInput.value.trim()) {
+    if (!ep.has_body && paramsInput && paramsInput.value.trim()) {
         var q = paramsInput.value.trim();
         url += (url.includes('?') ? '&' : '?') + q;
-    } else if (ep.method === 'POST') {
+    } else if (ep.has_body) {
         var bodyStr = (paramsInput && paramsInput.value.trim()) ? paramsInput.value.trim() : '{}';
         fetchOptions.headers['Content-Type'] = 'application/json';
         fetchOptions.body = bodyStr;
@@ -1720,6 +1681,3 @@ document.addEventListener('DOMContentLoaded', function() {
     checkPasswordAgainstLivePolicy();
     initApiExplorer();
 });
-
-
-

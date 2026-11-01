@@ -1,7 +1,5 @@
 import sys
-sys.path.insert(0, "/home/maarne/apps/antigravity/cyber_dashboard")
-
-import requests
+from scratch.legacy_support import requests
 from app.database import get_connection
 from app.services.auth_service import (
     is_initial_setup_required,
@@ -30,17 +28,17 @@ def test_setup_workflow():
     # 2. Verify Route Redirection to /setup
     s = requests.Session()
     # Test GET / redirects to /setup
-    res = s.get(f"{BASE_URL}/", allow_redirects=False)
+    res = s.get(f"{BASE_URL}/", follow_redirects=False)
     assert res.status_code == 307, f"Expected 307 redirect, got {res.status_code}"
     assert res.headers.get("location") == "/setup", f"Expected location /setup, got {res.headers.get('location')}"
 
     # Test GET /rules redirects to /setup
-    res = s.get(f"{BASE_URL}/rules", allow_redirects=False)
+    res = s.get(f"{BASE_URL}/rules", follow_redirects=False)
     assert res.status_code == 307
     assert res.headers.get("location") == "/setup"
 
     # Test GET /settings redirects to /setup
-    res = s.get(f"{BASE_URL}/settings", allow_redirects=False)
+    res = s.get(f"{BASE_URL}/settings", follow_redirects=False)
     assert res.status_code == 307
     assert res.headers.get("location") == "/setup"
 
@@ -95,7 +93,7 @@ def test_setup_workflow():
     assert "CyberDash" in res.text
 
     # GET /setup now redirects to /
-    res = s.get(f"{BASE_URL}/setup", allow_redirects=False)
+    res = s.get(f"{BASE_URL}/setup", follow_redirects=False)
     assert res.status_code == 307
     assert res.headers.get("location") == "/"
 

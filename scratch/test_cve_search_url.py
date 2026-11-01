@@ -1,9 +1,9 @@
-import requests
+from scratch.legacy_support import authenticated_session
 
 BASE_URL = "http://127.0.0.1:8000"
 
 def test_search_url():
-    session = requests.Session()
+    session = authenticated_session()
 
     print("1. Testing GET /?search=CVE-2023-38831...")
     res = session.get(f"{BASE_URL}/", params={"search": "CVE-2023-38831"})

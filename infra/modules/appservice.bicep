@@ -14,24 +14,22 @@ param appServicePlanName string
 @description('The name of the Web App.')
 param webAppName string
 
-@description('App Service Plan pricing tier SKU (e.g. F1, B1, P1v3).')
+@description('Development hosting only. Only the free F1 SKU is allowed; no paid fallback.')
 @allowed([
   'F1'
-  'D1'
-  'B1'
-  'B2'
-  'B3'
-  'S1'
-  'P1v3'
-  'P2v3'
 ])
 param skuName string = 'F1'
 
 @description('The environment name (e.g. staging, prod).')
 param environmentType string = 'prod'
 
-@description('Enable persistent storage mounted at /home (/home/data/cyber_dashboard.db).')
-param enablePersistentStorage bool = true
+@description('Ephemeral development storage only. Data may be lost when the container is replaced.')
+@allowed([false])
+param enablePersistentStorage bool = false
+
+@secure()
+@minLength(32)
+param jwtSecretKey string
 
 @description('The full container image reference (e.g. maarne/cyberdash:latest or index.docker.io/maarne/cyberdash:latest).')
 param containerImage string
@@ -66,7 +64,8 @@ resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   }
   sku: {
     name: skuName
-    tier: skuName == 'F1' ? 'Free' : skuName == 'D1' ? 'Shared' : (skuName == 'B1' || skuName == 'B2' || skuName == 'B3') ? 'Basic' : 'PremiumV3'
+    tier: 'Free'
+    capacity: 0 // Shared free-tier compute; no dedicated paid instances.
   }
 }
 
@@ -87,7 +86,7 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
     clientAffinityEnabled: false
     siteConfig: {
       linuxFxVersion: 'DOCKER|${containerImage}'
-      alwaysOn: skuName != 'F1' && skuName != 'D1'
+      alwaysOn: false // Always On is not available on F1.
       http20Enabled: true
       minTlsVersion: '1.2'
       ftpsState: 'Disabled'
@@ -98,11 +97,19 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE'
-          value: string(enablePersistentStorage && skuName != 'F1' && skuName != 'D1')
+          value: string(enablePersistentStorage)
         }
         {
           name: 'DATABASE_PATH'
-          value: (enablePersistentStorage && skuName != 'F1' && skuName != 'D1') ? '/home/data/cyber_dashboard.db' : '/app/data/cyber_dashboard.db'
+          value: '/app/data/cyber_dashboard.db'
+        }
+        {
+          name: 'JWT_SECRET_KEY'
+          value: jwtSecretKey
+        }
+        {
+          name: 'ENV'
+          value: 'production'
         }
         {
           name: 'WEBSITES_CONTAINER_START_TIME_LIMIT'
