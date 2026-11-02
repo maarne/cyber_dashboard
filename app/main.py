@@ -190,11 +190,16 @@ async def lifespan(app: FastAPI):
 
     # Start the background scheduler if enabled
     start_scheduler()
+    from app.services.asset_network_worker import start as start_asset_network
+    start_asset_network()
 
-    yield
-
-    stop_scheduler()
-    print("🛑 CyberDash shutting down gracefully...")
+    try:
+        yield
+    finally:
+        from app.services.asset_network_worker import stop as stop_asset_network
+        stop_asset_network()
+        stop_scheduler()
+        print("🛑 CyberDash shutting down gracefully...")
 
 
 from fastapi.openapi.utils import get_openapi
@@ -461,6 +466,8 @@ def get_template_auth_context(request: Request) -> dict:
     return {
         "is_authenticated": True,
         "feature_asset_prioritization": FEATURE_ASSET_PRIORITIZATION,
+        "feature_asset_monitoring": FEATURE_ASSET_MONITORING,
+        "feature_asset_discovery": FEATURE_ASSET_DISCOVERY,
         "current_user": info.get("username", ""),
         "user_role": role,
         "is_admin": role == "admin",
@@ -517,7 +524,7 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 templates.env.globals["get_mitre_ttp"] = get_mitre_ttp_details
 templates.env.globals["get_cve_details"] = get_cve_details
 
-from app.config import FEATURE_ASSET_PRIORITIZATION
+from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY
 from app.asset_security import AssetTransportMiddleware
 from app.asset_routes import register_asset_routes
 
@@ -525,6 +532,9 @@ app.add_middleware(AssetTransportMiddleware)
 if FEATURE_ASSET_PRIORITIZATION:
     register_asset_routes(app, templates, get_template_auth_context, require_authenticated_user,
                           require_analyst_or_admin, require_admin)
+    from app.asset_network_routes import register_network_routes
+    register_network_routes(app, templates, get_template_auth_context, require_authenticated_user,
+                            require_analyst_or_admin, require_admin)
 
 
 # ============================================================

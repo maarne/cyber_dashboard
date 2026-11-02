@@ -7,12 +7,13 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 from starlette.responses import JSONResponse
 
-from app.config import FEATURE_ASSET_PRIORITIZATION, JWT_SECRET_KEY, PUBLIC_BASE_URL
+from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, JWT_SECRET_KEY, PUBLIC_BASE_URL
 
 
 def is_asset_path(path):
     return any(path == p or path.startswith(p + "/") for p in
-               ("/assets", "/priorities", "/api/assets", "/api/asset-assessments", "/api/priorities"))
+               ("/assets", "/priorities", "/api/assets", "/api/asset-assessments", "/api/priorities",
+                "/asset-discovery", "/api/asset-discovery", "/api/asset-monitoring"))
 
 
 def csrf_token(request):
@@ -56,11 +57,17 @@ class AssetTransportMiddleware:
                 message = {**message, "headers": headers + [(b"cache-control", b"no-store, private"), (b"pragma", b"no-cache")]}
             await send(message)
 
-        if not FEATURE_ASSET_PRIORITIZATION:
+        path = scope['path']
+        disabled = (not FEATURE_ASSET_PRIORITIZATION
+                    or ((path.startswith('/asset-discovery') or path.startswith('/api/asset-discovery')) and not FEATURE_ASSET_DISCOVERY)
+                    or ((path.startswith('/api/asset-monitoring') or '/monitoring' in path) and not FEATURE_ASSET_MONITORING))
+        if disabled:
             return await JSONResponse({"detail": "Not found"}, 404)(scope, receive, private_send)
         if scope["method"] not in ("GET", "HEAD", "OPTIONS"):
             # JSON escaping can expand a 1 MiB CSV up to sixfold.
             maximum = 6 * 1048576 + 65536 if scope["path"] == "/api/assets/import/preview" else 65536
+            if scope['path'] == '/api/asset-discovery/import/preview':
+                maximum = 512 * 1024
             body = bytearray()
             while True:
                 message = await receive()

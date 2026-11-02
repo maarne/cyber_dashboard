@@ -4,6 +4,35 @@
 {% block asset_content %}
 <script id="asset-data" type="application/json">{{ asset | tojson }}</script>
 <h1>{{ asset.name }}</h1><p>{{ asset.external_id }} · {{ asset.environment }} · {{ asset.owner_team }}</p>
+{% if feature_asset_monitoring %}
+<section class="asset-panel" id="monitor-panel"><h2>Availability from this runner</h2>
+<p>Up means the configured check succeeded, not that the host is healthy or patched. Unknown and stale results are not Down. SSH-port checks verify reachability, not login.</p>
+<p id="monitor-scope-warning" class="asset-warning"></p>
+<details><summary>Runner capabilities, authorized scope and traffic budgets</summary><pre id="monitor-capabilities"></pre></details><div id="monitor-state" role="status"></div>
+<button type="button" id="monitor-refresh" class="btn btn-secondary">Refresh saved status</button>
+{% if is_analyst and not asset.is_archived %}<button type="button" id="monitor-check" class="btn btn-primary" disabled>Check now</button>{% endif %}
+{% if is_admin %}<p><a href="/api/assets/{{ asset.id }}/monitoring/export">Export recent monitoring history</a></p>{% endif %}
+{% if is_admin and not asset.is_archived %}
+<details><summary>Configure availability check (admin)</summary>
+<form id="monitor-form" class="asset-form">
+<label>IP or hostname <input name="target" required maxlength="253" placeholder="web01.example.net"></label>
+<label>Check <select name="method"><option value="https">HTTPS — curl</option><option value="http">HTTP — curl</option><option value="icmp">ICMP — ping</option><option value="tcp">TCP port — nmap (SSH preset: port 22)</option></select></label>
+<label>Port (empty = HTTP/HTTPS default; none for ICMP) <input name="port" type="number" min="1" max="65535"></label>
+<label>HTTP method <select name="http_method"><option>HEAD</option><option>GET</option></select></label>
+<label>Approved health path <input name="path" value="/" required maxlength="256"></label>
+<label>Expected HTTP codes <input name="expected_codes" value="200-399" required placeholder="200-399,401"></label>
+<label>Interval amount <input name="interval_amount" type="number" min="1" step="1" value="15" required></label>
+<label>Interval unit <select name="interval_unit"><option value="1">seconds</option><option value="60" selected>minutes</option><option value="3600">hours</option><option value="86400">days</option></select></label>
+<label>Timeout (seconds) <input name="timeout_seconds" type="number" min="1" max="5" value="3" required></label>
+<label>Failures to confirm Down <input name="failure_threshold" type="number" min="1" max="5" value="3" required></label>
+<label><input name="enabled" type="checkbox"> Enable approved check</label><label><input name="scheduled" type="checkbox"> Schedule checks (otherwise manual only)</label>
+<label><input name="authorized" type="checkbox"> I confirm authorization to contact this target from this runner</label>
+<p>Saving does not contact the target. A schedule waits until its first due time; Check now explicitly queues a check. Custom frequency is subject to visible rate/capacity limits; missed periods coalesce.</p>
+<button class="btn btn-primary">Save configuration</button>
+</form></details>{% endif %}
+<h3>Recent checks</h3><div id="monitor-history"></div></section>
+{% endif %}
+{% if feature_asset_discovery or feature_asset_monitoring %}<section class="asset-panel"><h2>Reviewed address observations</h2><p>Discovery observations are not a stable device identity. Importing them never enables or redirects a monitor.</p><div id="asset-addresses"></div><details><summary>All retained reviewed discovery evidence</summary><div id="asset-discovery-evidence"></div></details></section>{% endif %}
 {% if asset.is_archived %}<p class="asset-warning">Archived: excluded from the default queue. Restore before editing.</p>{% endif %}
 {% if is_admin %}<button type="button" id="asset-archive" class="btn btn-secondary">{{ 'Restore' if asset.is_archived else 'Archive' }} asset</button>{% endif %}
 {% if is_analyst and not asset.is_archived %}

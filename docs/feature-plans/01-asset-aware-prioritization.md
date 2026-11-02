@@ -143,21 +143,22 @@ Queue computation remains local/on-demand and bounded by 10,000 associations.
 Evidence/reasons are hydrated only for the requested page. No cloud resources,
 paid infrastructure, scanning, fuzzy matching, or automatic patching were added.
 
-## 12. Planned availability extension (not implemented)
+## 12. Optional availability extension (implemented, default off)
 
 See [Feature 1A — Configurable asset availability checks](01a-asset-availability-monitoring.md)
 for the requested follow-up plan: explicit IP/hostname targets, per-asset curl/
 ping/optional single-port nmap checks, private status/history, safe target scope,
-and best-effort scheduling. This is a separately gated, opt-in change to the
-current no-asset-network-contact boundary; it requires approval before any
-implementation or actual probes. Down/Unknown assets remain in vulnerability
+and best-effort scheduling. This separately gated extension was approved and
+implemented; actual probes still require explicit destination authorization.
+The base feature retains its no-asset-network-contact boundary. Down/Unknown assets remain in vulnerability
 prioritization, and the existing scoring formula is unchanged.
 
-## 13. Planned discovery extension (not implemented)
+## 13. Optional discovery extension (implemented, default off)
 
 [Feature 1B — Multi-network discovery and selective import](01b-network-discovery-and-selective-import.md)
 extends the follow-up scope to authorized network discovery with optional hostname
 resolution, independently scheduled multi-network profiles, arbitrary positive
 requested intervals, and quick selective candidate import. Discovery does not
 automatically add assets, enable monitoring, change vulnerability assessments, or
-start Features 2–5. It requires approval before implementation or real scans.
+start Features 2–5. Implementation was approved; real scans still require explicit
+destination authorization. See [operating guidance](../asset-network-operations.md).

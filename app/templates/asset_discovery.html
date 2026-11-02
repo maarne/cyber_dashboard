@@ -1,0 +1,50 @@
+{% extends "asset_layout.html" %}
+{% block title %}Discover assets — CyberDash{% endblock %}
+{% block asset_content %}
+<div id="discovery-workspace">
+<h1>Discover assets</h1>
+<p>Only explicitly authorized networks can be contacted. Results are staged for review, not automatically imported. No response does not prove absence. DNS hostnames are labels returned by the resolver, not verified device identities.</p>
+<p id="discovery-scope-warning" class="asset-warning"></p>
+<details><summary>Runner capabilities, authorized scope and traffic budgets</summary><pre id="discovery-capabilities"></pre></details>
+<section class="asset-panel"><h2>Discovery profiles</h2><div id="discovery-profiles"></div>
+{% if is_admin %}
+<details id="profile-editor"><summary>Create / edit a discovery profile</summary>
+<form id="discovery-profile-form" class="asset-form">
+<label>Name <input name="name" required maxlength="100"></label>
+<label>Networks (up to 16 CIDRs, one per line) <textarea name="networks" required placeholder="One authorized IPv4/IPv6 CIDR per line"></textarea></label>
+<label>Excluded addresses / CIDRs <textarea name="exclusions"></textarea></label>
+<label>Discovery TCP ports (max 5, no ranges) <input name="ports" value="80,443" required></label>
+<label>Interval amount <input name="interval_amount" type="number" min="1" step="1" value="1" required></label>
+<label>Interval unit <select name="interval_unit"><option value="1">seconds</option><option value="60">minutes</option><option value="3600">hours</option><option value="86400" selected>days</option></select></label>
+<label>First scheduled run (UTC, optional) <input name="first_run_at" type="datetime-local"></label>
+<label>Per-host timeout (seconds) <input name="timeout_seconds" type="number" min="1" max="5" value="3" required></label>
+<label><input name="resolve_names" type="checkbox"> Resolve PTR hostnames using this host's configured DNS resolver</label>
+<label><input name="forward_confirm" type="checkbox"> Forward-confirm returned hostnames (extra DNS work)</label>
+<label><input name="allow_partial" type="checkbox"> Accept explicitly labeled rotating partial coverage if a pass exceeds the run budget</label>
+<label><input name="enabled" type="checkbox"> Enable this profile for explicit runs</label>
+<label><input name="scheduled" type="checkbox"> Run on the requested schedule</label>
+<label><input name="authorized" type="checkbox"> I confirm authorization for all listed networks and resolver use</label>
+<p>Saving sends no traffic. Scheduling is opt-in. Any positive interval is accepted within safety limits, but scans never overlap their own profile. Duration, traffic budgets and F1 sleep can defer actual cadence.</p>
+<div><button class="btn btn-primary">Save profile</button> <button type="button" id="profile-new" class="btn btn-secondary">Reset to new profile</button></div>
+</form></details>{% endif %}</section>
+<section class="asset-panel"><h2>Runs and coverage</h2><button type="button" id="discovery-refresh" class="btn btn-secondary">Refresh saved results</button><div id="discovery-runs"></div></section>
+<section class="asset-panel"><h2>Candidate staging</h2>
+<form id="candidate-filters" class="asset-toolbar"><label>IP / hostname <input name="search" maxlength="200"></label><label>Profile ID (optional) <input name="profile_id" type="number" min="1"></label>
+<label>Network CIDR (optional) <input name="network" maxlength="64"></label>
+<label>Review state <select name="review"><option value="new">New</option><option value="all">All</option><option value="imported">Imported</option><option value="ignored">Ignored</option></select></label><button class="btn btn-secondary">Filter</button></form>
+{% if is_admin %}<p><span id="selection-count">0 selected</span> · <button type="button" id="select-page" class="btn btn-secondary">Select this page</button> <button type="button" id="clear-selection" class="btn btn-secondary">Clear selection</button> <button type="button" id="import-selected" class="btn btn-primary">Import selected…</button></p>{% endif %}
+<div id="discovery-candidates"></div></section>
+{% if is_admin %}
+<dialog id="discovery-import-dialog" aria-labelledby="discovery-import-title"><h2 id="discovery-import-title">Import only selected assets</h2>
+<p>Review names and defaults. Create new, explicitly link to an existing asset, or skip. Existing inventory fields, assessments and monitoring targets are preserved; imported addresses do not enable monitoring.</p>
+<form id="discovery-import-form" class="asset-form">
+<label>Default environment <input name="environment" value="development" required maxlength="40"></label><label>Default owner / team <input name="owner_team" maxlength="100"></label>
+<label>Default criticality <select name="criticality"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label>
+<label>Exposure <select name="exposure"><option value="unknown">Unknown</option><option value="internal">Internal (explicit assertion)</option><option value="internet">Internet-facing (explicit assertion)</option></select></label>
+<label>Default tags (semicolon separated) <input name="tags" value="discovered" maxlength="329"></label>
+<div id="discovery-import-rows" style="width:100%"></div><button class="btn btn-primary">Validate and preview selected rows</button>
+<button type="button" id="discovery-import-close" class="btn btn-secondary">Cancel</button></form>
+<pre id="discovery-import-preview" tabindex="0"></pre><button type="button" id="discovery-import-commit" class="btn btn-primary" hidden>Confirm reviewed import</button>
+</dialog>{% endif %}
+</div>
+{% endblock %}

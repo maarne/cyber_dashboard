@@ -159,7 +159,15 @@ Feature 1 adds private inventory, software observations, explicit CVE assessment
 CSV preview/commit, exports, and an explainable priority queue. It is **disabled
 by default**. Set `FEATURE_ASSET_PRIORITIZATION=true` and restart to enable it.
 See [operation, permissions, scoring, and recovery](docs/asset-prioritization.md).
-No scanning, paid infrastructure, or cloud deployment is introduced.
+The base inventory does not scan systems or provision infrastructure.
+
+Optional [availability checks and multi-network discovery](docs/asset-network-operations.md)
+extend this workflow with per-asset probes, custom schedules, hostname discovery,
+and selective candidate import. They are independently **disabled by default**
+and require explicit per-check/profile enablement. The destination scope defaults
+to RFC1918 IPv4 networks; an operator CIDR override replaces that default, and an
+explicitly empty override denies all targets.
+No real networks were scanned during implementation.
 
 ## Feature roadmap
 

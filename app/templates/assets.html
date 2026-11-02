@@ -10,6 +10,7 @@
  <label>Environment <input name="environment" maxlength="40"></label>
  <label>Tag <input name="tag" maxlength="32"></label>
  <label>Show <select name="archived"><option value="false">Active</option><option value="true">Archived</option></select></label>
+ {% if feature_asset_monitoring %}<label>Availability <select name="availability"><option value="">All</option><option>up</option><option>down</option><option>unknown</option><option>stale</option><option>disabled</option></select></label>{% endif %}
  <button class="btn btn-secondary">Filter</button>
 </form>
 <div id="inventory-list"></div>

@@ -10,6 +10,7 @@
 <label>State <select name="status"><option value="actionable">Actionable (default)</option><option value="all">All states</option><option value="open">Open (includes expired acceptance)</option><option value="in_progress">In progress</option><option value="accepted_risk">Accepted risk (unexpired)</option><option value="remediated">Remediated</option><option value="not_affected">Not affected</option></select></label>
 <label>Exposure <select name="exposure"><option value="">All</option><option>internet</option><option>internal</option><option>unknown</option></select></label>
 <label>Confidence <select name="confidence"><option value="">All</option><option>confirmed</option><option>suspected</option></select></label>
+{% if feature_asset_monitoring %}<label>Availability (context only) <select name="availability"><option value="">All</option><option>up</option><option>down</option><option>unknown</option><option>stale</option><option>disabled</option></select></label>{% endif %}
 <label><input type="checkbox" name="urgent_only" value="true"> KEV only</label><label><input type="checkbox" name="include_archived" value="true"> Include archived</label>
 <button class="btn btn-primary">Filter</button></form>
 <div id="priority-list"></div>

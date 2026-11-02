@@ -56,7 +56,7 @@ def explain(row, source_state, now):
 
 
 def list_priorities(*, asset_id=None, search="", environment="", tag="", status="actionable", exposure="",
-                    confidence="", urgent_only=False, include_archived=False, limit=50, offset=0):
+                    confidence="", urgent_only=False, include_archived=False, availability='', limit=50, offset=0):
     clauses, params = ["1=1"], []
     if not include_archived:
         clauses.append("a.is_archived=0")
@@ -86,6 +86,14 @@ def list_priorities(*, asset_id=None, search="", environment="", tag="", status=
             WHERE """ + " AND ".join(clauses), params).fetchall()
         now = datetime.now(timezone.utc)
         items = [explain(dict(row), source_state, now) for row in rows]
+        from app import config
+        if config.FEATURE_ASSET_MONITORING:
+            from app.services.asset_network_service import availability_map
+            states = availability_map(conn)
+            for item in items:
+                item['availability'] = states.get(item['asset_id'], {}).get('availability', 'disabled')
+            if availability:
+                items = [item for item in items if item['availability'] == availability]
         if search:
             term = search.casefold()
             items = [r for r in items if any(term in str(r[k]).casefold() for k in ("asset_name", "external_id", "cve_id", "owner_team"))]

@@ -57,6 +57,18 @@ if len(JWT_SECRET_KEY.encode("utf-8")) < 32 or JWT_SECRET_KEY == "cyberdash-secr
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 FEATURE_ASSET_PRIORITIZATION = os.getenv("FEATURE_ASSET_PRIORITIZATION", "false").lower() in ("1", "true", "yes")
+FEATURE_ASSET_MONITORING = os.getenv("FEATURE_ASSET_MONITORING", "false").lower() in ("1", "true", "yes")
+FEATURE_ASSET_DISCOVERY = os.getenv("FEATURE_ASSET_DISCOVERY", "false").lower() in ("1", "true", "yes")
+# Unset permits RFC1918 only; an explicit override replaces (never extends) it.
+# Preserve an explicitly empty value as the operator's deny-all switch.
+DEFAULT_ASSET_PROBE_ALLOWED_CIDRS = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+ASSET_PROBE_ALLOWED_CIDRS = os.getenv("ASSET_PROBE_ALLOWED_CIDRS", DEFAULT_ASSET_PROBE_ALLOWED_CIDRS)
+ASSET_PROBE_SCOPE_LABEL = os.getenv("ASSET_PROBE_SCOPE_LABEL", "local")[:80]
+ASSET_PROBE_RATE_PER_MINUTE = int(os.getenv("ASSET_PROBE_RATE_PER_MINUTE", "10"))
+ASSET_DISCOVERY_RATE_PER_MINUTE = int(os.getenv("ASSET_DISCOVERY_RATE_PER_MINUTE", "60"))
+ASSET_PROBE_DNS_RATE_PER_MINUTE = int(os.getenv("ASSET_PROBE_DNS_RATE_PER_MINUTE", "60"))
+if any(not 1 <= value <= 600 for value in (ASSET_PROBE_RATE_PER_MINUTE, ASSET_DISCOVERY_RATE_PER_MINUTE, ASSET_PROBE_DNS_RATE_PER_MINUTE)):
+    raise RuntimeError("Asset network rates must be between 1 and 600 attempts/minute.")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 ASSET_INTEL_STALE_HOURS = int(os.getenv("ASSET_INTEL_STALE_HOURS", "48"))
 if ASSET_INTEL_STALE_HOURS < 1:

@@ -4,10 +4,11 @@
 <link rel="stylesheet" href="/static/css/assets.css">
 {% endblock %}
 {% block content %}
-<main class="asset-workspace" data-analyst="{{ 'true' if is_analyst else 'false' }}" data-admin="{{ 'true' if is_admin else 'false' }}">
+<main class="asset-workspace" data-analyst="{{ 'true' if is_analyst else 'false' }}" data-admin="{{ 'true' if is_admin else 'false' }}" data-monitoring="{{ 'true' if feature_asset_monitoring else 'false' }}" data-discovery="{{ 'true' if feature_asset_discovery else 'false' }}">
   <nav aria-label="Inventory navigation"><a href="/assets">Inventory</a> · <a href="/priorities">Priority queue</a></nav>
+  {% if feature_asset_discovery and is_analyst %}<p><a href="/asset-discovery">Discover assets</a></p>{% endif %}
   <p id="asset-message" role="status" aria-live="polite"></p>
   {% block asset_content %}{% endblock %}
 </main>
 {% endblock %}
-{% block extra_scripts %}<script src="/static/js/assets.js" defer></script>{% endblock %}
+{% block extra_scripts %}<script src="/static/js/assets.js" defer></script>{% if feature_asset_monitoring or feature_asset_discovery %}<script src="/static/js/asset_network.js" defer></script>{% endif %}{% endblock %}

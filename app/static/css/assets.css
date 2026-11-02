@@ -20,3 +20,5 @@
 .asset-muted { opacity: .8; font-size: .9rem; }
 .asset-pager { display: flex; gap: 1rem; align-items: center; margin: 1rem 0; }
 .asset-workspace td button { margin: .2rem; }
+.asset-workspace fieldset label { display: flex; flex-direction: column; gap: .3rem; margin: .5rem 0; }
+.asset-workspace legend { padding: 0 .5rem; overflow-wrap: anywhere; }

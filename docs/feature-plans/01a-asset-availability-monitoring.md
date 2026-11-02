@@ -1,11 +1,11 @@
 # Feature 1A — Configurable asset availability checks
 
-**Status:** proposed; planning only, not implemented or enabled.  
+**Status:** implemented following approval; disabled by default, RFC1918 destination scope by default.
 **Parent:** [Feature 1 — Asset-aware prioritization](01-asset-aware-prioritization.md).  
 **Goal:** show whether an explicitly configured IP/hostname responds to a selected check, from the CyberDash runner's network.
 
 This is an optional extension of Feature 1, not the start of Features 2–5.
-Implementation and permission to contact real targets require separate approval.
+Implementation was approved. Permission to contact real targets remains separate.
 
 The requested multi-network discovery and fast selective-import workflow is
 planned in [Feature 1B](01b-network-discovery-and-selective-import.md). Discovery
@@ -176,16 +176,17 @@ never relax `app/services/outbound_service.py` or its public-only rules.
 
 ### Administrator-approved destination scope
 
-- Proposed operator setting: `ASSET_PROBE_ALLOWED_CIDRS`, default empty. Empty
-  means no probing. Require explicit authorized network ranges for resolved
-  destinations, with optional additional exact-hostname restrictions. Reject
+- Operator setting: `ASSET_PROBE_ALLOWED_CIDRS`. Following the RFC1918-default
+  request, unset permits `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`.
+  An explicit list replaces those defaults; an explicit empty value means no
+  probing. Require resolved destinations to be inside that scope. Reject
   universal IPv4/IPv6 `/0` allowances. Network scope is operator-controlled,
   not an analyst-editable inventory field or arbitrary request parameter.
 - Public and RFC1918/IPv6-ULA assets can be checked only when their resolved IPs
   satisfy that policy. Entering a hostname/IP is not proof of ownership; require
   an administrator acknowledgement that the organization authorizes the checks.
 - Always deny loopback, unspecified, link-local, multicast, broadcast, reserved
-  special-use addresses other than explicitly authorized RFC1918/ULA networks,
+  special-use addresses other than in-scope RFC1918/explicitly authorized ULA networks,
   cloud metadata/platform control endpoints (including
   Azure's platform virtual IP), and the runner's own addresses. These denials
   override allowlists. Explicit private-network permission is not a metadata or
@@ -409,7 +410,7 @@ restart network traffic. Keep the current F1 ephemerality warnings.
 
 **Recommended approval defaults:** one check per asset; curl/optional-capability
 ping and optional single-port nmap; no SSH authentication; manual-first rollout;
-admin-owned targets; explicit operator CIDR allowlist; 15-minute opt-in schedules;
+admin-owned targets; operator CIDR scope (RFC1918 when unset); 15-minute opt-in schedules;
 100 enabled monitors and two shared probe slots; three failed observations to
 confirm Down; no alerts or vulnerability-score changes.
 
@@ -422,3 +423,14 @@ merely by approving the document's architecture.
 The 15-minute value above is a default only, not a minimum or fixed preset list.
 Custom requested frequency is supported subject to visible resource/traffic
 limits and the non-overlap/F1 constraints described above and in Feature 1B.
+
+## 12. Implementation handover
+
+See [operator documentation](../asset-network-operations.md) for actual settings,
+tools, permissions, budgets, error/freshness semantics, selective import, restore
+controls and verification commands. Standard utilities are an optional Docker
+build choice, never privileged. Runtime flags default off. Following the user
+request on 2026-11-02, destination scope defaults to RFC1918 when unset; explicit
+overrides replace it, including empty-deny. No actual checks or schedules are
+enabled by that default, and no real networks were scanned. Features 2–5 remain
+unimplemented.

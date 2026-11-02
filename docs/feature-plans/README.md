@@ -18,20 +18,23 @@ Implement **one complete feature at a time**, review its acceptance results, and
 
 Complexity describes integration and testing scope, **not an implementation-time estimate**.
 
-### Feature 1 extensions awaiting approval
+### Feature 1 extensions implemented (default off)
 
 [Feature 1A — Configurable asset availability checks](01a-asset-availability-monitoring.md)
-adds a proposed per-asset IP/hostname, selectable standard-utility checks,
+adds a per-asset IP/hostname, selectable standard-utility checks,
 Up/Down/Unknown/Stale status, manual checks and optional bounded scheduling.
 
 [Feature 1B — Multi-network discovery and selective import](01b-network-discovery-and-selective-import.md)
-adds proposed multi-network scan profiles, hostname discovery, custom recurring
+adds multi-network scan profiles, hostname discovery, custom recurring
 intervals (seconds/minutes/hours/days), a candidate staging list, and quick
 preview/confirm import of selected assets. Requested frequency is separate from
 actual capacity, with non-overlapping scans and visible deferred/partial work.
 
-This is planning only: no probes, system tools, network permissions, or runtime
-changes have been added. It does not start Features 2–5 or change risk scoring.
+Both were implemented following approval. See [operation and authorization](../asset-network-operations.md).
+They remain disabled by default. Following the RFC1918-default request, an unset
+destination allowlist permits RFC1918 IPv4 networks; explicit overrides replace
+that scope, and an empty override denies all. No real networks were scanned.
+They do not start Features 2–5 or change risk scoring.
 
 ### Dependencies
 

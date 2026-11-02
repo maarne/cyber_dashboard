@@ -208,6 +208,7 @@ class AssessmentRecord(BaseModel):
 
 
 class PriorityRecord(AssessmentRecord):
+    availability: str | None = None
     asset_name: str
     external_id: str
     environment: str

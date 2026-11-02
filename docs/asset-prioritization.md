@@ -5,6 +5,11 @@ associations**. It does not scan assets, infer vulnerable versions from names,
 contact asset addresses, or install patches. No external request is made to
 calculate or display priorities; refresh the existing feeds separately.
 
+Optional [availability/discovery extensions](asset-network-operations.md) now
+exist behind separate default-off flags and explicit network authorization.
+The base feature still never contacts an asset, and availability/discovery never
+changes the vulnerability scoring formula or automatically enables monitoring.
+
 ## Enable locally
 
 1. Back up the existing SQLite database with `scripts/backup_database.py` before

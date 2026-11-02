@@ -90,7 +90,7 @@ def literal_like(value):
     return "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
-def list_assets(*, search="", environment="", tag="", archived=False, limit=50, offset=0):
+def list_assets(*, search="", environment="", tag="", archived=False, availability='', limit=50, offset=0):
     where, params = ["is_archived=?"], [int(archived)]
     if search:
         where.append("(name LIKE ? ESCAPE '\\' OR external_id LIKE ? ESCAPE '\\' OR owner_team LIKE ? ESCAPE '\\')")
@@ -101,8 +101,17 @@ def list_assets(*, search="", environment="", tag="", archived=False, limit=50, 
     if tag:
         where.append("EXISTS(SELECT 1 FROM asset_tags t WHERE t.asset_id=assets.id AND t.tag=?)")
         params.append(tag.casefold())
-    clause = " AND ".join(where)
     with get_connection() as conn:
+        if availability:
+            from app.services.asset_network_service import availability_map
+            states = availability_map(conn)
+            ids = [key for key, value in states.items() if value['availability'] == availability] if availability != 'disabled' else list(states)
+            if availability == 'disabled':
+                where.append('id NOT IN (' + ','.join('?' for _ in ids) + ')' if ids else '1=1')
+            else:
+                where.append('id IN (' + ','.join('?' for _ in ids) + ')' if ids else '1=0')
+            params.extend(ids)
+        clause = " AND ".join(where)
         total = conn.execute("SELECT COUNT(*) FROM assets WHERE " + clause, params).fetchone()[0]
         ids = conn.execute("SELECT id FROM assets WHERE " + clause + " ORDER BY id DESC LIMIT ? OFFSET ?", (*params, limit, offset)).fetchall()
         items = [get_asset_record(conn, row[0]) for row in ids]
@@ -163,6 +172,9 @@ def archive_asset(asset_id, payload, actor):
         conn.execute("UPDATE assets SET is_archived=?,row_version=row_version+1,updated_by=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
                      (int(payload["archived"]), actor["username"], asset_id))
         audit(conn, actor, "ASSET_ARCHIVED" if payload["archived"] else "ASSET_RESTORED", asset_id)
+        if payload['archived']:
+            from app.services.asset_network_service import archive_monitors
+            archive_monitors(conn, asset_id, actor)
         bump_inventory(conn)
         return get_asset_record(conn, asset_id)
 

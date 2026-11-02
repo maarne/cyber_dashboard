@@ -1,7 +1,7 @@
 """Ordered, additive migrations, called inside the startup write transaction."""
 
 
-def apply_migrations(conn):
+def _asset_inventory(conn):
     conn.execute("""CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )""")
@@ -80,3 +80,9 @@ def apply_migrations(conn):
     for sql in statements:
         conn.execute(sql)
     conn.execute("INSERT INTO schema_migrations(version,name) VALUES (1,'asset_prioritization')")
+
+
+def apply_migrations(conn):
+    _asset_inventory(conn)
+    from app.network_migrations import apply_network_migration
+    apply_network_migration(conn)

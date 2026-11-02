@@ -1,6 +1,7 @@
 """Feature 1 routes, registered with the existing RBAC dependencies."""
 
 from typing import Literal
+from app import config
 
 from fastapi import Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -25,8 +26,12 @@ def register_asset_routes(app, templates, auth_context, authenticated, analyst, 
     @router.get("/api/assets", response_model=AssetPage)
     def inventory(search: str = Query("", max_length=200), environment: str = Query("", max_length=40),
                   tag: str = Query("", max_length=32), archived: bool = False,
+                  availability: Literal['', 'up', 'down', 'unknown', 'stale', 'disabled'] = '',
                   limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0), user=Depends(authenticated)):
-        return assets.list_assets(search=search, environment=environment, tag=tag, archived=archived, limit=limit, offset=offset)
+        if availability and not config.FEATURE_ASSET_MONITORING:
+            from fastapi import HTTPException
+            raise HTTPException(422, 'Availability filtering requires the monitoring feature.')
+        return assets.list_assets(search=search, environment=environment, tag=tag, archived=archived, availability=availability, limit=limit, offset=offset)
 
     # Static paths must precede /{asset_id}.
     @router.get("/api/assets/export")
@@ -107,9 +112,13 @@ def register_asset_routes(app, templates, auth_context, authenticated, analyst, 
                    status: Literal["actionable", "all", "open", "in_progress", "remediated", "not_affected", "accepted_risk"] = "actionable",
                    exposure: Literal["", "internet", "internal", "unknown"] = "",
                    confidence: Literal["", "confirmed", "suspected"] = "", urgent_only: bool = False,
+                   availability: Literal['', 'up', 'down', 'unknown', 'stale', 'disabled'] = '',
                    include_archived: bool = False, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0), user=Depends(authenticated)):
+        if availability and not config.FEATURE_ASSET_MONITORING:
+            from fastapi import HTTPException
+            raise HTTPException(422, 'Availability filtering requires the monitoring feature.')
         return list_priorities(search=search, environment=environment, tag=tag, status=status, exposure=exposure,
-                               confidence=confidence, urgent_only=urgent_only, include_archived=include_archived, limit=limit, offset=offset)
+                               confidence=confidence, urgent_only=urgent_only, include_archived=include_archived, availability=availability, limit=limit, offset=offset)
 
     def page(request, name, **context):
         return templates.TemplateResponse(request=request, name=name, context={"request": request,

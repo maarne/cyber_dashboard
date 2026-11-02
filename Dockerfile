@@ -2,6 +2,7 @@
 # CyberDash — Production Multi-Stage / Hardened Dockerfile
 # ============================================================
 FROM python:3.11-slim-bookworm AS base
+ARG INSTALL_ASSET_NETWORK_TOOLS=false
 
 # Prevent Python from writing .pyc files and buffer stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,6 +15,11 @@ WORKDIR /app
 # Apply latest Debian security updates and remove package manager caches
 RUN apt-get update && \
     apt-get upgrade -y && \
+    if [ "$INSTALL_ASSET_NETWORK_TOOLS" = "true" ]; then \
+      apt-get install -y --no-install-recommends curl iputils-ping nmap && \
+      chmod u-s,g-s /usr/bin/ping && \
+      python3 -c "import os; p='/usr/bin/ping'; a='security.capability'; os.removexattr(p,a) if a in os.listxattr(p) else None"; \
+    fi && \
     rm -rf /var/lib/apt/lists/*
 
 # Install and upgrade Python dependencies with modern secure build tooling

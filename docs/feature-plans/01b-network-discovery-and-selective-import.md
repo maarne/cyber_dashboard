@@ -1,13 +1,15 @@
 # Feature 1B — Multi-network discovery and selective asset import
 
-**Status:** proposed; planning only, not implemented or enabled.  
+**Status:** implemented following approval; disabled by default, RFC1918 destination scope by default.
 **Parent:** [Feature 1 — Asset-aware prioritization](01-asset-aware-prioritization.md).  
 **Related:** [Feature 1A — Availability monitoring](01a-asset-availability-monitoring.md).  
 **Goal:** discover responding addresses and available hostnames across explicitly authorized networks, then quickly import only the assets an administrator selects.
 
 This extends the requested Feature 1 plan; it does not start Features 2–5.
-No networks, probes, tools, schedules, or automatic imports are enabled by writing
-or approving this architecture. Real target scope needs separate authorization.
+Implementation was approved. RFC1918 IPv4 is now the default permitted scope at
+the user's request; other ranges require an operator override. Each profile still
+requires explicit authorization and enablement. Defaults do not create profiles,
+start probes/schedules, or import assets automatically.
 
 ## 1. Required user outcome
 
@@ -263,7 +265,8 @@ candidate counts, raw utility output, or secrets enter templates/exports.
 
 Extend the **dedicated probe policy**, not the existing public-only intelligence/
 RSS/webhook transport. Every requested CIDR must be wholly contained in the
-operator-approved scope; partial intersection does not authorize scanning the
+operator scope (RFC1918 IPv4 when unset; explicit list replaces; empty denies
+all); partial intersection does not authorize scanning the
 whole CIDR. Explicitly handle network/broadcast/IPv6 semantics, exclusions,
 mapped IPv6 and overlapping ranges. Hard-denied metadata, platform control,
 loopback, link-local, multicast and runner-self addresses remain unscannable.
@@ -391,3 +394,17 @@ remain; consistent backups are still required.
 traffic budgets, discovery capability/ports, and hostname resolver policy.
 Choose the desired schedules per profile in deployment configuration/UI. No
 actual target values or resolver secrets belong in this planning document.
+
+## 11. Implementation handover
+
+See [operator documentation](../asset-network-operations.md) for enablement,
+network authorization, actual quotas, standard-tool packaging, scheduling,
+partial coverage, hostname confidence, quick selective import, reviewed evidence,
+backup/restore controls and verification commands. No real networks were scanned.
+
+Implemented refinements: DNS work has a separate shared budget; fixed discovery
+port costs count against pacing; changed names reopen review rather than rename
+inventory; reviewed evidence survives telemetry cleanup; retained address/evidence
+records are capped at 20,000 each. The UI accepts arbitrary positive intervals up
+to one year and shows requested versus actual/deferred/partial work. Periodic
+history is bounded, not an SLA or continuous-monitoring guarantee.

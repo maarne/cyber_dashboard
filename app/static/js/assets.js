@@ -69,8 +69,15 @@
         const filters = $('inventory-filters');
         async function load(offset = 0) {
             const query = new URLSearchParams(new FormData(filters)); query.set('offset', offset); query.set('limit', 50);
-            const data = await api(`/api/assets?${query}`), container = $('inventory-list');
-            table(container, ['Asset / external ID', 'Environment', 'Owner / team', 'Criticality', 'Exposure', 'Tags'], data.items.map(a => [link(`/assets/${a.id}`, `${a.name} (${a.external_id})`), a.environment, a.owner_team, `${a.criticality}/4`, a.exposure, a.tags.join(', ')]));
+            const [data, status] = await Promise.all([api(`/api/assets?${query}`), root.dataset.monitoring === 'true' ? api('/api/asset-monitoring/status') : Promise.resolve({items: []})]);
+            const states = new Map(status.items.map(r => [r.asset_id, r.state.availability])), container = $('inventory-list');
+            const headings = ['Asset / external ID', 'Environment', 'Owner / team', 'Criticality', 'Exposure', 'Tags'];
+            if (root.dataset.monitoring === 'true') headings.push('Availability');
+            table(container, headings, data.items.map(a => {
+                const row = [link(`/assets/${a.id}`, `${a.name} (${a.external_id})`), a.environment, a.owner_team, `${a.criticality}/4`, a.exposure, a.tags.join(', ')];
+                if (root.dataset.monitoring === 'true') row.push(states.get(a.id) || 'disabled');
+                return row;
+            }));
             pager(container, data, load);
         }
         filters.addEventListener('submit', run(() => load()));
@@ -98,7 +105,13 @@
         async function load(offset = 0) {
             const query = new URLSearchParams(new FormData(filters)); query.set('offset', offset);
             const data = await api(`/api/priorities?${query}`), container = $('priority-list');
-            table(container, ['Asset', 'CVE', 'Priority / explanation', 'Effective assessment'], data.items.map(r => [link(`/assets/${r.asset_id}`, r.asset_name), link(`https://nvd.nist.gov/vuln/detail/${r.cve_id}`, r.cve_id), explanation(r), state(r)]));
+            const headings = ['Asset', 'CVE', 'Priority / explanation', 'Effective assessment'];
+            if (root.dataset.monitoring === 'true') headings.push('Availability (not risk)');
+            table(container, headings, data.items.map(r => {
+                const row = [link(`/assets/${r.asset_id}`, r.asset_name), link(`https://nvd.nist.gov/vuln/detail/${r.cve_id}`, r.cve_id), explanation(r), state(r)];
+                if (root.dataset.monitoring === 'true') row.push(r.availability || 'disabled');
+                return row;
+            }));
             pager(container, data, load);
         }
         filters.addEventListener('submit', run(() => load())); run(() => load())();
