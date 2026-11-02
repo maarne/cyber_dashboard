@@ -86,3 +86,5 @@ def apply_migrations(conn):
     _asset_inventory(conn)
     from app.network_migrations import apply_network_migration
     apply_network_migration(conn)
+    from app.case_migrations import apply_case_migration
+    apply_case_migration(conn)

@@ -247,7 +247,9 @@ def get_api_endpoints_catalog() -> list[dict]:
         path = getattr(route, "path", "")
         if not path.startswith("/api") or not hasattr(route, "dependant"):
             continue
-        dependencies = {d.call for d in route.dependant.dependencies}
+        def dependency_calls(dependant):
+            return {call for dependency in dependant.dependencies for call in ({dependency.call} | dependency_calls(dependency))}
+        dependencies = dependency_calls(route.dependant)
         role = ("Admin" if require_admin in dependencies else "Analyst / Admin" if require_analyst_or_admin in dependencies
                 else "Viewer (authenticated)" if require_authenticated_user in dependencies else "Public")
         for method in sorted(route.methods - {"HEAD", "OPTIONS"}):

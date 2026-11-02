@@ -38,7 +38,7 @@
     <title>{% block title %}CyberDash — Security Dashboard{% endblock %}</title>
 
     <!-- Primary Application CSS Stylesheet (Self-Contained & Secure) -->
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=cases-1">
 
     <!-- Blocking Theme Initializer (Prevents Flash of Unstyled Theme) -->
     <script>
@@ -187,6 +187,7 @@
                 </a>
 
                 <!-- IOC Investigator link -->
+                {% if feature_case_management and is_analyst %}<a href="/cases" class="btn btn-secondary" id="cases-link">Cases</a>{% endif %}
                 <a href="/investigate" class="btn btn-secondary" id="investigate-link">
                     🔍 IOC Investigator
                 </a>

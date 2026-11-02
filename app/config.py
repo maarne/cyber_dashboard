@@ -59,6 +59,7 @@ JWT_EXPIRATION_HOURS = 24
 FEATURE_ASSET_PRIORITIZATION = os.getenv("FEATURE_ASSET_PRIORITIZATION", "false").lower() in ("1", "true", "yes")
 FEATURE_ASSET_MONITORING = os.getenv("FEATURE_ASSET_MONITORING", "false").lower() in ("1", "true", "yes")
 FEATURE_ASSET_DISCOVERY = os.getenv("FEATURE_ASSET_DISCOVERY", "false").lower() in ("1", "true", "yes")
+FEATURE_CASE_MANAGEMENT = os.getenv("FEATURE_CASE_MANAGEMENT", "false").lower() in ("1", "true", "yes")
 # Unset permits RFC1918 only; an explicit override replaces (never extends) it.
 # Preserve an explicitly empty value as the operator's deny-all switch.
 DEFAULT_ASSET_PROBE_ALLOWED_CIDRS = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

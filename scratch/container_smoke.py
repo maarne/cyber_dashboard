@@ -5,6 +5,7 @@ Only the uniquely named test container/volume created here are removed.
 """
 
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -19,18 +20,19 @@ def docker(*args, env=None):
     return subprocess.check_output(["docker", *args], env=env, text=True).strip()
 
 
-def main(image, assets=False, network_features=False):
+def main(image, assets=False, network_features=False, case_features=False):
     assets = assets or network_features
     name = "cyberdash-smoke-" + uuid.uuid4().hex[:12]
     volume = name + "-data"
     env = {**os.environ, "JWT_SECRET_KEY": secrets.token_hex(32), "FEATURE_ASSET_PRIORITIZATION": str(assets).lower(),
            'FEATURE_ASSET_MONITORING': str(network_features).lower(), 'FEATURE_ASSET_DISCOVERY': str(network_features).lower(),
-           'ASSET_PROBE_ALLOWED_CIDRS': ''}
+           'ASSET_PROBE_ALLOWED_CIDRS': '', 'FEATURE_CASE_MANAGEMENT': str(case_features).lower()}
     docker("volume", "create", volume)
 
     def start():
         docker("run", "-d", "--name", name, "-e", "JWT_SECRET_KEY", "-e", "FEATURE_ASSET_PRIORITIZATION",
-               '-e', 'FEATURE_ASSET_MONITORING', '-e', 'FEATURE_ASSET_DISCOVERY', '-e', 'ASSET_PROBE_ALLOWED_CIDRS', '-v', volume + ":/app/data",
+               '-e', 'FEATURE_ASSET_MONITORING', '-e', 'FEATURE_ASSET_DISCOVERY', '-e', 'ASSET_PROBE_ALLOWED_CIDRS',
+               '-e', 'FEATURE_CASE_MANAGEMENT', '-v', volume + ":/app/data",
                "-p", "127.0.0.1::8000", image, env=env)
         address = docker("port", name, "8000/tcp").splitlines()[0]
         url = "http://" + address
@@ -81,6 +83,25 @@ def main(image, assets=False, network_features=False):
                 assert session.get(url + '/asset-discovery', timeout=5).status_code == 200
         else:
             assert session.get(url + "/api/assets", timeout=5).status_code == 404
+        if case_features:
+            page = session.get(url + '/cases', timeout=5)
+            assert page.status_code == 200, page.text
+            case_csrf = re.search(r'name="case-csrf-token" content="([a-f0-9]+)"', page.text)[1]
+            case_headers = {'Origin': url, 'X-CSRF-Token': case_csrf}
+            response = session.post(url + '/api/investigations', json={'indicator': '44d88612fea8a8f36de82e1278abb02f'}, headers=case_headers, timeout=10)
+            assert response.status_code == 201, response.text
+            snapshot_id = response.json()['snapshot']['id']
+            response = session.post(url + '/api/cases', json={'title': 'Synthetic case smoke', 'snapshot_id': snapshot_id}, headers=case_headers, timeout=10)
+            assert response.status_code == 201, response.text
+            case_id = response.json()['id']
+            def edit_case(number):
+                return session.patch(url + f'/api/cases/{case_id}', json={'expected_version': 1, 'title': f'Case concurrent {number}'}, headers=case_headers, timeout=10).status_code
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                assert sorted(executor.map(edit_case, range(2))) == [200, 409]
+            report = session.get(url + f'/api/cases/{case_id}/export', timeout=10)
+            assert report.json()['evidence'][0]['snapshot']['integrity_valid']
+        else:
+            assert session.get(url + '/api/cases', timeout=5).status_code == 404
         for _ in range(10):
             assert session.get(url + "/api/users", timeout=5).status_code == 200
         token = session.post(url + "/api/tokens", json={"name": "smoke", "rate_limit_per_min": 1}, timeout=5).json()["token"]
@@ -110,6 +131,11 @@ def main(image, assets=False, network_features=False):
             assert restored.get(url + f'/api/assets/{asset_id}/monitoring', timeout=5).json()['state']['availability'] == 'disabled'
             assert len(restored.get(url + '/api/asset-discovery/profiles', timeout=5).json()['items']) == 1
             assert restored.get(url + '/api/asset-discovery/runs', timeout=5).json()['total'] == 0
+        if case_features:
+            report = restored.get(url + f'/api/cases/{case_id}/export', timeout=10).json()
+            assert report['evidence'][0]['snapshot']['integrity_valid']
+            assert report['evidence'][0]['snapshot']['id'] == snapshot_id
+            assert restored.get(url + '/api/audit-logs/verify', timeout=10).json()['is_valid']
         print("Container smoke passed: non-root runtime, two workers, health, auth, rate limits, audit concurrency and persistence across replacement.")
     finally:
         subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -117,4 +143,4 @@ def main(image, assets=False, network_features=False):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "cyberdash:asset-network", "--assets" in sys.argv[2:], '--network' in sys.argv[2:])
+    main(sys.argv[1] if len(sys.argv) > 1 else "cyberdash:asset-network", "--assets" in sys.argv[2:], '--network' in sys.argv[2:], '--cases' in sys.argv[2:])

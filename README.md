@@ -171,8 +171,13 @@ No real networks were scanned during implementation.
 
 ## Feature roadmap
 
+[Investigation case management](docs/investigation-cases.md) adds team-visible
+analyst/admin cases, local-only IOC captures, preserved evidence, append-only
+notes, close/reopen history and JSON/Markdown reports. Enable it with
+`FEATURE_CASE_MANAGEMENT=true`; it is independent of asset monitoring and default off.
+
 Detailed plans for the five features are in
-[the feature-plan roadmap](docs/feature-plans/README.md). Features 2–5 remain
-proposals. Feature 1 is implemented behind its
+[the feature-plan roadmap](docs/feature-plans/README.md). Features 3–5 remain
+proposals. Features 1 and 2 are implemented behind their
 default-off flag. Features are implemented one at a time after approval,
 without changing the F1-only, zero-paid-infrastructure development constraint.

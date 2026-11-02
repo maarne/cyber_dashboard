@@ -1,6 +1,6 @@
 # CyberDash feature implementation plans
 
-**Status:** Feature 1 implemented following user approval; Features 2–5 remain planning only.  
+**Status:** Features 1 and 2 implemented following user approval; Features 3–5 remain planning only.
 **Created:** 2026-11-01.  
 **Baseline:** the current FastAPI/SQLite application after the security fixes and F1-only configuration.
 
@@ -11,7 +11,7 @@ Implement **one complete feature at a time**, review its acceptance results, and
 | Order | Plan | Usable outcome | Relative complexity |
 | --- | --- | --- | --- |
 | 1 | [Asset-aware prioritization](01-asset-aware-prioritization.md) — implemented, default off | An inventory and explainable queue of vulnerabilities affecting your systems | Medium–large |
-| 2 | [Investigation case management](02-investigation-case-management.md) | Owned cases with notes, preserved evidence, dispositions, and exports | Medium–large |
+| 2 | [Investigation case management](02-investigation-case-management.md) — implemented, default off | Owned cases with notes, preserved evidence, dispositions, and exports | Medium–large |
 | 3 | [Detection-rule lifecycle](03-detection-rule-lifecycle.md) | Validated, versioned rules with independent review and controlled publishing | Large |
 | 4 | [Personalized watchlists](04-personalized-watchlists.md) | Saved monitoring criteria, in-app alerts, controlled webhooks, and digests | Large |
 | 5 | [Enterprise authentication](05-enterprise-authentication.md) | Optional OIDC SSO, local TOTP MFA, recovery, and safe identity linking | Large; security-sensitive |
@@ -52,7 +52,7 @@ They do not start Features 2–5 or change risk scoring.
 4. **Truthful intelligence:** missing facts stay unknown. Product-name similarity is not proof of vulnerability; a pivot URL is not evidence that a provider was queried.
 5. **Protect existing work:** additive migrations, stable IDs, no silent reseeding over user edits, no automatic historical deletions, and no live-database test execution.
 6. **Keep current security fixes:** explicit signing secrets, revocable sessions, enforced token limits, public-address-pinned outbound requests, masked webhook URLs, and versioned audit verification.
-7. **Approval boundaries:** Feature 1 was approved and implemented behind a default-off flag. Tables, routes, dependencies, and settings in Features 2–5 remain proposals; implementation requires separate approval.
+7. **Approval boundaries:** Features 1 and 2 were approved and implemented behind default-off flags. Tables, routes, dependencies, and settings in Features 3–5 remain proposals; implementation requires separate approval.
 
 ## 3. Shared implementation conventions
 

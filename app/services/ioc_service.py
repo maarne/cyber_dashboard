@@ -106,6 +106,8 @@ def enrich_ip(ip_str: str) -> dict:
         "is_private": False,
         "is_bogon": False,
         "geo_flag": "🌐",
+        "dns_status": "not_queried",
+        "geoip_status": "not_queried",
     }
 
     # Check if private/loopback/bogon
@@ -125,16 +127,20 @@ def enrich_ip(ip_str: str) -> dict:
     try:
         host, _, _ = socket.gethostbyaddr(ip_str)
         result["reverse_dns"] = host
+        result['dns_status'] = 'available'
     except Exception:
         result["reverse_dns"] = "No PTR Record"
+        result['dns_status'] = 'unavailable'
 
     # Live GeoIP & ASN API Lookup (ip-api.com)
+    result['geoip_status'] = 'unavailable'
     try:
         with httpx.Client(timeout=3.0) as client:
             resp = client.get(f"http://ip-api.com/json/{ip_str}?fields=status,message,country,countryCode,regionName,city,isp,org,as,query")
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "success":
+                    result['geoip_status'] = 'available'
                     result["country"] = data.get("country", "Unknown")
                     result["country_code"] = data.get("countryCode", "XX")
                     result["city"] = data.get("city", "Unknown")
@@ -149,8 +155,10 @@ def enrich_ip(ip_str: str) -> dict:
                         # Unicode Regional Indicator flag calculation
                         flag = "".join(chr(127397 + ord(char)) for char in code)
                         result["geo_flag"] = flag
-    except Exception as e:
-        print(f"⚠️ GeoIP API lookup fallback: {e}")
+    except httpx.TimeoutException:
+        result['geoip_status'] = 'timeout'
+    except Exception:
+        result['geoip_status'] = 'unavailable'
 
     return result
 
@@ -166,6 +174,7 @@ def enrich_domain(domain_str: str) -> dict:
         "mx_records": [],
         "primary_ip": None,
         "ip_enrichment": None,
+        "dns_status": "not_queried",
     }
 
     # Resolve A records (IPv4)
@@ -173,11 +182,13 @@ def enrich_domain(domain_str: str) -> dict:
         resolved = socket.gethostbyname_ex(domain_str)
         ips = resolved[2]
         result["resolved_ips"] = ips
+        result['dns_status'] = 'available' if ips else 'unavailable'
         if ips:
             result["primary_ip"] = ips[0]
             result["ip_enrichment"] = enrich_ip(ips[0])
     except Exception:
         result["resolved_ips"] = []
+        result['dns_status'] = 'unavailable'
 
     return result
 
@@ -236,7 +247,7 @@ def enrich_hash(hash_str: str, hash_type: str) -> dict:
 # MASTER INVESTIGATION CONTROLLER
 # ============================================================
 
-def investigate_ioc(raw_indicator: str) -> dict:
+def investigate_ioc(raw_indicator: str, *, local_only=False, save_history=True) -> dict:
     """
     Execute full multi-source threat triage for an indicator.
     
@@ -264,13 +275,20 @@ def investigate_ioc(raw_indicator: str) -> dict:
         "threat_actors": [],
         "pivots": {},
         "raw_details": {},
+        "sources": {
+            'local_indicators': {'status': 'not_queried'},
+            'dns': {'status': 'not_queried'},
+            'geoip': {'status': 'not_queried'},
+            'hash_catalog': {'status': 'not_queried'},
+            'external_reputation': {'status': 'not_queried', 'note': 'Pivot links are not provider queries.'},
+        },
     }
 
     # ----------------------------------------------------------
     # 1. Type-Specific Enrichment
     # ----------------------------------------------------------
     if ioc_type in ("ipv4", "ipv6"):
-        net_info = enrich_ip(indicator)
+        net_info = {} if local_only else enrich_ip(indicator)
         dossier["network"] = net_info
         dossier["pivots"] = {
             "VirusTotal": f"https://www.virustotal.com/gui/ip-address/{indicator}",
@@ -281,7 +299,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
         }
 
     elif ioc_type == "domain":
-        dom_info = enrich_domain(indicator)
+        dom_info = {} if local_only else enrich_domain(indicator)
         dossier["network"] = dom_info.get("ip_enrichment") or {}
         dossier["raw_details"] = dom_info
         dossier["pivots"] = {
@@ -292,7 +310,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
         }
 
     elif ioc_type == "url":
-        url_info = enrich_url(indicator)
+        url_info = {} if local_only else enrich_url(indicator)
         dossier["network"] = url_info.get("domain_enrichment", {}).get("ip_enrichment") or {}
         dossier["raw_details"] = url_info
         dossier["pivots"] = {
@@ -303,6 +321,7 @@ def investigate_ioc(raw_indicator: str) -> dict:
 
     elif ioc_type in ("md5", "sha1", "sha256"):
         hash_info = enrich_hash(indicator, ioc_type)
+        dossier['sources']['hash_catalog']['status'] = 'available'
         dossier["raw_details"] = hash_info
         dossier["threat_score"] = hash_info.get("threat_score", 50)
         dossier["verdict"] = hash_info.get("verdict", "UNKNOWN")
@@ -313,6 +332,11 @@ def investigate_ioc(raw_indicator: str) -> dict:
             "AlienVault OTX": f"https://otx.alienvault.com/indicator/file/{indicator}",
             "MalwareBazaar": f"https://bazaar.abuse.ch/sample/{indicator}/",
         }
+
+    if not local_only and ioc_type in ('ipv4', 'ipv6', 'domain', 'url'):
+        domain_data = dossier['raw_details'].get('domain_enrichment', dossier['raw_details'])
+        dossier['sources']['dns']['status'] = domain_data.get('dns_status', dossier['network'].get('dns_status', 'unavailable'))
+        dossier['sources']['geoip']['status'] = dossier['network'].get('geoip_status', 'not_queried')
 
     # ----------------------------------------------------------
     # 2. Local Database Threat Indicators Query
@@ -326,12 +350,13 @@ def investigate_ioc(raw_indicator: str) -> dict:
             cursor.execute("""SELECT * FROM threat_indicators
                 WHERE indicator_type = ? AND indicator_value = ? LIMIT 10""", (stored_type, normalized))
             matches = cursor.fetchall()
+            dossier['sources']['local_indicators']['status'] = 'available'
             for m in matches:
                 dossier["feed_matches"].append(dict(m))
                 dossier["threat_tags"].append(f"{m['source']} ({m['threat_type']})")
                 dossier["threat_score"] = max(dossier["threat_score"], 85)
-    except Exception as e:
-        print(f"⚠️ Error querying local threat indicators: {e}")
+    except Exception:
+        dossier['sources']['local_indicators']['status'] = 'unavailable'
 
     # ----------------------------------------------------------
     # 3. Threat Actor Correlation
@@ -382,14 +407,15 @@ def investigate_ioc(raw_indicator: str) -> dict:
 
     # Save to investigation history
     geo_c = dossier.get("network", {}).get("country", "")
-    save_investigation_history(
-        indicator=indicator,
-        indicator_type=ioc_type,
-        verdict=dossier["verdict"],
-        threat_score=dossier["threat_score"],
-        threat_tags=", ".join(dossier["threat_tags"]),
-        geo_country=geo_c,
-    )
+    if save_history:
+        save_investigation_history(
+            indicator=indicator,
+            indicator_type=ioc_type,
+            verdict=dossier["verdict"],
+            threat_score=dossier["threat_score"],
+            threat_tags=", ".join(dossier["threat_tags"]),
+            geo_country=geo_c,
+        )
 
     return dossier
 

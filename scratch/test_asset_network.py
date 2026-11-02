@@ -86,7 +86,7 @@ class AssetNetworkTests(unittest.TestCase):
     def test_migration_idempotent_and_no_targets_jobs(self):
         initialize_database(); initialize_database()
         with get_connection() as conn:
-            self.assertEqual(conn.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], 2)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0], 3)
             for table in ('asset_monitor_configs', 'asset_discovery_profiles', 'asset_network_jobs'):
                 self.assertEqual(conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0], 0)
             self.assertFalse(conn.execute('PRAGMA foreign_key_check').fetchall())
@@ -377,7 +377,7 @@ assert '/api/asset-discovery/profiles' not in app.openapi()['paths']
         from app import database
         from app.network_migrations import apply_network_migration
         with patch.object(database, 'DATABASE_PATH', legacy):
-            with patch('app.network_migrations.apply_network_migration'): initialize_database()
+            with patch('app.network_migrations.apply_network_migration'), patch('app.case_migrations.apply_case_migration'): initialize_database()
             asset = assets.create_asset({'external_id': 'legacy', 'name': 'Existing inventory'}, {'username': 'fixture', 'role': 'admin'})
             with self.assertRaises(RuntimeError):
                 with get_connection() as conn:

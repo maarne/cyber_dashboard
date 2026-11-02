@@ -307,6 +307,7 @@ body {
     max-width: 1440px;
     margin: 0 auto;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 1.5rem;
@@ -337,6 +338,8 @@ body {
 
 .header-actions {
     display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
     align-items: center;
     gap: 0.75rem;
 }
@@ -3602,7 +3605,6 @@ select:disabled,
         grid-template-columns: 1fr !important;
     }
 }
-
 
 
 

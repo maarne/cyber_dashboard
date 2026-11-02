@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<meta name="case-csrf-token" content="{{ case_csrf_token }}">
+<link rel="stylesheet" href="/static/css/assets.css">
+{% endblock %}
+{% block content %}
+<main class="asset-workspace" id="case-workspace" data-admin="{{ 'true' if is_admin else 'false' }}">
+<nav aria-label="Case navigation"><a href="/cases">Cases</a> · <a href="/investigate">IOC investigator</a>{% if feature_asset_prioritization %} · <a href="/assets">Inventory</a>{% endif %}</nav>
+<p>INTERNAL — Analyst/admin SOC workspace. Cases are team-visible; assignment is workflow ownership, not private access. Do not enter credentials or secrets.</p>
+<p id="case-message" role="status" aria-live="polite"></p>
+{% block case_content %}{% endblock %}
+</main>
+{% endblock %}
+{% block extra_scripts %}<script src="/static/js/cases.js" defer></script>{% endblock %}

@@ -7,13 +7,17 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 from starlette.responses import JSONResponse
 
-from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, JWT_SECRET_KEY, PUBLIC_BASE_URL
+from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, FEATURE_CASE_MANAGEMENT, JWT_SECRET_KEY, PUBLIC_BASE_URL
 
 
 def is_asset_path(path):
     return any(path == p or path.startswith(p + "/") for p in
                ("/assets", "/priorities", "/api/assets", "/api/asset-assessments", "/api/priorities",
-                "/asset-discovery", "/api/asset-discovery", "/api/asset-monitoring"))
+                 "/asset-discovery", "/api/asset-discovery", "/api/asset-monitoring"))
+
+
+def is_case_path(path):
+    return any(path == p or path.startswith(p + '/') for p in ('/cases', '/api/cases', '/api/investigations'))
 
 
 def csrf_token(request):
@@ -48,7 +52,11 @@ class AssetTransportMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not is_asset_path(scope["path"]):
+        if scope['type'] != 'http':
+            return await self.app(scope, receive, send)
+        case_path = is_case_path(scope['path'])
+        legacy_investigation = scope['path'] == '/investigate' or scope['path'].startswith('/api/investigate')
+        if not (is_asset_path(scope['path']) or case_path or legacy_investigation):
             return await self.app(scope, receive, send)
 
         async def private_send(message):
@@ -58,9 +66,14 @@ class AssetTransportMiddleware:
             await send(message)
 
         path = scope['path']
-        disabled = (not FEATURE_ASSET_PRIORITIZATION
-                    or ((path.startswith('/asset-discovery') or path.startswith('/api/asset-discovery')) and not FEATURE_ASSET_DISCOVERY)
-                    or ((path.startswith('/api/asset-monitoring') or '/monitoring' in path) and not FEATURE_ASSET_MONITORING))
+        if case_path:
+            disabled = not FEATURE_CASE_MANAGEMENT
+        elif legacy_investigation:
+            disabled = False
+        else:
+            disabled = (not FEATURE_ASSET_PRIORITIZATION
+                        or ((path.startswith('/asset-discovery') or path.startswith('/api/asset-discovery')) and not FEATURE_ASSET_DISCOVERY)
+                        or ((path.startswith('/api/asset-monitoring') or '/monitoring' in path) and not FEATURE_ASSET_MONITORING))
         if disabled:
             return await JSONResponse({"detail": "Not found"}, 404)(scope, receive, private_send)
         if scope["method"] not in ("GET", "HEAD", "OPTIONS"):

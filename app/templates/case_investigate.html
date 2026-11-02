@@ -1,0 +1,20 @@
+{% extends "case_layout.html" %}
+{% block title %}IOC investigator — CyberDash{% endblock %}
+{% block case_content %}
+<h1>IOC investigator</h1>
+<form id="investigation-capture" class="asset-form">
+<label>IP, domain, HTTP(S) URL or file hash <input id="case-ioc" name="indicator" value="{{ ioc }}" required maxlength="2048"></label>
+<label><input name="local_only" type="checkbox" checked> Local-only: use cached threat indicators and the local hash catalog; no DNS or provider requests</label>
+<p>Unchecking local-only explicitly allows existing DNS and IP geolocation enrichment. DNS can disclose queried names to your resolver; public IP geolocation sends an IP to ip-api.com over HTTP. No submitted URL is fetched and no new reputation providers are queried. Pivot links do not mean a provider was consulted.</p>
+<button class="btn btn-primary">Investigate and preserve result</button></form>
+<p>Page loads and refreshes do not run lookups. Legacy lookup history is not a full evidence capture and has unknown attribution where no actor was recorded.</p>
+<details><summary>Recent lookup history (captured results and legacy summaries)</summary><div id="lookup-history"></div></details>
+{% if snapshot %}<script type="application/json" id="captured-data">{{ snapshot | tojson }}</script>{% endif %}
+<section class="asset-panel" id="captured-result" hidden><h2>Captured result</h2><div id="captured-summary"></div><details><summary>Full preserved dossier and source availability</summary><pre id="captured-dossier"></pre></details><div id="captured-matches"></div>
+<h3>Create a case from this capture</h3><form id="captured-create-case" class="asset-form">
+<label>Title <input name="title" required maxlength="200"></label><label>Summary <textarea name="summary" maxlength="4000"></textarea></label>
+<label>Severity <select name="severity"><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select></label>
+<label>Assignee <select name="assignee_user_id" data-assignees><option value="">Unassigned</option></select></label>
+<label>Initial note <textarea name="initial_note" maxlength="8000"></textarea></label><button class="btn btn-primary">Create case with preserved evidence</button></form>
+<h3>Or attach to an existing case</h3><form id="captured-attach" class="asset-form"><label>Case ID <input name="case_id" type="number" min="1" required></label><button class="btn btn-secondary">Attach to existing case</button></form></section>
+{% endblock %}

@@ -1,6 +1,6 @@
 # Feature 2 — Investigation case management
 
-**Status:** proposed; implement only after approval.  
+**Status:** implemented following user approval; default-off rollout flag retained.
 **Goal:** turn a one-off IOC lookup into an owned, explainable investigation that another analyst can continue.  
 **Prerequisites:** existing IOC investigator; optional links to Feature 1 assets and current detection rules.
 
@@ -117,3 +117,14 @@ Move the new UI to explicit POST execution and GET result-by-ID rendering. Make 
 Use `FEATURE_CASE_MANAGEMENT`; existing one-off investigations remain available when disabled. Require a backup before migration and document that F1 database replacement loses unsaved cases. Exports can support manual reporting but are not a complete database restore mechanism.
 
 **Recommended defaults to approve:** analyst/admin team visibility, immutable text/JSON evidence, plain-text append-only notes, no attachments, and no public links. A later private-case model needs explicit ACL design across search, counts, exports, and background notifications before it can be offered safely.
+
+## 11. Implementation handover
+
+Implemented the recommended defaults following approval. See [operator and privacy
+guidance](../investigation-cases.md) for actual APIs, permissions, local-only
+capture, integrity checks, quotas, legacy compatibility and recovery. The owner
+or an admin closes cases; historical evidence survives account removal and lookup
+history clearing. Additional bounds: 1,000 retained snapshots overall, 200 notes,
+100 references and 1,000 events per case, 12 MiB reports. No new dependencies,
+paid resources, public sharing links or attachments were introduced. Features 3–5
+remain unimplemented.

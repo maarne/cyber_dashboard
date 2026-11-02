@@ -468,6 +468,7 @@ def get_template_auth_context(request: Request) -> dict:
         "feature_asset_prioritization": FEATURE_ASSET_PRIORITIZATION,
         "feature_asset_monitoring": FEATURE_ASSET_MONITORING,
         "feature_asset_discovery": FEATURE_ASSET_DISCOVERY,
+        "feature_case_management": FEATURE_CASE_MANAGEMENT,
         "current_user": info.get("username", ""),
         "user_role": role,
         "is_admin": role == "admin",
@@ -524,7 +525,7 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 templates.env.globals["get_mitre_ttp"] = get_mitre_ttp_details
 templates.env.globals["get_cve_details"] = get_cve_details
 
-from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY
+from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, FEATURE_CASE_MANAGEMENT
 from app.asset_security import AssetTransportMiddleware
 from app.asset_routes import register_asset_routes
 
@@ -535,6 +536,9 @@ if FEATURE_ASSET_PRIORITIZATION:
     from app.asset_network_routes import register_network_routes
     register_network_routes(app, templates, get_template_auth_context, require_authenticated_user,
                             require_analyst_or_admin, require_admin)
+if FEATURE_CASE_MANAGEMENT:
+    from app.case_routes import register_case_routes
+    register_case_routes(app, templates, get_template_auth_context, require_analyst_or_admin, require_admin)
 
 
 # ============================================================
@@ -647,9 +651,16 @@ def detection_rules_page(request: Request, rule_type: str = "ALL", search: str =
 # ============================================================
 
 @app.get("/investigate", include_in_schema=False)
-def ioc_investigator_page(request: Request, ioc: str = Query("", max_length=2048), user: dict = Depends(require_authenticated_user)):
+def ioc_investigator_page(request: Request, ioc: str = Query("", max_length=2048), snapshot_id: int | None = Query(None, ge=1), user: dict = Depends(require_authenticated_user)):
     """Render the Threat Intelligence & IOC Investigator triage console."""
     auth_ctx = get_template_auth_context(request)
+    if FEATURE_CASE_MANAGEMENT:
+        require_analyst_or_admin(request)
+        from app.asset_security import csrf_token
+        from app.services.investigation_snapshot_service import get_snapshot
+        snapshot = get_snapshot(snapshot_id, user) if snapshot_id else None
+        return templates.TemplateResponse(request=request, name='case_investigate.html', context={
+            'request': request, **auth_ctx, 'ioc': ioc.strip(), 'snapshot': snapshot, 'case_csrf_token': csrf_token(request)})
     recent_history = get_recent_investigations(limit=10)
     
     dossier = None
@@ -1466,19 +1477,34 @@ def api_investigate_ioc(
 ):
     if not ioc.strip():
         return JSONResponse(status_code=400, content={"error": "IOC parameter is required."})
-    return investigate_ioc(ioc.strip())
+    response = JSONResponse(investigate_ioc(ioc.strip(), save_history=not FEATURE_CASE_MANAGEMENT))
+    if FEATURE_CASE_MANAGEMENT:
+        response.headers['Deprecation'] = 'true'
+        response.headers['Link'] = '</api/investigations>; rel="successor-version"'
+    return response
 
 
 @app.get("/api/investigate/history")
 def api_get_investigate_history(
+    request: Request,
     limit: int = Query(15, ge=1, le=200),
     user: dict = Depends(require_authenticated_user),
 ):
+    if FEATURE_CASE_MANAGEMENT:
+        require_analyst_or_admin(request)
     return get_recent_investigations(limit=limit)
 
 
 @app.delete("/api/investigate/history")
 def api_clear_investigate_history(request: Request, admin: dict = Depends(require_admin)):
+    if FEATURE_CASE_MANAGEMENT:
+        from app.asset_security import protect_mutation
+        from app.services.case_common import audit, write_transaction
+        protect_mutation(request, admin)
+        with write_transaction() as conn:
+            conn.execute('DELETE FROM investigation_history')
+            audit(conn, admin, 'INVESTIGATION_HISTORY_CLEARED', 'history')
+        return {'message': 'Lookup history cleared; case evidence and captured results retained.'}
     client_ip = get_client_ip(request)
     success = clear_investigation_history()
     if success:

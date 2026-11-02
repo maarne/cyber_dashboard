@@ -1,0 +1,27 @@
+{% extends "case_layout.html" %}
+{% block title %}{{ case.reference }} — CyberDash cases{% endblock %}
+{% block case_content %}
+<script type="application/json" id="case-data">{{ case | tojson }}</script>
+<h1>{{ case.reference }}</h1><div id="case-summary"></div>
+<p><a href="/api/cases/{{ case.id }}/export?format=json">Download JSON report</a> · <a href="/api/cases/{{ case.id }}/export?format=markdown">Download Markdown report</a></p>
+<button type="button" id="case-refresh" class="btn btn-secondary">Reload saved case</button>
+<details><summary>Edit title, summary, severity or assignee</summary><form id="case-edit" class="asset-form" data-case-edit>
+<label>Title <input name="title" required maxlength="200"></label><label>Summary <textarea name="summary" maxlength="4000"></textarea></label>
+<label>Severity <select name="severity"><option>low</option><option>medium</option><option>high</option><option>critical</option></select></label>
+<label>Assignee <select name="assignee_user_id" data-assignees><option value="">Unassigned / deleted account</option></select></label>
+<button class="btn btn-primary">Save changes</button></form></details>
+<section class="asset-panel"><h2>Status and conclusion</h2>
+<p>Only the assigned human analyst or an administrator can close a case. A human conclusion is separate from automated IOC verdicts. Closed cases must be reopened before editing.</p>
+<form id="case-transition" class="asset-form"><label>New status <select name="status"><option>open</option><option>in_progress</option><option>closed</option></select></label>
+<label>Conclusion (closing only) <select name="conclusion"><option value="">Choose</option><option>malicious</option><option>benign</option><option>security_test</option><option>inconclusive</option></select></label>
+<label>Reason / closure rationale <textarea name="reason" required maxlength="8000"></textarea></label><button class="btn btn-primary">Apply transition</button></form></section>
+<section class="asset-panel"><h2>Preserved evidence</h2><p>Captures are append-only. Re-investigation creates a new snapshot. References alone are not frozen evidence.</p><div id="case-evidence"></div>
+<form id="case-attach" class="asset-form" data-case-edit><label>Authorized captured snapshot ID <input name="snapshot_id" type="number" min="1" required></label><button class="btn btn-secondary">Attach snapshot</button></form>
+<details><summary>Compare two saved snapshots</summary><form id="case-compare" class="asset-form"><label>Older snapshot ID <input name="older" type="number" min="1" required></label><label>Newer snapshot ID <input name="newer" type="number" min="1" required></label><button class="btn btn-secondary">Compare saved evidence</button></form><pre id="case-comparison"></pre></details></section>
+<section class="asset-panel"><h2>Append-only notes</h2><div id="case-notes"></div>
+<form id="case-note" class="asset-form" data-case-edit><label>Note <textarea name="body" required maxlength="8000"></textarea></label><label>Corrects note ID (optional; original retained) <input name="supersedes_note_id" type="number" min="1"></label><button class="btn btn-primary">Append note</button></form></section>
+<section class="asset-panel"><h2>Linked context</h2><p>Links do not verify vulnerability, attribution or a rule revision. Stored labels survive deletion; current details can change.</p><div id="case-references"></div>
+<form id="case-reference" class="asset-form" data-case-edit><label>Type <select name="kind">{% if feature_asset_prioritization %}<option>asset</option>{% endif %}<option>cve</option><option>actor</option><option>rule</option></select></label><label>Existing ID <input name="target_id" required maxlength="100"></label><button class="btn btn-secondary">Add context reference</button></form></section>
+<section class="asset-panel"><h2>Chronology</h2><div id="case-events"></div></section>
+{% if is_admin %}<details><summary>Archive / restore (admin)</summary><form id="case-archive" class="asset-form"><label>Action <select name="archived"><option value="true">Archive</option><option value="false">Restore</option></select></label><label>Reason <input name="reason" required maxlength="2000"></label><button class="btn btn-secondary">Apply archive state</button></form></details>{% endif %}
+{% endblock %}
