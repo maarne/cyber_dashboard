@@ -54,15 +54,27 @@ class ManagedConnection(sqlite3.Connection):
 
 def get_connection():
     """Open the configured database; never silently fall back to ephemeral storage."""
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DATABASE_PATH), timeout=30, factory=ManagedConnection)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA busy_timeout = 30000")
-    return conn
+    from app.storage.local import StorageError, validate_connection, check_location
+    from app.config import ALLOW_EPHEMERAL_STORAGE
+    path = Path(DATABASE_PATH).absolute()
+    check_location(path, ALLOW_EPHEMERAL_STORAGE)
+    if not path.is_file(): raise StorageError('database_missing')
+    try:
+        conn = sqlite3.connect(path.as_uri()+'?mode=rw', uri=True, timeout=30, factory=ManagedConnection)
+    except sqlite3.Error:
+        raise StorageError('database_unavailable') from None
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        validate_connection(conn, path)
+        return conn
+    except Exception:
+        conn.close()
+        raise
 
 
-def initialize_database():
+def initialize_database(seed_defaults=True):
     """
     Create all the database tables if they do not already exist.
 
@@ -100,6 +112,30 @@ def initialize_database():
     #       conn.close()
     #
     # The "with" version is shorter and safer!
+    from app.storage.local import installing, StorageError, add_identity, check_location
+    from app.config import ALLOW_EPHEMERAL_STORAGE
+    if not ALLOW_EPHEMERAL_STORAGE and not installing():
+        # Ordinary durable startup is verification, never implicit repair/seeding.
+        with get_connection() as probe:
+            if not probe.execute("SELECT 1 FROM sqlite_master WHERE name='users'").fetchone():
+                raise StorageError('schema_upgrade_required')
+            versions=[r[0] for r in probe.execute('SELECT version FROM schema_migrations ORDER BY version')]
+            if versions!=[1,2,3,4]: raise StorageError('schema_upgrade_required')
+            from app.storage.local import admin_required
+            admin_required(probe)
+            from app.config import FEATURE_RULE_LIFECYCLE
+            if FEATURE_RULE_LIFECYCLE:
+                from app.rule_migrations import manage_existing
+                probe.execute('BEGIN IMMEDIATE')
+                manage_existing(probe)
+        print('✅ Configured database identity/schema verified; no initialization or reseeding performed.')
+        return
+    elif not Path(DATABASE_PATH).exists():
+        check_location(Path(DATABASE_PATH).absolute(), ALLOW_EPHEMERAL_STORAGE)
+        Path(DATABASE_PATH).parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        import os
+        fd = os.open(DATABASE_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        os.close(fd)
     with get_connection() as conn:
         # Multiple Gunicorn workers may initialize together. Lock before reading
         # migration metadata so a column cannot be added twice concurrently.
@@ -410,14 +446,18 @@ def initialize_database():
             pass  # Column already exists
 
         # Deduplication: Remove any duplicate detection rules by title
-        cursor.execute("""
+        from app.config import FEATURE_RULE_LIFECYCLE
+        managed_columns = {r['name'] for r in cursor.execute('PRAGMA table_info(detection_rules)')}
+        managed = installing() or FEATURE_RULE_LIFECYCLE or ('lifecycle_managed' in managed_columns and cursor.execute('SELECT 1 FROM detection_rules WHERE lifecycle_managed=1 LIMIT 1').fetchone())
+        if not managed:
+            cursor.execute("""
             DELETE FROM detection_rules
             WHERE id NOT IN (
                 SELECT MIN(id)
                 FROM detection_rules
                 GROUP BY LOWER(TRIM(title))
             )
-        """)
+            """)
 
         # Migration: Add Unique Index on title to guarantee no duplicates
         try:
@@ -493,12 +533,15 @@ def initialize_database():
 
         from app.migrations import apply_migrations
         apply_migrations(conn)
+        add_identity(conn)
         conn.commit()
 
     # When the "with" block ends here, the connection is
     # automatically closed. The database file is saved.
     print("✅ Database initialized successfully!")
     print(f"   Database file: {DATABASE_PATH}")
+    if not seed_defaults:
+        return
 
     # Seed default RSS feeds
     seed_default_rss_feeds()

@@ -41,17 +41,34 @@ BASE_DIR = Path(__file__).parent.parent
 # The directory where our FastAPI "app" package lives
 APP_DIR = Path(__file__).parent
 
-# The full file path to our SQLite database file.
-# By default, it is created inside the project root, but can be
-# overridden via the DATABASE_PATH environment variable (e.g. for Azure).
+# Durable installation profile and SQLite path. Ordinary startup never creates
+# or adopts a database; operator provisioning is explicit.
+from app.storage.local import data_directory, load_manifest, enabled, private_read, StorageError, require_sqlite_backend
+APP_DATA_DIR = data_directory()
+STORAGE_PROFILE = load_manifest(APP_DATA_DIR)
+for _name, _value in (STORAGE_PROFILE or {}).get('settings', {}).items():
+    os.environ.setdefault(_name, _value)
+ALLOW_EPHEMERAL_STORAGE = enabled(os.getenv('ALLOW_EPHEMERAL_STORAGE', str((STORAGE_PROFILE or {}).get('ephemeral', False))))
+EXPECTED_DATABASE_ID = os.getenv('EXPECTED_DATABASE_ID', '')
 _db_env = os.getenv("DATABASE_PATH")
-DATABASE_PATH = Path(_db_env) if _db_env else BASE_DIR / "cyber_dashboard.db"
+if _db_env is not None and not _db_env.strip(): raise StorageError('configuration_invalid')
+DATABASE_PATH = Path(_db_env).expanduser().absolute() if _db_env else Path((STORAGE_PROFILE or {}).get('database_path', str(APP_DATA_DIR/'cyber_dashboard.db')))
+require_sqlite_backend()
 
 
 # ============================================================
 # SECURITY & AUTHENTICATION CONFIGURATION
 # ============================================================
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+_key_file = os.getenv('JWT_SECRET_KEY_FILE')
+if _key_file is not None and (not _key_file.strip() or not Path(_key_file).is_absolute()):
+    raise StorageError('configuration_invalid')
+if 'JWT_SECRET_KEY' in os.environ and _key_file is not None:
+    raise RuntimeError('Set JWT_SECRET_KEY or JWT_SECRET_KEY_FILE, not both.')
+if 'JWT_SECRET_KEY' in os.environ:
+    JWT_SECRET_KEY = os.environ['JWT_SECRET_KEY']
+else:
+    _key_file = _key_file or (STORAGE_PROFILE or {}).get('signing_key_file')
+    JWT_SECRET_KEY = private_read(Path(_key_file), maximum=4096).rstrip('\r\n') if _key_file else ''
 if len(JWT_SECRET_KEY.encode("utf-8")) < 32 or JWT_SECRET_KEY == "cyberdash-secret-key-change-in-production-2026":
     raise RuntimeError("Set JWT_SECRET_KEY to a unique, randomly generated secret of at least 32 bytes before starting CyberDash.")
 JWT_ALGORITHM = "HS256"
@@ -60,6 +77,7 @@ FEATURE_ASSET_PRIORITIZATION = os.getenv("FEATURE_ASSET_PRIORITIZATION", "false"
 FEATURE_ASSET_MONITORING = os.getenv("FEATURE_ASSET_MONITORING", "false").lower() in ("1", "true", "yes")
 FEATURE_ASSET_DISCOVERY = os.getenv("FEATURE_ASSET_DISCOVERY", "false").lower() in ("1", "true", "yes")
 FEATURE_CASE_MANAGEMENT = os.getenv("FEATURE_CASE_MANAGEMENT", "false").lower() in ("1", "true", "yes")
+FEATURE_RULE_LIFECYCLE = os.getenv("FEATURE_RULE_LIFECYCLE", "false").lower() in ("1", "true", "yes")
 # Unset permits RFC1918 only; an explicit override replaces (never extends) it.
 # Preserve an explicitly empty value as the operator's deny-all switch.
 DEFAULT_ASSET_PROBE_ALLOWED_CIDRS = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

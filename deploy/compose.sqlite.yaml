@@ -1,0 +1,17 @@
+# SQLite Stage A only. External DB profiles arrive after portability validation.
+services:
+  app:
+    build: ..
+    image: cyberdash:storage-resilience
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8000"
+    environment:
+      APP_DATA_DIR: /app/data
+    volumes:
+      - cyberdash_data:/app/data
+    # Before the first `up`, initialize this volume with the documented one-off
+    # operator command. Do NOT use this to replace a missing existing database.
+
+volumes:
+  cyberdash_data:

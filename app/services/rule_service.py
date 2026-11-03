@@ -31,50 +31,16 @@ def get_all_detection_rules(rule_type: str = None, search: str = None, siem: str
     """
     Fetch all detection rules from the database with optional filtering.
     """
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        query = "SELECT * FROM detection_rules WHERE 1=1"
-        params = []
-
-        if rule_type and rule_type.upper() != 'ALL':
-            query += " AND UPPER(rule_type) = ?"
-            params.append(rule_type.upper())
-
-        if siem and siem.upper() != 'ALL':
-            query += " AND (UPPER(target_siem) LIKE ? OR UPPER(target_siem) = 'GENERIC')"
-            params.append(f"%{siem.upper()}%")
-
-        if search:
-            pattern = f"%{search.strip()}%"
-            query += " AND (title LIKE ? OR mitre_ttp LIKE ? OR target_cve LIKE ? OR description LIKE ? OR code_content LIKE ? OR deployment_guide LIKE ?)"
-            params.extend([pattern, pattern, pattern, pattern, pattern, pattern])
-
-        query += " ORDER BY id ASC"
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        result = []
-        for row in rows:
-            r = dict(row)
-            if not r.get("deployment_guide"):
-                r["deployment_guide"] = ""
-            result.append(r)
-        return result
+    from app.services.rule_lifecycle_service import public_rules
+    return public_rules(rule_type,search,siem)
 
 
 def get_rule_by_id(rule_id: int):
     """
     Fetch a single detection rule by ID.
     """
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM detection_rules WHERE id = ?", (rule_id,))
-        row = cursor.fetchone()
-        if row:
-            r = dict(row)
-            if not r.get("deployment_guide"):
-                r["deployment_guide"] = ""
-            return r
-        return None
+    from app.services.rule_lifecycle_service import public_rule
+    return public_rule(rule_id)
 
 
 def save_detection_rule(data: dict):
@@ -82,6 +48,8 @@ def save_detection_rule(data: dict):
     Create a new detection rule.
     """
     with get_connection() as conn:
+        from app.services.rule_lifecycle_service import legacy_writable
+        legacy_writable(conn)
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO detection_rules
@@ -107,6 +75,8 @@ def update_detection_rule(rule_id: int, data: dict):
     Update an existing detection rule.
     """
     with get_connection() as conn:
+        from app.services.rule_lifecycle_service import legacy_writable
+        legacy_writable(conn)
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE detection_rules
@@ -142,6 +112,8 @@ def delete_detection_rule(rule_id: int):
     Delete a detection rule by ID.
     """
     with get_connection() as conn:
+        from app.services.rule_lifecycle_service import legacy_writable
+        legacy_writable(conn)
         cursor = conn.cursor()
         cursor.execute("DELETE FROM detection_rules WHERE id = ?", (rule_id,))
         conn.commit()
@@ -681,6 +653,11 @@ yara64.exe -r agenttesla.yar C:\\Users\\Public\\
     ]
 
     with get_connection() as conn:
+        from app import config
+        from app.services.rule_lifecycle_service import activated
+        conn.execute('BEGIN IMMEDIATE')
+        if activated(conn) and conn.execute('SELECT 1 FROM detection_rules LIMIT 1').fetchone():
+            return  # Never refill/overwrite/deduplicate version-managed identities.
         cursor = conn.cursor()
         for r in rules:
             cursor.execute("""
@@ -714,4 +691,7 @@ yara64.exe -r agenttesla.yar C:\\Users\\Public\\
                 GROUP BY LOWER(TRIM(title))
             )
         """)
+        if config.FEATURE_RULE_LIFECYCLE:
+            from app.rule_migrations import manage_existing
+            manage_existing(conn)
         conn.commit()

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Detection rule catalog — CyberDash{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="/static/css/assets.css">{% endblock %}
+{% block content %}
+<main class="asset-workspace">
+<h1>Detection rule catalog</h1>
+<p>Only published revisions and explicitly marked legacy rules are shown. Syntax validation, workflow approval, and proven detection efficacy are different things. No rule is deployed automatically.</p>
+{% if feature_rule_lifecycle and is_analyst %}<p><a href="/rule-workbench">Open private rule workbench</a></p>{% endif %}
+{% if not feature_rule_lifecycle %}<p>Lifecycle authoring is disabled. This version-managed catalog remains read-only.</p>{% endif %}
+<form method="get" action="/rules" class="asset-toolbar">
+<label>Search public source/metadata <input name="search" value="{{ search or '' }}" maxlength="200"></label>
+<label>Rule type <select name="rule_type">{% for value in ['ALL','SIGMA','YARA'] %}<option {% if rule_type==value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+<label>Platform <select name="siem">{% for value in ['ALL','SPLUNK','SENTINEL','ELASTIC','YARA'] %}<option {% if siem==value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+<button class="btn btn-secondary">Filter</button></form>
+<p>{{ rules | length }} public rules</p>
+{% for rule in rules %}<section class="asset-panel" data-rule-id="{{ rule.id }}">
+<h2>{{ rule.title }}</h2>
+<p>{{ rule.rule_type }} · {{ rule.severity }} · {{ rule.target_siem or 'Generic' }} · Revision {{ rule.revision_number }}</p>
+<p class="asset-warning">{{ rule.notice }}</p><p>{{ rule.description or '' }}</p>
+<p>{{ rule.mitre_ttp or '' }} · {{ rule.target_cve or '' }}</p>
+<details><summary>Source (exact public revision)</summary><pre id="rule-source-{{ rule.id }}">{{ rule.code_content }}</pre></details>
+<details><summary>Deployment guidance (unverified text, not executed)</summary><pre>{{ rule.deployment_guide or 'No deployment guidance provided.' }}</pre></details>
+<p>SHA-256: {{ rule.sha256 }}</p>
+<p><a href="/api/detection-rules/{{ rule.id }}/download">Download this revision</a>{% if feature_rule_lifecycle and is_analyst %} · <a href="/rule-workbench/{{ rule.id }}">Authoring / history</a>{% endif %}</p>
+</section>{% else %}<p>No public rules match these filters. Private drafts are not included.</p>{% endfor %}
+</main>
+{% endblock %}

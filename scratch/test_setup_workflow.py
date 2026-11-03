@@ -20,6 +20,7 @@ def test_setup_workflow():
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM users WHERE role = 'admin'")
+        cursor.execute('UPDATE installation_metadata SET admin_setup_completed=0 WHERE id=1')
         conn.commit()
 
     assert is_initial_setup_required() is True, "Setup must be required when no admin exists"

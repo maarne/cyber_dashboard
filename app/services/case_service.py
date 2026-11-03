@@ -176,6 +176,14 @@ def reference_target(conn, kind, target_id):
             raise HTTPException(422, 'Invalid CVE ID.')
         row = conn.execute('SELECT cve_id FROM cves WHERE cve_id=?', (target_id,)).fetchone()
         label = target_id
+    elif kind == 'rule':
+        if not target_id.isascii() or not target_id.isdigit() or int(target_id)<1:
+            raise HTTPException(422,'Use an existing positive integer rule ID.')
+        target_id=str(int(target_id))
+        from app.services.rule_lifecycle_service import public_record
+        raw=conn.execute('SELECT * FROM detection_rules WHERE id=?',(target_id,)).fetchone()
+        value=public_record(conn,raw) if raw else None
+        row=value; label=value['title'] if value else ''
     else:
         if not target_id.isascii() or not target_id.isdigit() or int(target_id) < 1:
             raise HTTPException(422, 'Use an existing positive integer entity ID.')

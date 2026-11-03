@@ -8,6 +8,7 @@ ARG INSTALL_ASSET_NETWORK_TOOLS=false
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PORT=8000 \
+    APP_DATA_DIR="/app/data" \
     DATABASE_PATH="/app/data/cyber_dashboard.db"
 
 WORKDIR /app
@@ -25,7 +26,7 @@ RUN apt-get update && \
 # Install and upgrade Python dependencies with modern secure build tooling
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip "setuptools>=83.0.0" "wheel>=0.46.2" && \
-    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --only-binary=:all: -r requirements.txt && \
     pip install --no-cache-dir --upgrade "msgpack>=1.2.1" "jaraco.context>=6.1.0"
 
 # Copy application source code

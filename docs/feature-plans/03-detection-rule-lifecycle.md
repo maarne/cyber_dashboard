@@ -1,12 +1,12 @@
 # Feature 3 — Validated, versioned detection-rule lifecycle
 
-**Status:** proposed; implement only after approval.  
+**Status:** implemented following approval; default off. Existing-instance rollout is blocked by missing runtime files after a restart. See [operations](../detection-rule-lifecycle.md) and [validation/handover](../detection-rule-lifecycle-validation.md).
 **Goal:** make rule changes reviewable and reproducible before anyone treats them as deployable detections.  
 **Prerequisites:** existing Sigma/YARA catalog and current analyst/admin RBAC; no external SIEM is required.
 
 ## 1. Current state and gap
 
-`app/services/rule_service.py` creates, updates, and deletes mutable rows in `detection_rules`. Request schemas bound source length but do not validate Sigma structure or compile YARA. There is no revision history, review state, approval identity, or published-versus-draft boundary.
+Before this feature, `app/services/rule_service.py` created, updated, and deleted mutable rows in `detection_rules`, without validation or revision/review history. The implementation below now supplies those boundaries while preserving feature-off legacy behavior until first activation.
 
 The `/rules` HTML catalog is public, while its JSON API requires authentication. A lifecycle must enforce visibility on **both** paths. A hidden edit button is not protection for draft code embedded in page HTML.
 
@@ -38,7 +38,7 @@ The `/rules` HTML catalog is public, while its JSON API requires authentication.
 
 No silent self-approval bypass. In a single-person development setup, create a second local reviewer account; this has no additional hosting/service cost. A future “self-approved development” policy would need separate approval and prominent labeling.
 
-## 4. Proposed data model and migration
+## 4. Data model and migration
 
 | Table/change | Essential fields and constraints |
 | --- | --- |
@@ -74,7 +74,7 @@ No silent self-approval bypass. In a single-person development setup, create a s
 
 All reports state: **syntax/structure validation is not proof of detection efficacy**.
 
-## 6. Proposed API and authorization
+## 6. API and authorization
 
 | Route | Access / behavior |
 | --- | --- |
@@ -95,7 +95,7 @@ Machine analyst/admin tokens may create drafts or request validation, but cannot
 ## 7. UI and implementation map
 
 - Extend `rule_service.py`; add `rule_validation_service.py`, `rule_lifecycle_service.py`, revision/review schemas, and protected lifecycle routes.
-- Update `rules.html`; extract its growing editor logic into `app/static/js/rules.js` without introducing a frontend build system.
+- Keep `rules.html` only for never-activated legacy installations; use `rules_catalog.html`, private `rule_workbench.html` and `app/static/js/rules.js` for managed installations without a frontend build system.
 - Add tabs/panels for source, validation, revision diff/history, review comments, and deployment guidance.
 - Show badges for legacy/unreviewed, draft, validation error, pending review, and published revision. Downloads identify their exact revision.
 - Render diffs/source as escaped text; untrusted Markdown must not become executable HTML.
@@ -124,4 +124,4 @@ Machine analyst/admin tokens may create drafts or request validation, but cannot
 
 Use `FEATURE_RULE_LIFECYCLE`. Legacy-content visibility and the changed update/delete contract must be documented before enabling it. After versioned writes begin, turning the feature off should preserve a **read-only published catalog**, not reactivate the old mutable CRUD paths and bypass review.
 
-**Recommended defaults to approve:** unreviewed legacy visibility, independent human admin approval, no direct deployment, local-only validators, and strict source/report limits. SIEM conversion and efficacy testing require a later, separately scoped set of log fixtures and platform-specific acceptance tests.
+**Implemented approved defaults:** unreviewed legacy visibility, independent human admin approval, no direct deployment, local-only validators, and strict source/report limits. SIEM conversion and efficacy testing require a later, separately scoped set of log fixtures and platform-specific acceptance tests.

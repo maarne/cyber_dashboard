@@ -14,9 +14,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Generate a development signing key. Keep the same secret across restarts
-# if sessions should survive. Production must use a managed secret store.
-export JWT_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+# NEW installations only: durable data, settings and a generated private signing key.
+# Existing installations: inspect/adopt instead; see the storage guide below.
+export APP_DATA_DIR="$HOME/.local/share/cyberdash"
+python -m scripts.configure_storage init --data-dir "$APP_DATA_DIR" --confirm-new
 python -m app.main
 ```
 
@@ -24,6 +25,11 @@ Open <http://127.0.0.1:8000> and complete the administrator setup wizard.
 There is **no default administrator password**. Provision the initial account
 before exposing a new instance publicly. The primary account is protected by
 database identity, not its username.
+
+**Upgrade/recovery:** [storage initialization, adoption and backups](docs/storage-resilience.md).
+Startup no longer silently creates a missing database or adopts a workspace file.
+The current server's [persistent 8765 instance](docs/local-instance-8765.md) has
+separate boot-service, backup and recovery instructions.
 
 Use **Refresh Feeds** after logging in as an analyst or administrator. Live
 feeds need outbound Internet access. NVD requests are paginated and paced to
@@ -35,15 +41,20 @@ runs use a persisted watermark. CISA KEV imports the complete catalog.
 
 | Variable | Purpose |
 | --- | --- |
-| `JWT_SECRET_KEY` | Required unique random secret, at least 32 bytes. Missing/known insecure values prevent startup. |
-| `DATABASE_PATH` | SQLite file; defaults to `cyber_dashboard.db` in the project root. The app never silently falls back to another database. |
+| `APP_DATA_DIR` | Private durable installation directory; defaults to `$XDG_DATA_HOME/cyberdash` or `~/.local/share/cyberdash`. Docker uses `/app/data`. |
+| `JWT_SECRET_KEY` / `JWT_SECRET_KEY_FILE` | Alternative secret sources; never set both. Otherwise use the private signing-key file recorded during initialization. No automatic replacement on restart. |
+| `DATABASE_PATH` | Optional explicit SQLite path; must match the installed profile. Otherwise use the profile's recorded path. |
+| `ALLOW_EPHEMERAL_STORAGE` | Explicit disposable/test mode only; false by default. Temporary/unmounted storage is refused for durable provisioning. |
+| `EXPECTED_DATABASE_ID` | Optional additional pin to the configured database's identity UUID. |
 | `ENV` | Set to `production` for HTTPS-only session cookies behind a trusted TLS proxy. |
 | `NVD_API_KEY` | Optional NVD key for higher request throughput. |
 | `URLHAUS_API_KEY` | Optional Abuse.ch feed credential. |
 | `URLHAUS_RECENT_URL` | Optional trusted operator override of the URLhaus source. |
 
-For a persisted local environment, copy `.env.example`, fill in the secret,
-then run `.venv/bin/uvicorn app.main:app --env-file .env --reload`.
+For a persisted local environment, copy `.env.example`, configure the installation
+directory and either a secret source or the installed key (remove the empty
+`JWT_SECRET_KEY=` entry when using the latter), then run
+`.venv/bin/uvicorn app.main:app --env-file .env --reload`.
 Never commit `.env` or copy a development secret into production.
 
 ## Access and API
@@ -90,19 +101,22 @@ suites together in a single interpreter; use the runner above.
 
 ## Hosting and backups
 
-The Docker image runs as a non-root user. Supply `JWT_SECRET_KEY` and mount a
-durable volume at `/app/data`, owned/writable by UID/GID **10001**. For example:
+The Docker image runs as a non-root user. Mount a durable volume at `/app/data`,
+owned/writable by UID/GID **10001**. Provision a new volume explicitly, then reuse it:
 
 ```bash
 docker build -t cyberdash .
-docker run --rm -p 8000:8000 --env-file .env -v cyberdash-data:/app/data cyberdash
+docker run --rm -v cyberdash-data:/app/data --entrypoint python cyberdash -B -m scripts.configure_storage init --data-dir /app/data --confirm-new
+docker run --restart unless-stopped -p 127.0.0.1:8000:8000 -v cyberdash-data:/app/data cyberdash
 ```
 
 Azure Bicep/pipeline configuration is **development-only F1 (Free)**. Both Bicep
 templates reject paid SKUs; there is no automatic paid-tier fallback. Always On
-and persistent App Service storage are disabled. SQLite lives in
-`/app/data/cyber_dashboard.db`: **accounts, rules, tokens, and audit history may
-be lost when Azure replaces the container**. The app can sleep or stop under F1
+and persistent App Service storage are disabled. The durability guard now refuses
+normal SQLite provisioning in an unmounted container layer; the unchanged F1
+deployment needs an explicit future storage configuration rather than silently
+creating ephemeral accounts/data. Disposable opt-in cannot guarantee persistence.
+The app can sleep or stop under F1
 quotas; scheduled refreshes are not guaranteed while it is idle.
 
 Configure an Azure DevOps **secret variable** named `jwtSecretKey` before
@@ -124,7 +138,8 @@ from any resources already running in Azure.
 SQLite is intended for a single deployment instance. Validate filesystem locking
 on the selected persistent storage; network filesystems can have SQLite locking
 limitations. Use a server database before horizontal scaling. Persistence is
-**not** a backup, and this repository does not provision an automated backup schedule.
+**not** a backup. Optional local systemd backup/service templates are supplied but
+are not installed/enabled automatically; see [storage operations](docs/storage-resilience.md).
 
 Create a consistent backup (output must not already exist):
 
@@ -171,13 +186,26 @@ No real networks were scanned during implementation.
 
 ## Feature roadmap
 
+**Reliability initiative:** [Stage A storage hardening](docs/storage-resilience.md)
+is implemented. The [approved staged plan](docs/feature-plans/00-database-resilience-and-external-databases.md)
+also covers portable SQL access, PostgreSQL/MariaDB and a database-selection wizard;
+those later stages are **not implemented yet**. External connection settings are
+rejected rather than silently falling back to SQLite.
+
 [Investigation case management](docs/investigation-cases.md) adds team-visible
 analyst/admin cases, local-only IOC captures, preserved evidence, append-only
 notes, close/reopen history and JSON/Markdown reports. Enable it with
 `FEATURE_CASE_MANAGEMENT=true`; it is independent of asset monitoring and default off.
 
+[Detection-rule lifecycle](docs/detection-rule-lifecycle.md) adds immutable revisions,
+local Sigma/YARA validation, independent human-admin review, controlled publication,
+private drafts, diffs and rollback drafts. Enable `FEATURE_RULE_LIFECYCLE=true`
+after a backup. Existing rules remain public as **legacy/unreviewed**; disabling
+the flag after activation leaves the managed catalog read-only, not mutable.
+Syntax validation is not proof of detection efficacy; nothing is deployed.
+
 Detailed plans for the five features are in
-[the feature-plan roadmap](docs/feature-plans/README.md). Features 3–5 remain
-proposals. Features 1 and 2 are implemented behind their
-default-off flag. Features are implemented one at a time after approval,
+[the feature-plan roadmap](docs/feature-plans/README.md). Features 4–5 remain
+proposals. Features 1–3 are implemented behind their
+default-off flags. Features are implemented one at a time after approval,
 without changing the F1-only, zero-paid-infrastructure development constraint.

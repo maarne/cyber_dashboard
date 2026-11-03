@@ -44,6 +44,7 @@ class ReviewRegressions(unittest.TestCase):
         with get_connection() as conn:
             for table in ("api_rate_windows", "api_tokens", "users", "revoked_sessions", "audit_logs", "cves", "cisa_exploits", "threat_indicators", "investigation_history", "app_settings", "job_leases", "fetch_log"):
                 conn.execute(f"DELETE FROM {table}")
+            conn.execute('UPDATE installation_metadata SET admin_setup_completed=0 WHERE id=1')
             conn.execute("UPDATE security_policies SET min_length=10")
         auth.complete_initial_setup("primary_owner", self.password)
         self.client = TestClient(app, raise_server_exceptions=False)
@@ -110,6 +111,7 @@ class ReviewRegressions(unittest.TestCase):
     def test_health_and_ready_work_before_setup(self):
         with get_connection() as conn:
             conn.execute("DELETE FROM users")
+            conn.execute('UPDATE installation_metadata SET admin_setup_completed=0 WHERE id=1')
         self.assertEqual(self.client.get("/api/health").status_code, 200)
         self.assertTrue(self.client.get("/api/ready").json()["setup_required"])
 
@@ -285,6 +287,7 @@ class ReviewRegressions(unittest.TestCase):
     def test_concurrent_setup_creates_only_one_primary(self):
         with get_connection() as conn:
             conn.execute("DELETE FROM users")
+            conn.execute('UPDATE installation_metadata SET admin_setup_completed=0 WHERE id=1')
         barrier = Barrier(2)
         def setup(index):
             barrier.wait()

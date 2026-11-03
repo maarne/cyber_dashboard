@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Rule lifecycle workbench — CyberDash{% endblock %}
+{% block extra_head %}<meta name="rule-csrf-token" content="{{ rule_csrf_token }}"><link rel="stylesheet" href="/static/css/assets.css">{% endblock %}
+{% block content %}
+<main class="asset-workspace" id="rule-workbench" data-rule-id="{{ rule_id or '' }}" data-admin="{{ 'true' if is_admin else 'false' }}" data-user-id="{{ rule_user_id or '' }}">
+<nav><a href="/rules">Public catalog</a>{% if feature_case_management %} · <a href="/cases">Cases</a>{% endif %}</nav>
+<h1>Private rule lifecycle workbench</h1>
+<p>Draft → validate → submit → independent human-admin review → explicit publication. Validation checks syntax/structure, not real-world efficacy or SIEM conversion. No samples, scans, includes, module imports or deployment are executed.</p>
+<p id="rule-message" role="status" aria-live="polite"></p>
+<p><button type="button" id="rule-refresh" class="btn btn-secondary">Reload saved rules</button> <button type="button" id="rule-new" class="btn btn-primary">New rule draft</button> <label><input type="checkbox" id="rules-archived"> Show archived identities</label></p>
+<div id="rule-list"></div>
+<section class="asset-panel" id="rule-current" hidden><h2>Current working revision</h2><div id="rule-state"></div>
+<p><button type="button" id="rule-validate" class="btn btn-secondary">Validate saved revision</button> <button type="button" id="rule-submit" class="btn btn-primary">Submit saved draft</button> <button type="button" id="rule-withdraw" class="btn btn-secondary">Withdraw to a new draft</button></p>
+<p>Actions above use the saved revision, not unsaved editor text. Frozen candidates must be withdrawn before editing. Legacy content needs a new draft before submission.</p>
+<div id="rule-validation"></div><div id="rule-reviews"></div>
+{% if is_admin %}<form id="rule-review" class="asset-form"><label>Decision <select name="decision"><option>approved</option><option>rejected</option></select></label><label>Review rationale <textarea name="reason" required maxlength="2000"></textarea></label><button class="btn btn-primary">Record independent human review</button></form><p id="rule-review-note">A different human admin must review the candidate. A service token cannot approve or publish.</p>
+<button type="button" id="rule-publish" class="btn btn-primary">Publish approved saved revision</button>
+<form id="rule-archive" class="asset-form"><label>Action <select name="archived"><option value="true">Archive</option><option value="false">Restore</option></select></label><label>Reason <input name="reason" maxlength="2000" required></label><button class="btn btn-secondary">Apply archive state</button></form>{% endif %}
+<p id="rule-export-link"></p></section>
+<section class="asset-panel"><h2 id="rule-editor-title">Create a new draft identity</h2>
+<form id="rule-editor" class="asset-form">
+<label>Catalog title <input name="title" required maxlength="300"></label>
+<label>Type <select name="rule_type"><option>Sigma</option><option>YARA</option></select></label>
+<label>Severity <select name="severity"><option>LOW</option><option>MEDIUM</option><option selected>HIGH</option><option>CRITICAL</option><option>INFORMATIONAL</option></select></label>
+<label>MITRE technique (optional) <input name="mitre_ttp" maxlength="200" placeholder="T1059.001 - PowerShell"></label><label>CVE (optional) <input name="target_cve" maxlength="100" placeholder="CVE-2026-12345"></label>
+<label>Target platforms (labels only) <input name="target_siem" maxlength="200" value="Generic"></label>
+<label>Description <textarea name="description" maxlength="4000"></textarea></label>
+<label style="flex-basis:100%">Source (max 200 KiB UTF-8) <textarea name="code_content" required maxlength="204800" rows="14" spellcheck="false"></textarea></label>
+<label style="flex-basis:100%">Deployment guidance (plain text, not executed) <textarea name="deployment_guide" maxlength="16000" rows="6"></textarea></label>
+<button class="btn btn-primary">Save as a new immutable draft revision</button></form></section>
+<section class="asset-panel" id="rule-history-panel" hidden><h2>Revision history</h2><div id="rule-history"></div>
+<form id="rule-diff" class="asset-form"><label>Older revision ID <input name="older" type="number" min="1" required></label><label>Newer revision ID <input name="newer" type="number" min="1" required></label><button class="btn btn-secondary">Compare source and metadata</button></form><pre id="rule-diff-output"></pre>
+<form id="rule-rollback" class="asset-form"><label>Restore source revision ID <input name="source_revision_id" type="number" min="1" required></label><label>Rollback rationale <input name="reason" required maxlength="2000"></label><button class="btn btn-secondary">Create rollback draft (not publication)</button></form></section>
+<p>Initial limits: 500 identities, 50 revisions per identity, 50 MiB retained snapshots, 20 validation reports per revision, two shared validator slots. Nothing is automatically pruned. Keep off-instance backups; F1 storage can be lost.</p>
+</main>
+{% endblock %}
+{% block extra_scripts %}<script src="/static/js/rules.js" defer></script>{% endblock %}

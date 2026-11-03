@@ -74,7 +74,7 @@ class AssetPrioritizationTests(unittest.TestCase):
             before = {table: [tuple(r) for r in conn.execute(f"SELECT * FROM {table}")] for table in ("users", "assets", "asset_cve_assessments", "audit_logs")}
         initialize_database(); initialize_database()
         with get_connection() as conn:
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 3)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 4)
             self.assertFalse(conn.execute("PRAGMA foreign_key_check").fetchall())
             for table, values in before.items():
                 self.assertEqual([tuple(r) for r in conn.execute(f"SELECT * FROM {table}")], values)

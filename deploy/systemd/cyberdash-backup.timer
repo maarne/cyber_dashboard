@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily CyberDash backup (independent of app uptime)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=15m
+Persistent=true
+Unit=cyberdash-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=CyberDash (durable SQLite installation)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cyberdash
+Group=cyberdash
+WorkingDirectory=/opt/cyberdash
+Environment=APP_DATA_DIR=/var/lib/cyberdash
+EnvironmentFile=-/etc/cyberdash/runtime.env
+ExecStart=/opt/cyberdash/.venv/bin/python -B -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cyberdash
+
+[Install]
+WantedBy=multi-user.target

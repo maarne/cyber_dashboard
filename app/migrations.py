@@ -88,3 +88,5 @@ def apply_migrations(conn):
     apply_network_migration(conn)
     from app.case_migrations import apply_case_migration
     apply_case_migration(conn)
+    from app.rule_migrations import apply_rule_migration
+    apply_rule_migration(conn)

@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from fastapi import HTTPException
 from starlette.responses import JSONResponse
 
-from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, FEATURE_CASE_MANAGEMENT, JWT_SECRET_KEY, PUBLIC_BASE_URL
+from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, FEATURE_CASE_MANAGEMENT, FEATURE_RULE_LIFECYCLE, JWT_SECRET_KEY, PUBLIC_BASE_URL
 
 
 def is_asset_path(path):
@@ -55,8 +55,9 @@ class AssetTransportMiddleware:
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
         case_path = is_case_path(scope['path'])
+        rule_path = scope['path']=='/rules' or scope['path'].startswith(('/api/detection-rules','/api/rule-lifecycle','/rule-workbench'))
         legacy_investigation = scope['path'] == '/investigate' or scope['path'].startswith('/api/investigate')
-        if not (is_asset_path(scope['path']) or case_path or legacy_investigation):
+        if not (is_asset_path(scope['path']) or case_path or legacy_investigation or rule_path):
             return await self.app(scope, receive, send)
 
         async def private_send(message):
@@ -66,7 +67,9 @@ class AssetTransportMiddleware:
             await send(message)
 
         path = scope['path']
-        if case_path:
+        if rule_path:
+            disabled = (path.startswith(('/api/rule-lifecycle','/rule-workbench')) and not FEATURE_RULE_LIFECYCLE)
+        elif case_path:
             disabled = not FEATURE_CASE_MANAGEMENT
         elif legacy_investigation:
             disabled = False
@@ -81,6 +84,8 @@ class AssetTransportMiddleware:
             maximum = 6 * 1048576 + 65536 if scope["path"] == "/api/assets/import/preview" else 65536
             if scope['path'] == '/api/asset-discovery/import/preview':
                 maximum = 512 * 1024
+            if rule_path:
+                maximum = 1500000  # Bounded escaped JSON for a 200 KiB source plus metadata.
             body = bytearray()
             while True:
                 message = await receive()

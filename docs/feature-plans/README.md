@@ -1,8 +1,18 @@
 # CyberDash feature implementation plans
 
-**Status:** Features 1 and 2 implemented following user approval; Features 3–5 remain planning only.
+**Status:** Features 1–3 implemented following user approval; Features 4–5 remain planning only.
 **Created:** 2026-11-01.  
 **Baseline:** the current FastAPI/SQLite application after the security fixes and F1-only configuration.
+
+## Approved reliability initiative after the reboot
+
+[Database resilience and external databases](00-database-resilience-and-external-databases.md)
+is an approved, staged initiative for durable SQLite, PostgreSQL/MariaDB,
+a secure first-install selector, environment/secret-file configuration, portable
+migrations and backup/restore. [Stage A](../storage-resilience.md) is implemented;
+portable SQL access, external engines and the web selector remain pending. It is
+recommended before Features 4–5; it does not start those features or authorize
+paid infrastructure or automatic live-data migration.
 
 ## 1. Roadmap and recommended order
 
@@ -12,7 +22,7 @@ Implement **one complete feature at a time**, review its acceptance results, and
 | --- | --- | --- | --- |
 | 1 | [Asset-aware prioritization](01-asset-aware-prioritization.md) — implemented, default off | An inventory and explainable queue of vulnerabilities affecting your systems | Medium–large |
 | 2 | [Investigation case management](02-investigation-case-management.md) — implemented, default off | Owned cases with notes, preserved evidence, dispositions, and exports | Medium–large |
-| 3 | [Detection-rule lifecycle](03-detection-rule-lifecycle.md) | Validated, versioned rules with independent review and controlled publishing | Large |
+| 3 | [Detection-rule lifecycle](03-detection-rule-lifecycle.md) — implemented, default off | Validated, versioned rules with independent review and controlled publishing | Large |
 | 4 | [Personalized watchlists](04-personalized-watchlists.md) | Saved monitoring criteria, in-app alerts, controlled webhooks, and digests | Large |
 | 5 | [Enterprise authentication](05-enterprise-authentication.md) | Optional OIDC SSO, local TOTP MFA, recovery, and safe identity linking | Large; security-sensitive |
 
@@ -34,7 +44,7 @@ Both were implemented following approval. See [operation and authorization](../a
 They remain disabled by default. Following the RFC1918-default request, an unset
 destination allowlist permits RFC1918 IPv4 networks; explicit overrides replace
 that scope, and an empty override denies all. No real networks were scanned.
-They do not start Features 2–5 or change risk scoring.
+Those extensions did not start other roadmap features or change risk scoring.
 
 ### Dependencies
 
@@ -48,11 +58,11 @@ They do not start Features 2–5 or change risk scoring.
 
 1. **No paid infrastructure:** retain F1-only Bicep guards, no Always On, no paid storage/database/queue, no billable cron or authentication service provisioned automatically.
 2. **No uptime or durability promises on F1:** the app can sleep, scheduled tasks can be missed, and a replaced container can lose SQLite data. Exports/backups are essential; use a local Docker volume for development that needs persistence.
-3. **Keep the stack:** FastAPI, SQLite, Jinja2, vanilla JavaScript/CSS. No frontend framework, bundler, Redis, Celery, Kubernetes, or vector database is required.
+3. **Keep the stack:** FastAPI, Jinja2, vanilla JavaScript/CSS and the existing SQLite option. Optional PostgreSQL/MariaDB support and a portable SQL layer are approved as future stages of the separate reliability initiative, not yet enabled. No frontend framework, bundler, Redis, Celery, Kubernetes, or vector database is required.
 4. **Truthful intelligence:** missing facts stay unknown. Product-name similarity is not proof of vulnerability; a pivot URL is not evidence that a provider was queried.
 5. **Protect existing work:** additive migrations, stable IDs, no silent reseeding over user edits, no automatic historical deletions, and no live-database test execution.
 6. **Keep current security fixes:** explicit signing secrets, revocable sessions, enforced token limits, public-address-pinned outbound requests, masked webhook URLs, and versioned audit verification.
-7. **Approval boundaries:** Features 1 and 2 were approved and implemented behind default-off flags. Tables, routes, dependencies, and settings in Features 3–5 remain proposals; implementation requires separate approval.
+7. **Approval boundaries:** Features 1–3 were approved and implemented behind default-off flags. Tables, routes, dependencies, and settings in Features 4–5 remain proposals; implementation requires separate approval.
 
 ## 3. Shared implementation conventions
 

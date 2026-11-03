@@ -1,0 +1,15 @@
+[Unit]
+Description=CyberDash private installation backup
+
+[Service]
+Type=oneshot
+User=cyberdash
+Group=cyberdash
+WorkingDirectory=/opt/cyberdash
+ExecStart=/opt/cyberdash/.venv/bin/python -B -m scripts.backup_installation --data-dir /var/lib/cyberdash --output-dir /var/backups/cyberdash --include-managed-key
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cyberdash /var/backups/cyberdash

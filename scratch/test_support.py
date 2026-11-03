@@ -20,6 +20,11 @@ _sandbox = tempfile.TemporaryDirectory(prefix="cyberdash-test-")
 atexit.register(_sandbox.cleanup)
 os.environ["DATABASE_PATH"] = str(Path(_sandbox.name) / "test.db")
 os.environ["JWT_SECRET_KEY"] = secrets.token_hex(32)
+os.environ['APP_DATA_DIR'] = str(Path(_sandbox.name)/'installation')
+os.environ['ALLOW_EPHEMERAL_STORAGE'] = 'true'
+os.environ.pop('JWT_SECRET_KEY_FILE', None)
+for _name in ('DATABASE_URL','DATABASE_URL_FILE','DB_TYPE','DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD','DB_PASSWORD_FILE','EXPECTED_DATABASE_ID'):
+    os.environ.pop(_name, None)
 os.environ.pop("ENV", None)
 
 # A forgotten mock must never contact real feeds, webhooks or enrichment APIs.

@@ -64,7 +64,7 @@ from app.services.audit_service import (
 
 # Import our own modules (from the app/ package)
 from app.config import APP_DIR
-from app.database import initialize_database
+from app.database import initialize_database, get_connection
 
 # Import the data fetcher services
 from app.services.cve_service import fetch_and_store_cves, fetch_epss_scores
@@ -181,8 +181,18 @@ async def lifespan(app: FastAPI):
     """
     print("🚀 Starting CyberDash — Cyber Security Dashboard")
     print("=" * 50)
-    initialize_database()
-    seed_default_admin_user()
+    from app.storage.local import StorageError
+    import sqlite3
+    app.state.storage_startup_error = None
+    try:
+        initialize_database()
+        seed_default_admin_user()
+    except (StorageError, sqlite3.Error) as exc:
+        code = exc.code if isinstance(exc, StorageError) else 'database_unavailable'
+        app.state.storage_startup_error = code
+        print(f'Storage blocked ({code}); health remains available. Use the storage operator tools; no fallback database was created.')
+        yield
+        return
     print("=" * 50)
     print("🌐 Dashboard available at: http://127.0.0.1:8000")
     print("📚 API documentation at:   http://127.0.0.1:8000/docs")
@@ -349,10 +359,18 @@ async def setup_redirection_middleware(request: Request, call_next):
     path = request.url.path
     if path in ("/api/health", "/api/ready"):
         return await call_next(request)
+    from app.storage.local import StorageError
+    startup_error = getattr(app.state, 'storage_startup_error', None)
+    if startup_error:
+        return JSONResponse({'status':'unavailable','code':startup_error},503,headers={'Cache-Control':'no-store'})
     accept_header = request.headers.get("accept", "").lower()
     is_api_request = path.startswith("/api") or "application/json" in accept_header
 
-    if is_initial_setup_required():
+    try:
+        setup_required = is_initial_setup_required()
+    except StorageError as exc:
+        return JSONResponse({'status':'unavailable','code':exc.code},503,headers={'Cache-Control':'no-store'})
+    if setup_required:
         allowed_prefixes = ("/static", "/favicon.ico")
         allowed_paths = ("/setup", "/api/setup", "/api/health", "/api/ready", "/api/security/password-policy", "/api/security/generate-password", "/docs", "/redoc", "/redocs", "/openapi.json")
         if not (any(path.startswith(p) for p in allowed_prefixes) or path in allowed_paths):
@@ -469,6 +487,7 @@ def get_template_auth_context(request: Request) -> dict:
         "feature_asset_monitoring": FEATURE_ASSET_MONITORING,
         "feature_asset_discovery": FEATURE_ASSET_DISCOVERY,
         "feature_case_management": FEATURE_CASE_MANAGEMENT,
+        "feature_rule_lifecycle": FEATURE_RULE_LIFECYCLE,
         "current_user": info.get("username", ""),
         "user_role": role,
         "is_admin": role == "admin",
@@ -525,7 +544,7 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 templates.env.globals["get_mitre_ttp"] = get_mitre_ttp_details
 templates.env.globals["get_cve_details"] = get_cve_details
 
-from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, FEATURE_CASE_MANAGEMENT
+from app.config import FEATURE_ASSET_PRIORITIZATION, FEATURE_ASSET_MONITORING, FEATURE_ASSET_DISCOVERY, FEATURE_CASE_MANAGEMENT, FEATURE_RULE_LIFECYCLE
 from app.asset_security import AssetTransportMiddleware
 from app.asset_routes import register_asset_routes
 
@@ -539,6 +558,8 @@ if FEATURE_ASSET_PRIORITIZATION:
 if FEATURE_CASE_MANAGEMENT:
     from app.case_routes import register_case_routes
     register_case_routes(app, templates, get_template_auth_context, require_analyst_or_admin, require_admin)
+from app.rule_routes import register_rule_routes
+register_rule_routes(app,templates,get_template_auth_context,require_analyst_or_admin,require_admin)
 
 
 # ============================================================
@@ -630,11 +651,14 @@ def threat_actors_page(request: Request, search: str = None, sector: str = None)
 def detection_rules_page(request: Request, rule_type: str = "ALL", search: str = None, siem: str = "ALL"):
     """Render the MITRE ATT&CK TTP & Detection Rule Repository page."""
     rules = get_all_detection_rules(rule_type=rule_type, search=search, siem=siem)
+    from app.services.rule_lifecycle_service import activated
+    with get_connection() as conn:
+        managed_catalog = FEATURE_RULE_LIFECYCLE or activated(conn)
     auth_ctx = get_template_auth_context(request)
 
     return templates.TemplateResponse(
         request=request,
-        name="rules.html",
+        name="rules_catalog.html" if managed_catalog else "rules.html",
         context={
             "request": request,
             "rules": rules,
@@ -1340,12 +1364,17 @@ def api_health():
 def api_ready():
     """Readiness checks database access without exposing configuration or secrets."""
     from app.database import get_connection
+    from app.storage.local import StorageError
+    if getattr(app.state, 'storage_startup_error', None):
+        return JSONResponse(status_code=503, content={'status':'unavailable','code':app.state.storage_startup_error},headers={'Cache-Control':'no-store'})
     try:
         with get_connection() as conn:
             conn.execute("SELECT COUNT(*) FROM users").fetchone()
         return {"status": "ready", "setup_required": is_initial_setup_required()}
+    except StorageError as exc:
+        return JSONResponse(status_code=503, content={'status':'unavailable','code':exc.code},headers={'Cache-Control':'no-store'})
     except Exception:
-        return JSONResponse(status_code=503, content={"status": "unavailable"})
+        return JSONResponse(status_code=503, content={"status": "unavailable"},headers={'Cache-Control':'no-store'})
 
 
 # ============================================================
@@ -1552,6 +1581,13 @@ def api_create_detection_rule(
     request: Request,
     user: dict = Depends(require_analyst_or_admin),
 ):
+    if FEATURE_RULE_LIFECYCLE:
+        from app.asset_security import protect_mutation
+        from app.models.rule_schemas import RuleSnapshot
+        from app.services.asset_service import validate
+        from app.services.rule_lifecycle_service import create
+        protect_mutation(request,user)
+        return JSONResponse(create(validate(RuleSnapshot,rule.model_dump()),user),status_code=201)
     import sqlite3
     client_ip = get_client_ip(request)
     try:
@@ -1586,6 +1622,8 @@ def api_update_detection_rule(
     request: Request,
     user: dict = Depends(require_analyst_or_admin),
 ):
+    if FEATURE_RULE_LIFECYCLE:
+        raise HTTPException(409,'Mutable PUT is retired. Create an immutable revision with expected_version and expected_parent_revision_id.')
     client_ip = get_client_ip(request)
     import sqlite3
     try:
@@ -1613,6 +1651,8 @@ def api_delete_detection_rule(
     request: Request,
     user: dict = Depends(require_analyst_or_admin),
 ):
+    if FEATURE_RULE_LIFECYCLE:
+        raise HTTPException(409,'Hard deletion is retired. Use the admin archive endpoint with an expected version and reason.')
     client_ip = get_client_ip(request)
     rule = get_rule_by_id(rule_id)
     rule_title = rule["title"] if rule else f"#{rule_id}"

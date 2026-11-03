@@ -11,7 +11,7 @@ __pycache__/
 coverage.xml
 htmlcov/
 
-# SQLite database (regenerated at runtime)
+# SQLite databases and private installation/backup state are not source files.
 *.db
 *.db-journal
 *.db-wal
@@ -19,6 +19,10 @@ htmlcov/
 .env
 .env.*
 !.env.example
+installation.json
+signing.key
+backup.json
+.installation.lock
 .coverage.*
 
 # IDE / editor files

@@ -328,6 +328,8 @@ def create_user(username: str, password: str, role: str = "viewer") -> dict:
         primary = clean_role == "admin" and not conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone()
         cursor.execute("INSERT INTO users (username, password_hash, role, is_primary) VALUES (?, ?, ?, ?)",
                        (username, pwd_hash, clean_role, int(primary)))
+        if primary:
+            conn.execute('UPDATE installation_metadata SET admin_setup_completed=1 WHERE id=1')
         conn.commit()
         user_id = cursor.lastrowid
     return {"id": user_id, "username": username, "role": clean_role}
@@ -423,7 +425,8 @@ def is_initial_setup_required() -> bool:
     Returns True if no admin account exists in the database.
     """
     with get_connection() as conn:
-        return conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone() is None
+        from app.storage.local import admin_required
+        return admin_required(conn)
 
 
 def complete_initial_setup(username: str, password: str) -> dict:
@@ -443,6 +446,8 @@ def complete_initial_setup(username: str, password: str) -> dict:
         conn.execute("BEGIN IMMEDIATE")
         if conn.execute("SELECT 1 FROM users WHERE role = 'admin'").fetchone():
             raise ValueError("Initial setup has already been completed.")
+        from app.storage.local import admin_required
+        admin_required(conn)
         if conn.execute("SELECT 1 FROM users WHERE username = ?", (clean_username,)).fetchone():
             raise ValueError("That username already exists. Choose a different administrator username.")
         cursor = conn.cursor()
@@ -450,6 +455,7 @@ def complete_initial_setup(username: str, password: str) -> dict:
             "INSERT INTO users (username, password_hash, role, is_primary) VALUES (?, ?, 'admin', 1)",
             (clean_username, pwd_hash),
         )
+        conn.execute('UPDATE installation_metadata SET admin_setup_completed=1 WHERE id=1')
         conn.commit()
         user_id = cursor.lastrowid
 

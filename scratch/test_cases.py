@@ -253,7 +253,7 @@ assert '/api/cases' not in app.openapi()['paths']
         from app.case_migrations import apply_case_migration
         legacy = Path(test_support._sandbox.name)/'case-upgrade.db'
         with patch.object(database,'DATABASE_PATH',legacy):
-            with patch('app.case_migrations.apply_case_migration'): initialize_database()
+            with patch('app.case_migrations.apply_case_migration'), patch('app.rule_migrations.apply_rule_migration'): initialize_database()
             with get_connection() as conn: conn.execute("INSERT INTO investigation_history(indicator,indicator_type,verdict,threat_score) VALUES ('legacy.example','domain','UNKNOWN',0)")
             with self.assertRaises(RuntimeError):
                 with get_connection() as conn:
@@ -263,7 +263,7 @@ assert '/api/cases' not in app.openapi()['paths']
             with get_connection() as conn:
                 old = conn.execute('SELECT * FROM investigation_history').fetchone()
                 self.assertIsNone(old['actor_name']); self.assertIsNone(old['snapshot_id']); self.assertEqual(old['indicator'],'legacy.example')
-                self.assertEqual(conn.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0],3)
+                self.assertEqual(conn.execute('SELECT COUNT(*) FROM schema_migrations').fetchone()[0],4)
                 self.assertEqual(conn.execute('SELECT COUNT(*) FROM cases').fetchone()[0],0)
                 self.assertFalse(conn.execute('PRAGMA foreign_key_check').fetchall())
 
